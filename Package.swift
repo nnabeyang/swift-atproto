@@ -7,17 +7,39 @@ let package = Package(
     name: "SwiftAtproto",
     platforms: [.macOS(.v13)],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "SwiftAtproto",
             targets: ["SwiftAtproto"]
         ),
+        .executable(
+            name: "swift-atproto",
+            targets: ["LexGen"]
+        ),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-syntax.git", from: "509.0.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.0"),
+
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "SwiftAtproto"),
+            name: "SwiftAtproto"
+        ),
+        .target(
+            name: "SwiftAtprotoLex",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+            ]
+        ),
+        .executableTarget(
+            name: "LexGen",
+            dependencies: [
+                "SwiftAtprotoLex",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "CommandLineTool"
+        ),
         .testTarget(
             name: "SwiftAtprotoTests",
             dependencies: ["SwiftAtproto"]
