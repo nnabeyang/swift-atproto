@@ -1,12 +1,10 @@
+import Foundation
 import XCTest
 @testable import SwiftAtproto
 
 final class SwiftAtprotoTests: XCTestCase {
-    func testExample() throws {
-        // XCTest Documentation
-        // https://developer.apple.com/documentation/xctest
-
-        // Defining Test Cases and Test Methods
-        // https://developer.apple.com/documentation/xctest/defining_test_cases_and_test_methods
+    func testMakeParameters() throws {
+        let items = XRPCBaseClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello"])
+        XCTAssertEqual(items.map(\.description).sorted(), ["param1[]=1", "param1[]=2", "param1[]=3", "param2=hello"])
     }
 }
