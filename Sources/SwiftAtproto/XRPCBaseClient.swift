@@ -1,6 +1,14 @@
 import Foundation
 
-open class XRPCBaseClient {
+public protocol XRPCClientProtocol {
+    func fetch<T: Decodable>(
+        endpoint: String, contentType: String, httpMethod: XRPCBaseClient.HTTPMethod, params: (some Encodable)?,
+        input: (some Encodable)?, retry: Bool
+    ) async throws -> T
+    func refreshSession() async -> Bool
+}
+
+open class XRPCBaseClient: XRPCClientProtocol {
     private let host: URL
     private let decoder: JSONDecoder
     public var auth = AuthInfo()

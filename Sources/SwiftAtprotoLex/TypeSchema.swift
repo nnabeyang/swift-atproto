@@ -307,14 +307,15 @@ class TypeSchema: Codable {
                 expression: TryExprSyntax(expression:
                     AwaitExprSyntax(expression: ExprSyntax(
                         FunctionCallExprSyntax(
-                            calledExpression: ExprSyntax("XRPCClient.shared.fetch"),
+                            calledExpression: ExprSyntax("client.fetch"),
                             leftParen: .leftParenToken(),
                             arguments: .init([
                                 LabeledExprSyntax(label: "endpoint", colon: .colonToken(), expression: StringLiteralExprSyntax(content: self.id), trailingComma: .commaToken()),
                                 LabeledExprSyntax(label: "contentType", colon: .colonToken(), expression: StringLiteralExprSyntax(content: def.contentType), trailingComma: .commaToken()),
                                 LabeledExprSyntax(label: "httpMethod", colon: .colonToken(), expression: ExprSyntax(stringLiteral: httpMethod), trailingComma: .commaToken()),
                                 LabeledExprSyntax(label: "params", colon: .colonToken(), expression: ExprSyntax("params"), trailingComma: .commaToken()),
-                                LabeledExprSyntax(label: "input", colon: .colonToken(), expression: def.inputRPCValue),
+                                LabeledExprSyntax(label: "input", colon: .colonToken(), expression: def.inputRPCValue, trailingComma: .commaToken()),
+                                LabeledExprSyntax(label: "retry", colon: .colonToken(), expression: ExprSyntax("true")),
                             ]),
                             rightParen: .rightParenToken()
                         )
@@ -1135,6 +1136,8 @@ extension HTTPAPITypeDefinition {
 
     func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap) -> [FunctionParameterSyntax] {
         var arguments = [FunctionParameterSyntax]()
+        let comma: TokenSyntax? = (input == nil && (parameters == nil || (parameters?.properties.isEmpty ?? false))) ? nil : .commaToken()
+        arguments.append(.init(firstName: .identifier("client"), type: TypeSyntax("any XRPCClientProtocol"), trailingComma: comma))
         if let input {
             switch input.encoding {
             case .cbor, .any, .car:
