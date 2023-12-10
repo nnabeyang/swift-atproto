@@ -33,6 +33,17 @@ Add the following to your Podfile:
 pod 'SwiftAtproto'
 ```
 
+### Usage
+
+[nnabeyang/swiftsky](https://github.com/nnabeyang/swiftsky) uses swift-atproto to generate the code to implement the XRPC protocol.
+In the case of swiftsky, code generation is done as follows:
+```bash
+git clone https://github.com/nnabeyang/swift-atproto
+git clone https://github.com/nnabeyang/swiftsky
+cd swift-atproto
+make lexgen
+```
+
 ## License
 
 swift-atproto is published under the MIT License, see LICENSE.
