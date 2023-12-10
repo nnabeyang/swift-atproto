@@ -6,7 +6,7 @@ swift-atproto is a atproto library.
 
 ### SwiftPM
 
-Add the `SwiftAtprotoUtil` as a dependency:
+Add the `SwiftAtproto` as a dependency:
 
 ```swift
 let package = Package(
@@ -18,7 +18,7 @@ let package = Package(
     targets: [
         .executableTarget(name: "<executable-target-name>", dependencies: [
             // other dependencies
-                .product(name: "SwiftAtprotoUtil", package: "swift-atproto"),
+                .product(name: "SwiftAtproto", package: "swift-atproto"),
         ]),
         // other targets
     ]
