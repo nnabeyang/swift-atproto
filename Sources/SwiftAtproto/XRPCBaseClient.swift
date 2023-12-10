@@ -35,9 +35,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
     }
 
     public func fetch<T: Decodable>(
-        endpoint: String, contentType: String = "application/json", httpMethod: HTTPMethod = .get, params: (some Encodable)? = nil,
-        input: (some Encodable)? = nil,
-        retry: Bool = true
+        endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
     ) async throws -> T {
         let authorization = endpoint == "com.atproto.server.refreshSession" ? auth.refreshJwt : auth.accessJwt
         var url = host.appending(path: endpoint)
@@ -80,7 +78,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
                     if xrpcerror.error == "ExpiredToken" {
                         if await refreshSession() {
                             return try await fetch(
-                                endpoint: endpoint, httpMethod: httpMethod,
+                                endpoint: endpoint, contentType: contentType, httpMethod: httpMethod,
                                 params: params, input: input, retry: false
                             )
                         }
