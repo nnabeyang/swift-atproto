@@ -6,6 +6,8 @@ public protocol XRPCClientProtocol {
         input: (some Encodable)?, retry: Bool
     ) async throws -> T
     func refreshSession() async -> Bool
+
+    func getAuthorization(endpoint: String) -> String
 }
 
 open class XRPCBaseClient: XRPCClientProtocol {
@@ -37,7 +39,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
     public func fetch<T: Decodable>(
         endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
     ) async throws -> T {
-        let authorization = endpoint == "com.atproto.server.refreshSession" ? auth.refreshJwt : auth.accessJwt
+        let authorization = getAuthorization(endpoint: endpoint)
         var url = host.appending(path: endpoint)
         if httpMethod == .get, let params = params?.dictionary {
             url.append(queryItems: Self.makeParameters(params: params))
@@ -104,6 +106,10 @@ open class XRPCBaseClient: XRPCClientProtocol {
 
     open func refreshSession() async -> Bool {
         false
+    }
+
+    open func getAuthorization(endpoint _: String) -> String {
+        _abstract()
     }
 }
 
