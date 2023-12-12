@@ -196,12 +196,6 @@ enum Lex {
         return out
     }
 
-    static func fixRecordReferences(schemas: [Schema], defmap _: ExtDefMap, prefix: String) {
-        for schema in schemas where schema.id.hasPrefix(prefix) {
-            print("ok")
-        }
-    }
-
     static func nameFromId(id: String, prefix: String) -> String {
         id.trim(prefix: prefix).split(separator: ".").map {
             $0.titleCased()
