@@ -25,7 +25,7 @@ public func main(outdir: String, path: String, prefix: String) throws {
     try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
     let enumName = Lex.structNameFor(prefix: prefix)
     let fileUrl = outdirURL.appending(path: "\(enumName).swift")
-    let src = Lex.baseFile(name: enumName)
+    let src = Lex.baseFile(prefix: prefix, defMap: defmap)
     try src.write(to: fileUrl, atomically: true, encoding: .utf8)
     for schema in schemas {
         guard schema.id.hasPrefix(prefix) else { continue }
@@ -49,9 +49,57 @@ enum Lex {
         .newlines(2),
     ])
 
-    static func baseFile(name: String) -> String {
+    static func baseFile(prefix: String, defMap: ExtDefMap) -> String {
+        var arguments = [(id: LabeledExprSyntax, val: LabeledExprSyntax)]()
+        for key in defMap.keys.sorted() {
+            guard let ts = defMap[key],
+                  ts.type.prefix == prefix
+            else {
+                continue
+            }
+
+            if case .record = ts.type.type {
+                arguments.append((id: LabeledExprSyntax(label: "id", colon: .colonToken(),
+                                                        expression: StringLiteralExprSyntax(content: key),
+                                                        trailingComma: .commaToken()),
+                                  val: LabeledExprSyntax(label: "val", colon: .colonToken(),
+                                                         expression: ExprSyntax("\(raw: ts.type.typeName).self"))))
+            }
+        }
+
         let src = SourceFileSyntax(leadingTrivia: Self.fileHeader, statementsBuilder: {
-            EnumDeclSyntax(name: TokenSyntax(stringLiteral: name), memberBlock: .init(members: []))
+            ImportDeclSyntax(
+                path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "SwiftAtproto")]),
+                trailingTrivia: .newlines(2)
+            )
+            EnumDeclSyntax(name: TokenSyntax(stringLiteral: Lex.structNameFor(prefix: prefix))) {
+                FunctionDeclSyntax(
+                    leadingTrivia: nil,
+                    modifiers: [DeclModifierSyntax(name: .keyword(.static))],
+                    name: .identifier("registerLexiconTypes"),
+                    signature: FunctionSignatureSyntax(
+                        parameterClause: FunctionParameterClauseSyntax(
+                            leftParen: .leftParenToken(),
+                            parameters: .init([]),
+                            rightParen: .rightParenToken()
+                        ),
+                        effectSpecifiers: nil,
+                        returnClause: nil
+                    )
+                ) {
+                    for argument in arguments {
+                        FunctionCallExprSyntax(
+                            calledExpression: ExprSyntax("LexiconTypesMap.shared.register"),
+                            leftParen: .leftParenToken(),
+                            arguments: .init([
+                                argument.id,
+                                argument.val,
+                            ]),
+                            rightParen: .rightParenToken()
+                        )
+                    }
+                }
+            }
         },
         trailingTrivia: .newline)
         return src.formatted().description

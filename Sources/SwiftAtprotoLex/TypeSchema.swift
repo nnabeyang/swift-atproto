@@ -77,7 +77,7 @@ final class Schema: Codable {
                     walk?("\(name)_Output", schema)
                 }
             case let .record(def):
-                let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: "", type: .object(def.record))
+                let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: "", type: .object(def.record), needsType: true)
                 walk?(name, ts)
             default:
                 break
@@ -113,16 +113,28 @@ class TypeSchema: Codable {
     var defName = ""
 
     let type: FieldTypeDefinition
+    let needsType: Bool
 
-    init(id: String, prefix: String, defName: String, type: FieldTypeDefinition) {
+    init(id: String, prefix: String, defName: String, type: FieldTypeDefinition, needsType: Bool = false) {
         self.id = id
         self.prefix = prefix
         self.defName = defName
         self.type = type
+        self.needsType = TypeSchema.fix(type: type, needsType: needsType)
     }
 
     required init(from decoder: Decoder) throws {
         type = try FieldTypeDefinition(from: decoder)
+        needsType = TypeSchema.fix(type: type, needsType: false)
+    }
+
+    private static func fix(type: FieldTypeDefinition, needsType: Bool) -> Bool {
+        switch type {
+        case let .object(def):
+            return def.properties.isEmpty ? true : needsType
+        default:
+            return needsType
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -357,8 +369,7 @@ class TypeSchema: Codable {
                     InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "Codable"))
                 }
             ) {
-                let needType = !def.properties.keys.contains("type")
-                if needType {
+                if needsType {
                     VariableDeclSyntax(
                         bindingSpecifier: .keyword(.let)
                     ) {
@@ -399,7 +410,7 @@ class TypeSchema: Codable {
                         InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "CodingKey"))
                     }
                 ) {
-                    if needType {
+                    if needsType {
                         EnumCaseDeclSyntax(elements: EnumCaseElementListSyntax([
                             EnumCaseElementSyntax(name: "type", rawValue: InitializerClauseSyntax(
                                 value: StringLiteralExprSyntax(content: "$type")
