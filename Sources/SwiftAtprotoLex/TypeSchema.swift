@@ -510,12 +510,13 @@ class TypeSchema: Codable {
                         effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
                     )
                 ) {
-                    DeclSyntax("var container = encoder.singleValueContainer()")
+                    DeclSyntax("var container = encoder.container(keyedBy: CodingKeys.self)")
                     SwitchExprSyntax(subject: ExprSyntax(stringLiteral: "self")) {
                         for ts in tss {
                             let id = ts.defName == "main" ? ts.id : #"\#(ts.id)#\#(ts.defName)"#
                             SwitchCaseSyntax(#"case let .\#(raw: Lex.caseNameFromId(id: id, prefix: prefix))(value):"#) {
-                                ExprSyntax("try container.encode(value)")
+                                ExprSyntax(#"try container.encode("\#(raw: id)", forKey: .type)"#)
+                                ExprSyntax("try value.encode(to: encoder)")
                             }
                         }
                     }
