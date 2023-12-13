@@ -13,7 +13,7 @@ let package = Package(
     // name, platforms, products, etc.
     dependencies: [
         // other dependencies
-        .package(url: "https://github.com/nnabeyang/swift-atproto", from: "0.4.0"),
+        .package(url: "https://github.com/nnabeyang/swift-atproto", from: "0.4.1"),
     ],
     targets: [
         .executableTarget(name: "<executable-target-name>", dependencies: [
