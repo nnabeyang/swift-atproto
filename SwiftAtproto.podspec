@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "SwiftAtproto"
-  s.version      = "0.4.1"
+  s.version      = "0.4.2"
   s.summary      = "swift-atproto is a atproto library."
   s.homepage              = "https://github.com/nnabeyang/swift-atproto"
   s.license               = { :type => "MIT", :file => "LICENSE" }
