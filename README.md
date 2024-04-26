@@ -35,14 +35,14 @@ pod 'SwiftAtproto'
 
 ### Usage
 
-[nnabeyang/swiftsky](https://github.com/nnabeyang/swiftsky) uses swift-atproto to generate the code to implement the XRPC protocol.
-In the case of swiftsky, code generation is done as follows:
+Code generation is done as follows:
 ```bash
-git clone https://github.com/nnabeyang/swift-atproto
-git clone https://github.com/nnabeyang/swiftsky
-cd swift-atproto
-make lexgen
+swift package plugin --allow-writing-to-package-directory swift-atproto \
+  --outdir <OUTPUT_DIR> \
+  /path/to/bluesky-social/atproto/lexicons
 ```
+
+`swift-atproto` supports code generation from the Lexicon up to the [@atproto/api@0.7.2](https://github.com/bluesky-social/atproto/pull/1946) tag in the repository `bulue-social/atproto`.
 
 ## License
 
