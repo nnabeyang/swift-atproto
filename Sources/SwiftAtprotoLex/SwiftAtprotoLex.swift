@@ -6,11 +6,14 @@ public func main(outdir: String, path: String, prefix: String) throws {
     let decoder = JSONDecoder()
     var schemas = [Schema]()
     let url = URL(filePath: path)
+    var prefixes = [String]()
     if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
         for case let fileUrl as URL in enumerator {
             do {
                 let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
                 if fileAttributes.isRegularFile!, fileUrl.pathExtension == "json" {
+                    let nsId = fileUrl.nsId(baseURL: url)
+                    update(prefixes: &prefixes, nsId: nsId)
                     let json = try String(contentsOf: fileUrl)
                     try schemas.append(decoder.decode(Schema.self, from: Data(json.utf8)))
                 }
@@ -20,7 +23,7 @@ public func main(outdir: String, path: String, prefix: String) throws {
         }
     }
 
-    let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: ["com.atproto", "app.bsky"])
+    let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
     let outdirURL = URL(filePath: outdir)
     try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
     let enumName = Lex.structNameFor(prefix: prefix)
@@ -32,6 +35,24 @@ public func main(outdir: String, path: String, prefix: String) throws {
         let fileUrl = outdirURL.appending(path: "\(schema.name).swift")
         let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap)
         try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+    }
+}
+
+func update(prefixes: inout [String], nsId: String) {
+    for (i, prefix) in prefixes.enumerated() {
+        let candidate = prefix.commonPrefix(with: nsId)
+        if !candidate.isEmpty, prefix != nsId {
+            prefixes[i] = candidate.hasSuffix(".") ? String(candidate.dropLast()) : candidate
+            return
+        }
+    }
+    prefixes.append(nsId)
+}
+
+private extension URL {
+    func nsId(baseURL: URL) -> String {
+        precondition(path.hasPrefix(baseURL.path))
+        return deletingPathExtension().path.dropFirst(baseURL.path.count + 1).replacingOccurrences(of: "/", with: ".")
     }
 }
 
