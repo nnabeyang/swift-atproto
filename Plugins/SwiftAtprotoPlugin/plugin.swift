@@ -22,7 +22,7 @@ extension SwiftAtprotoPlugin: CommandPlugin {
         context: PluginContext,
         arguments: [String]
     ) async throws {
-        let codeGenerationTool = try context.tool(named: "LexGen")
+        let codeGenerationTool = try context.tool(named: "swift-atproto")
         try codeGenerate(tool: codeGenerationTool, arguments: arguments)
     }
 }

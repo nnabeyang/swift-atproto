@@ -13,7 +13,7 @@ let package = Package(
         ),
         .executable(
             name: "swift-atproto",
-            targets: ["LexGen"]
+            targets: ["swift-atproto"]
         ),
         .plugin(
             name: "SwiftAtprotoPlugin",
@@ -37,7 +37,7 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "LexGen",
+            name: "swift-atproto",
             dependencies: [
                 "SwiftAtprotoLex",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
@@ -55,7 +55,7 @@ let package = Package(
                         .writeToPackageDirectory(reason: "This command reformats source files"),
                     ]
                 ),
-                dependencies: [.target(name: "LexGen")],
+                dependencies: [.target(name: "swift-atproto")],
                 path: "Plugins/SwiftAtprotoPlugin"),
     ]
 )
