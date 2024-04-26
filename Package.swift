@@ -15,6 +15,10 @@ let package = Package(
             name: "swift-atproto",
             targets: ["LexGen"]
         ),
+        .plugin(
+            name: "SwiftAtprotoPlugin",
+            targets: ["Generate Source Code"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-syntax.git", exact: "510.0.1"),
@@ -44,5 +48,14 @@ let package = Package(
             name: "SwiftAtprotoTests",
             dependencies: ["SwiftAtproto"]
         ),
+        .plugin(name: "Generate Source Code",
+                capability: .command(
+                    intent: .custom(verb: "swift-atproto", description: "Formats Swift source files using SwiftFormat"),
+                    permissions: [
+                        .writeToPackageDirectory(reason: "This command reformats source files"),
+                    ]
+                ),
+                dependencies: [.target(name: "LexGen")],
+                path: "Plugins/SwiftAtprotoPlugin"),
     ]
 )
