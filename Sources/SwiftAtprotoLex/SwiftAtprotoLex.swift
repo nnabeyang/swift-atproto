@@ -72,10 +72,18 @@ enum Lex {
                 path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "SwiftAtproto")]),
                 trailingTrivia: .newlines(2)
             )
-            EnumDeclSyntax(name: TokenSyntax(stringLiteral: Lex.structNameFor(prefix: prefix))) {
+            EnumDeclSyntax(
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
+                name: TokenSyntax(stringLiteral: Lex.structNameFor(prefix: prefix))
+            ) {
                 FunctionDeclSyntax(
                     leadingTrivia: nil,
-                    modifiers: [DeclModifierSyntax(name: .keyword(.static))],
+                    modifiers: [
+                        DeclModifierSyntax(name: .keyword(.public)),
+                        DeclModifierSyntax(name: .keyword(.static)),
+                    ],
                     name: .identifier("registerLexiconTypes"),
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax(
@@ -152,6 +160,9 @@ enum Lex {
             }
             return VariableDeclSyntax(
                 leadingTrivia: leadingTrivia,
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
                 bindingSpecifier: .keyword(.let)
             ) {
                 PatternBindingSyntax(

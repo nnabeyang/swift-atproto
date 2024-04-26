@@ -277,7 +277,10 @@ class TypeSchema: Codable {
         let output = def.rpcOutput(ts: self, fname: fname, defMap: defMap)
         return FunctionDeclSyntax(
             leadingTrivia: leadingTrivia,
-            modifiers: [DeclModifierSyntax(name: .keyword(.static))],
+            modifiers: [
+                DeclModifierSyntax(name: .keyword(.public)),
+                DeclModifierSyntax(name: .keyword(.static)),
+            ],
             name: .identifier(typeName),
             signature: FunctionSignatureSyntax(
                 parameterClause: FunctionParameterClauseSyntax(
@@ -364,6 +367,9 @@ class TypeSchema: Codable {
 
             return ClassDeclSyntax(
                 leadingTrivia: leadingTrivia,
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
                 name: .init(stringLiteral: name),
                 inheritanceClause: InheritanceClauseSyntax {
                     InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "Codable"))
@@ -371,6 +377,9 @@ class TypeSchema: Codable {
             ) {
                 if needsType {
                     VariableDeclSyntax(
+                        modifiers: [
+                            DeclModifierSyntax(name: .keyword(.public)),
+                        ],
                         bindingSpecifier: .keyword(.let)
                     ) {
                         PatternBindingSyntax(
@@ -389,6 +398,9 @@ class TypeSchema: Codable {
                 }
                 InitializerDeclSyntax(
                     leadingTrivia: .newlines(2),
+                    modifiers: [
+                        DeclModifierSyntax(name: .keyword(.public)),
+                    ],
                     initKeyword: .keyword(.`init`), signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax(
                             leftParen: .leftParenToken(),
@@ -437,6 +449,9 @@ class TypeSchema: Codable {
             }
             return EnumDeclSyntax(
                 leadingTrivia: leadingTrivia,
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
                 name: .init(stringLiteral: name),
                 inheritanceClause: InheritanceClauseSyntax {
                     InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "Codable"))
@@ -465,6 +480,9 @@ class TypeSchema: Codable {
 
                 InitializerDeclSyntax(
                     leadingTrivia: .newlines(2),
+                    modifiers: [
+                        DeclModifierSyntax(name: .keyword(.public)),
+                    ],
                     initKeyword: .keyword(.`init`),
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax(
@@ -498,6 +516,9 @@ class TypeSchema: Codable {
                 }
                 FunctionDeclSyntax(
                     leadingTrivia: .newlines(2),
+                    modifiers: [
+                        DeclModifierSyntax(name: .keyword(.public)),
+                    ],
                     name: .identifier("encode"),
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax(
@@ -528,6 +549,9 @@ class TypeSchema: Codable {
             let tname = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap)
             return VariableDeclSyntax(
                 leadingTrivia: leadingTrivia,
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
                 bindingSpecifier: .keyword(.let)
             ) {
                 PatternBindingSyntax(
@@ -713,6 +737,9 @@ enum FieldTypeDefinition: Codable {
 
     func variable(name: String, typeName: String) -> VariableDeclSyntax {
         VariableDeclSyntax(
+            modifiers: [
+                DeclModifierSyntax(name: .keyword(.public)),
+            ],
             bindingSpecifier: .keyword(.var)
         ) {
             PatternBindingSyntax(
