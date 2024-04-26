@@ -2,7 +2,7 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-public func main(outdir: String, path: String, prefix: String) throws {
+public func main(outdir: String, path: String) throws {
     let decoder = JSONDecoder()
     var schemas = [Schema]()
     let url = URL(filePath: path)
@@ -24,17 +24,20 @@ public func main(outdir: String, path: String, prefix: String) throws {
     }
 
     let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
-    let outdirURL = URL(filePath: outdir)
-    try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
-    let enumName = Lex.structNameFor(prefix: prefix)
-    let fileUrl = outdirURL.appending(path: "\(enumName).swift")
-    let src = Lex.baseFile(prefix: prefix, defMap: defmap)
-    try src.write(to: fileUrl, atomically: true, encoding: .utf8)
-    for schema in schemas {
-        guard schema.id.hasPrefix(prefix) else { continue }
-        let fileUrl = outdirURL.appending(path: "\(schema.name).swift")
-        let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap)
+    let outdirBaseURL = URL(filePath: outdir)
+    for prefix in prefixes {
+        let outdirURL = outdirBaseURL.appending(path: prefix.split(separator: ".").joined())
+        try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
+        let enumName = Lex.structNameFor(prefix: prefix)
+        let fileUrl = outdirURL.appending(path: "\(enumName).swift")
+        let src = Lex.baseFile(prefix: prefix, defMap: defmap)
         try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+        for schema in schemas {
+            guard schema.id.hasPrefix(prefix) else { continue }
+            let fileUrl = outdirURL.appending(path: "\(schema.name).swift")
+            let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap)
+            try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+        }
     }
 }
 

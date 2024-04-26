@@ -8,11 +8,9 @@ struct Lexgen: ParsableCommand {
     var path: String
     @Option(name: .long)
     var outdir: String
-    @Option(name: .long)
-    var prefix: String
 
     mutating func run() throws {
-        try SwiftAtprotoLex.main(outdir: outdir, path: path, prefix: prefix)
+        try SwiftAtprotoLex.main(outdir: outdir, path: path)
     }
 }
 
