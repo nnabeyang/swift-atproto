@@ -86,11 +86,10 @@ final class Schema: Codable {
         let tname = Lex.nameFromId(id: id, prefix: prefix)
         for elem in defs {
             let name = elem.key
-            let n: String
-            if name == "main" {
-                n = tname
+            let n: String = if name == "main" {
+                tname
             } else {
-                n = "\(tname)_\(name.titleCased())"
+                "\(tname)_\(name.titleCased())"
             }
             walk?(n, elem.value)
         }
@@ -131,9 +130,9 @@ class TypeSchema: Codable {
     private static func fix(type: FieldTypeDefinition, needsType: Bool) -> Bool {
         switch type {
         case let .object(def):
-            return def.properties.isEmpty ? true : needsType
+            def.properties.isEmpty ? true : needsType
         default:
-            return needsType
+            needsType
         }
     }
 
@@ -142,11 +141,10 @@ class TypeSchema: Codable {
     }
 
     func lookupRef(ref: String, defMap: ExtDefMap) -> TypeSchema {
-        let fqref: String
-        if ref.hasPrefix("#") {
-            fqref = "\(id)\(ref)"
+        let fqref: String = if ref.hasPrefix("#") {
+            "\(id)\(ref)"
         } else {
-            fqref = ref
+            ref
         }
         guard let rr = defMap[fqref] else {
             fatalError("no such ref: \(fqref)")
@@ -170,11 +168,10 @@ class TypeSchema: Codable {
         } else {
             "\(Lex.structNameFor(prefix: ts.prefix)).\(ts.typeName)"
         }
-        let vname: String
-        if tname.contains(where: { $0 == "." }) {
-            vname = String(tname.split(separator: ".")[1])
+        let vname: String = if tname.contains(where: { $0 == "." }) {
+            String(tname.split(separator: ".")[1])
         } else {
-            vname = tname
+            tname
         }
         return (vname, tname)
     }
@@ -186,11 +183,10 @@ class TypeSchema: Codable {
         guard !prefix.isEmpty else {
             fatalError("why no prefix?")
         }
-        let baseType: String
-        if defName != "main" {
-            baseType = "\(Lex.nameFromId(id: id, prefix: prefix))_\(defName.titleCased())"
+        let baseType: String = if defName != "main" {
+            "\(Lex.nameFromId(id: id, prefix: prefix))_\(defName.titleCased())"
         } else {
-            baseType = Lex.nameFromId(id: id, prefix: prefix)
+            Lex.nameFromId(id: id, prefix: prefix)
         }
         if case let .array(def) = type {
             if case .union = def.items {
@@ -437,11 +433,10 @@ class TypeSchema: Codable {
         case let .union(def):
             var tss = [TypeSchema]()
             for ref in def.refs {
-                let refName: String
-                if ref.first == "#" {
-                    refName = "\(id)\(ref)"
+                let refName: String = if ref.first == "#" {
+                    "\(id)\(ref)"
                 } else {
-                    refName = ref
+                    ref
                 }
                 if let ts = defMap[refName]?.type {
                     tss.append(ts)

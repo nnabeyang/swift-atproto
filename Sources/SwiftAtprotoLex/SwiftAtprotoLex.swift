@@ -176,11 +176,10 @@ enum Lex {
     static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap) -> DeclSyntaxProtocol? {
         switch ts.type {
         case .token:
-            let n: String
-            if ts.defName == "main" {
-                n = ts.id
+            let n: String = if ts.defName == "main" {
+                ts.id
             } else {
-                n = "\(ts.id)#\(ts.defName)"
+                "\(ts.id)#\(ts.defName)"
             }
             return VariableDeclSyntax(
                 leadingTrivia: leadingTrivia,

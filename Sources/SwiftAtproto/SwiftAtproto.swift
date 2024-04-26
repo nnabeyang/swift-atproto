@@ -114,15 +114,15 @@ public final class Parameters: Encodable, ExpressibleByDictionaryLiteral {
         let d = dictionary.filter {
             switch $1 {
             case let .string(v):
-                return v != nil
+                v != nil
             case let .bool(v):
-                return v != nil
+                v != nil
             case let .integer(v):
-                return v != nil
+                v != nil
             case let .array(v):
-                return v != nil
+                v != nil
             case let .unknown(v):
-                return v != nil
+                v != nil
             }
         }
         try d.encode(to: encoder)
@@ -131,14 +131,14 @@ public final class Parameters: Encodable, ExpressibleByDictionaryLiteral {
     public typealias Key = String
     public typealias Value = ParamElement
     public required convenience init(dictionaryLiteral elements: (String, ParamElement)...) {
-        let dictionary = [String: ParamElement].init(elements, uniquingKeysWith: { l, _ in l })
+        let dictionary = [String: ParamElement](elements, uniquingKeysWith: { l, _ in l })
         self.init(dictionary: dictionary)
     }
 }
 
 @inline(never)
 @usableFromInline
-internal func _abstract(
+func _abstract(
     file: StaticString = #file,
     line: UInt = #line
 ) -> Never {
