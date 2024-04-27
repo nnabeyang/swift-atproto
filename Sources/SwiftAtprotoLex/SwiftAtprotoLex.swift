@@ -27,6 +27,9 @@ public func main(outdir: String, path: String) throws {
     let outdirBaseURL = URL(filePath: outdir)
     for prefix in prefixes {
         let outdirURL = outdirBaseURL.appending(path: prefix.split(separator: ".").joined())
+        if FileManager.default.fileExists(atPath: outdirURL.path) {
+            try FileManager.default.removeItem(at: outdirURL)
+        }
         try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
         let enumName = Lex.structNameFor(prefix: prefix)
         let fileUrl = outdirURL.appending(path: "\(enumName).swift")
