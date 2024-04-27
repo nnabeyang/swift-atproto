@@ -26,7 +26,8 @@ public func main(outdir: String, path: String) throws {
     let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
     let outdirBaseURL = URL(filePath: outdir)
     for prefix in prefixes {
-        let outdirURL = outdirBaseURL.appending(path: prefix.split(separator: ".").joined())
+        let filePrefix = prefix.split(separator: ".").joined()
+        let outdirURL = outdirBaseURL.appending(path: filePrefix)
         if FileManager.default.fileExists(atPath: outdirURL.path) {
             try FileManager.default.removeItem(at: outdirURL)
         }
@@ -37,7 +38,7 @@ public func main(outdir: String, path: String) throws {
         try src.write(to: fileUrl, atomically: true, encoding: .utf8)
         for schema in schemas {
             guard schema.id.hasPrefix(prefix) else { continue }
-            let fileUrl = outdirURL.appending(path: "\(schema.name).swift")
+            let fileUrl = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
             let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap)
             try src.write(to: fileUrl, atomically: true, encoding: .utf8)
         }
