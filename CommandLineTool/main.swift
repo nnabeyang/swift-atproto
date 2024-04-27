@@ -3,7 +3,7 @@ import Foundation
 import SwiftAtprotoLex
 
 struct Lexgen: ParsableCommand {
-    static var configuration = CommandConfiguration(commandName: "swift-atproto", version: "0.5.0")
+    static var configuration = CommandConfiguration(commandName: "swift-atproto", version: SwiftAtprotoLex.version)
     @Argument
     var path: String
     @Option(name: .long)

@@ -2,6 +2,8 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
+public var version: String { "0.5.0" }
+
 public func main(outdir: String, path: String) throws {
     let decoder = JSONDecoder()
     var schemas = [Schema]()
