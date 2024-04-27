@@ -42,7 +42,7 @@ swift package plugin --allow-writing-to-package-directory swift-atproto \
   /path/to/bluesky-social/atproto/lexicons
 ```
 
-`swift-atproto` supports code generation from the Lexicon up to the [@atproto/api@0.7.2](https://github.com/bluesky-social/atproto/pull/1946) tag in the repository `bulue-social/atproto`.
+`swift-atproto` supports code generation from the Lexicon up to the [@atproto/api@0.10.5](https://github.com/bluesky-social/atproto/pull/2282) tag in the repository `bulue-social/atproto`.
 
 ## License
 
