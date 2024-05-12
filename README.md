@@ -47,4 +47,4 @@ swift package plugin --allow-writing-to-package-directory swift-atproto \
 swift-atproto is published under the MIT License, see LICENSE.
 
 ## Author
-[Noriaki Watanabe@nnabeyang](https://bsky.app/profile/nnabeyang.bsky.social)
+[Noriaki Watanabe@nnabeyang](https://bsky.app/profile/did:plc:bnh3bvyqr3vzxyvjdnrrusbr)
