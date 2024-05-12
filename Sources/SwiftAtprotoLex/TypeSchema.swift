@@ -361,6 +361,10 @@ class TypeSchema: Codable {
                 required[req] = true
             }
 
+            for key in def.nullable ?? [] {
+                required[key] = false
+            }
+
             return ClassDeclSyntax(
                 leadingTrivia: leadingTrivia,
                 modifiers: [
