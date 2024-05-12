@@ -7,4 +7,14 @@ final class SwiftAtprotoTests: XCTestCase {
         let items = XRPCBaseClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello"])
         XCTAssertEqual(items.map(\.description).sorted(), ["param1[]=1", "param1[]=2", "param1[]=3", "param2=hello"])
     }
+
+    func testLexLinkCodable() throws {
+        let json = #"{"$link":"bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy"}"#
+        let decoder = JSONDecoder()
+        let link = try decoder.decode(LexLink.self, from: Data(json.utf8))
+        XCTAssertEqual(link.toBaseEncodedString, "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy")
+        let encoder = JSONEncoder()
+        encoder.dataEncodingStrategy = XRPCBaseClient.dataEncodingStrategy
+        XCTAssertEqual(try String(decoding: encoder.encode(link), as: UTF8.self), json)
+    }
 }

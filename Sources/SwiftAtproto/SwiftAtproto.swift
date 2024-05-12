@@ -1,3 +1,6 @@
+import CID
+import Foundation
+
 public class LexiconTypesMap {
     public static let shared = LexiconTypesMap()
     public var map = [String: Any.Type]()
@@ -39,20 +42,37 @@ public struct LexiconTypeDecoder: Codable {
     }
 }
 
-public struct LexLink: Codable {
-    public let link: String
-    private enum CodingKeys: String, CodingKey {
+public typealias LexLink = CID
+
+extension LexLink: Codable {
+    static func dataEncodingStrategy(data: Data, encoder: any Encoder) throws {
+        let cid = try CID(data[1...])
+        var container = encoder.container(keyedBy: LexLink.CodingKeys.self)
+        try container.encode(cid.toBaseEncodedString, forKey: .link)
+    }
+
+    enum CodingKeys: String, CodingKey {
         case link = "$link"
     }
 
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        link = try container.decode(String.self, forKey: .link)
+        do {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let link = try container.decode(String.self, forKey: .link)
+            self = try CID(link)
+        } catch {
+            let container = try decoder.singleValueContainer()
+            let bytes = try [UInt8](container.decode(Data.self))
+            precondition(bytes[0] == 0)
+            self = try CID(Data(bytes[1...]))
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(link, forKey: .link)
+        var container = encoder.singleValueContainer()
+        var bytes: [UInt8] = [0]
+        bytes.append(contentsOf: rawBuffer)
+        try container.encode(Data(bytes))
     }
 }
 

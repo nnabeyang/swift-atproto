@@ -19,6 +19,20 @@ open class XRPCBaseClient: XRPCClientProtocol {
         case post
     }
 
+    static let dataEncodingStrategy: JSONEncoder.DataEncodingStrategy = .custom { data, encoder in
+        do {
+            if !data.isEmpty, data[0] == 0 {
+                try LexLink.dataEncodingStrategy(data: data, encoder: encoder)
+                return
+            }
+        } catch {}
+        if let string = String(data: data, encoding: .utf8) {
+            try string.encode(to: encoder)
+        } else {
+            try data.base64Encoded().encode(to: encoder)
+        }
+    }
+
     public init(host: URL) {
         self.host = host.appending(path: "xrpc")
         decoder = JSONDecoder()
@@ -56,6 +70,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
             request.addValue(contentType, forHTTPHeaderField: "Content-Type")
             if let input {
                 let encoder = JSONEncoder()
+                encoder.dataEncodingStrategy = Self.dataEncodingStrategy
                 encoder.outputFormatting = [.withoutEscapingSlashes]
                 switch input {
                 case let data as Data:

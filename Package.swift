@@ -21,13 +21,17 @@ let package = Package(
         ),
     ],
     dependencies: [
+        .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
         .package(url: "https://github.com/apple/swift-syntax.git", exact: "510.0.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.3.1"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.53.8")
     ],
     targets: [
         .target(
-            name: "SwiftAtproto"
+            name: "SwiftAtproto",
+            dependencies: [
+                .product(name: "CID", package: "swift-cid")
+            ]
         ),
         .target(
             name: "SwiftAtprotoLex",
