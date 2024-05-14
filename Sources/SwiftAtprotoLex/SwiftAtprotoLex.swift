@@ -25,6 +25,7 @@ public func main(outdir: String, path: String) throws {
         }
     }
 
+    prefixes = prefixes.map { String($0.dropLast()) }
     let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
     let outdirBaseURL = URL(filePath: outdir)
     for prefix in prefixes {
@@ -50,8 +51,8 @@ public func main(outdir: String, path: String) throws {
 func update(prefixes: inout [String], nsId: String) {
     for (i, prefix) in prefixes.enumerated() {
         let candidate = prefix.commonPrefix(with: nsId)
-        if !candidate.isEmpty, prefix != nsId {
-            prefixes[i] = candidate.hasSuffix(".") ? String(candidate.dropLast()) : candidate
+        if !candidate.isEmpty, prefix != nsId, candidate.hasSuffix(".") {
+            prefixes[i] = candidate
             return
         }
     }
