@@ -1061,6 +1061,7 @@ struct CidLinkTypeDefinition: Codable {
 enum EncodingType: String, Codable {
     case cbor = "application/cbor"
     case json = "application/json"
+    case jsonl = "application/jsonl"
     case car = "application/vnd.ipld.car"
     case text = "text/plain"
     case any = "*/*"
@@ -1157,12 +1158,10 @@ extension HTTPAPITypeDefinition {
     var contentType: String {
         if let input {
             switch input.encoding {
-            case .json:
-                return "application/json"
+            case .json, .jsonl, .text:
+                return input.encoding.rawValue
             case .cbor, .any, .car:
                 return "*/*"
-            case .text:
-                return "text/plain"
             }
         }
         return "*/*"
@@ -1186,7 +1185,7 @@ extension HTTPAPITypeDefinition {
                 let tname = "String"
                 let comma: TokenSyntax? = (parameters == nil || (parameters?.properties.isEmpty ?? false)) ? nil : .commaToken()
                 arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
-            case .json:
+            case .json, .jsonl:
                 let tname = "\(fname)_Input"
                 let comma: TokenSyntax? = (parameters == nil || (parameters?.properties.isEmpty ?? false)) ? nil : .commaToken()
                 arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
@@ -1215,9 +1214,12 @@ extension HTTPAPITypeDefinition {
     func rpcOutput(ts: TypeSchema, fname: String, defMap: ExtDefMap) -> ReturnClauseSyntax {
         if let output {
             switch output.encoding {
-            case .json:
+            case .json, .jsonl:
+                guard let schema = output.schema else {
+                    return ReturnClauseSyntax(type: TypeSyntax(stringLiteral: "EmptyResponse"))
+                }
                 let outname: String
-                if case let .ref(def) = output.schema?.type {
+                if case let .ref(def) = schema.type {
                     (_, outname) = ts.namesFromRef(ref: def.ref, defMap: defMap)
                 } else {
                     outname = "\(fname)_Output"

@@ -9,6 +9,8 @@ public class LexiconTypesMap {
     }
 }
 
+public struct EmptyResponse: Codable {}
+
 public struct LexiconTypeDecoder: Codable {
     let typeName: String?
     public let val: Codable
