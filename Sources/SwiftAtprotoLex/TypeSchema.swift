@@ -1066,10 +1066,10 @@ enum EncodingType: String, Codable {
     case any = "*/*"
 
     init(from decoder: Decoder) throws {
-        let a = try String(from: decoder)
-        guard let value = EncodingType(rawValue: a) else {
-            // TODO: throw error
-            fatalError()
+        let rawValue = try String(from: decoder)
+
+        guard let value = EncodingType(rawValue: rawValue) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "unexpected mimetype: \(rawValue.debugDescription)"))
         }
         self = value
     }
