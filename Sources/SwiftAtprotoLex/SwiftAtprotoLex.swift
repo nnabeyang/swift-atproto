@@ -2,7 +2,7 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-public var version: String { "0.7.0" }
+public var version: String { "0.8.0" }
 
 public func main(outdir: String, path: String) throws {
     let decoder = JSONDecoder()
