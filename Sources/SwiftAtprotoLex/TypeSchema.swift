@@ -24,24 +24,6 @@ final class Schema: Codable {
         case defs
     }
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        lexicon = try container.decode(Int.self, forKey: .lexicon)
-        id = try container.decode(String.self, forKey: .id)
-        revision = try container.decodeIfPresent(Int.self, forKey: .revision)
-        description = try container.decodeIfPresent(String.self, forKey: .description)
-        defs = try container.decode([String: TypeSchema].self, forKey: .defs)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(lexicon, forKey: .lexicon)
-        try container.encode(id, forKey: .id)
-        try container.encodeIfPresent(revision, forKey: .revision)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encode(defs, forKey: .defs)
-    }
-
     func allTypes(prefix: String) -> [String: TypeSchema] {
         var out = [String: TypeSchema]()
         let id = id
@@ -759,12 +741,6 @@ struct TokenTypeDefinition: Codable {
         case type
         case description
     }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
-    }
 }
 
 struct NullTypeDefinition: Codable {
@@ -774,12 +750,6 @@ struct NullTypeDefinition: Codable {
     private enum TypedCodingKeys: String, CodingKey {
         case type
         case description
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
     }
 }
 
@@ -794,14 +764,6 @@ struct BooleanTypeDefinition: Codable {
         case description
         case `default`
         case const
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encodeIfPresent(`default`, forKey: .default)
-        try container.encodeIfPresent(const, forKey: .const)
     }
 }
 
@@ -823,17 +785,6 @@ struct IntegerTypeDefinition: Codable {
         case `default`
         case const
     }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encodeIfPresent(minimum, forKey: .minimum)
-        try container.encodeIfPresent(maximum, forKey: .maximum)
-        try container.encodeIfPresent(`enum`, forKey: .enum)
-        try container.encodeIfPresent(`default`, forKey: .default)
-        try container.encodeIfPresent(const, forKey: .const)
-    }
 }
 
 struct BlobTypeDefinition: Codable {
@@ -846,13 +797,6 @@ struct BlobTypeDefinition: Codable {
         case accept
         case maxSize
     }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(accept, forKey: .accept)
-        try container.encodeIfPresent(maxSize, forKey: .maxSize)
-    }
 }
 
 struct BytesTypeDefinition: Codable {
@@ -864,13 +808,6 @@ struct BytesTypeDefinition: Codable {
         case type
         case minLength
         case maxLength
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(minLength, forKey: .minLength)
-        try container.encodeIfPresent(maxLength, forKey: .maxLength)
     }
 }
 
@@ -898,20 +835,6 @@ struct StringTypeDefinition: Codable {
         case `enum`
         case const
     }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encodeIfPresent(format, forKey: .format)
-        try container.encodeIfPresent(maxLength, forKey: .maxLength)
-        try container.encodeIfPresent(minLength, forKey: .minLength)
-        try container.encodeIfPresent(maxGraphemes, forKey: .maxGraphemes)
-        try container.encodeIfPresent(minGraphemes, forKey: .minGraphemes)
-        try container.encodeIfPresent(knownValues, forKey: .knownValues)
-        try container.encodeIfPresent(`enum`, forKey: .enum)
-        try container.encodeIfPresent(const, forKey: .const)
-    }
 }
 
 struct ObjectTypeDefinition: Codable {
@@ -927,15 +850,6 @@ struct ObjectTypeDefinition: Codable {
         case properties
         case required
         case nullable
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encode(properties, forKey: .properties)
-        try container.encodeIfPresent(required, forKey: .required)
-        try container.encodeIfPresent(nullable, forKey: .nullable)
     }
 
     var sortedProperties: [(String, FieldTypeDefinition)] {
@@ -956,13 +870,6 @@ struct ReferenceTypeDefinition: Codable {
         case description
         case ref
     }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encode(ref, forKey: .ref)
-    }
 }
 
 struct UnionTypeDefinition: Codable {
@@ -970,28 +877,6 @@ struct UnionTypeDefinition: Codable {
     let description: String?
     let refs: [String]
     let closed: Bool?
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case description
-        case refs
-        case closed
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        description = try container.decodeIfPresent(String.self, forKey: .description)
-        refs = try container.decode([String].self, forKey: .refs)
-        closed = try container.decodeIfPresent(Bool.self, forKey: .closed)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encode(refs, forKey: .refs)
-        try container.encodeIfPresent(closed, forKey: .closed)
-    }
 }
 
 struct ArrayTypeDefinition: Codable {
@@ -1034,28 +919,10 @@ struct ArrayTypeDefinition: Codable {
 
 struct UnknownTypeDefinition: Codable {
     var type: FieldType { .unknown }
-
-    private enum TypedCodingKeys: String, CodingKey {
-        case type
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-    }
 }
 
 struct CidLinkTypeDefinition: Codable {
     var type: FieldType { .cidLink }
-
-    private enum TypedCodingKeys: String, CodingKey {
-        case type
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-    }
 }
 
 enum EncodingType: String, Codable {
@@ -1100,21 +967,6 @@ struct Parameters: Codable {
 
     let required: [String]?
     let properties: [String: FieldTypeDefinition]
-
-    private enum TypedCodingKeys: String, CodingKey {
-        case type
-        case properties
-        case required
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-
-        try container.encode(properties, forKey: .properties)
-        try container.encodeIfPresent(required, forKey: .required)
-    }
-
     var sortedProperties: [(String, FieldTypeDefinition)] {
         properties.keys.sorted().compactMap {
             guard let property = properties[$0] else { return nil }
@@ -1275,20 +1127,6 @@ struct SubscriptionDefinition: Codable {
 
     let parameters: Parameters?
     let message: MessageType?
-
-    private enum TypedCodingKeys: String, CodingKey {
-        case type
-        case parameters
-        case message
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-
-        try container.encodeIfPresent(parameters, forKey: .parameters)
-        try container.encodeIfPresent(message, forKey: .message)
-    }
 }
 
 struct RecordDefinition: Codable {
@@ -1298,18 +1136,4 @@ struct RecordDefinition: Codable {
 
     let key: String
     let record: ObjectTypeDefinition
-
-    private enum TypedCodingKeys: String, CodingKey {
-        case type
-        case key
-        case record
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.TypedCodingKeys.self)
-        try container.encode(type, forKey: .type)
-
-        try container.encode(key, forKey: .key)
-        try container.encode(record, forKey: .record)
-    }
 }
