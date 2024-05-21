@@ -90,9 +90,9 @@ open class XRPCBaseClient: XRPCClientProtocol {
 
         guard 200 ... 299 ~= httpResponse.statusCode else {
             do {
-                let xrpcerror = try decoder.decode(XRPCError.self, from: data)
+                let error = try decoder.decode(UnExpectedError.self, from: data)
                 if retry {
-                    if xrpcerror.error == "ExpiredToken" {
+                    if error.error == "ExpiredToken" {
                         if await refreshSession() {
                             return try await fetch(
                                 endpoint: endpoint, contentType: contentType, httpMethod: httpMethod,
@@ -101,11 +101,8 @@ open class XRPCBaseClient: XRPCClientProtocol {
                         }
                     }
                 }
-                throw xrpcerror
+                throw error
             } catch {
-                if error is XRPCError {
-                    throw error
-                }
                 throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(httpResponse.statusCode)"])
             }
         }
@@ -128,10 +125,22 @@ open class XRPCBaseClient: XRPCClientProtocol {
     }
 }
 
-struct XRPCError: Error, LocalizedError, Decodable {
-    let error: String?
-    let message: String?
+public protocol XRPCError: Error, LocalizedError, Decodable {
+    var error: String? { get }
+    var message: String? { get }
+}
+
+public extension XRPCError {
     var errorDescription: String? {
         message
+    }
+}
+
+public class UnExpectedError: XRPCError {
+    public let error: String?
+    public let message: String?
+    public init(error: String?, message: String?) {
+        self.error = error
+        self.message = message
     }
 }

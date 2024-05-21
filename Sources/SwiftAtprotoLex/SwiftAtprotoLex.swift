@@ -165,14 +165,16 @@ enum Lex {
 
                 if let main = schema.defs["main"],
                    main.isMethod,
-                   let method = Self.writeMethods(
+                   let methods = Self.writeMethods(
                        leadingTrivia: allTypes.isEmpty ? nil : .newlines(2),
                        typeName: Self.nameFromId(id: schema.id, prefix: prefix),
                        typeSchema: main,
                        defMap: defMap
                    )
                 {
-                    method
+                    for method in methods {
+                        method
+                    }
                 }
             }
         },
@@ -180,7 +182,7 @@ enum Lex {
         return src.formatted().description
     }
 
-    static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap) -> DeclSyntaxProtocol? {
+    static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap) -> [DeclSyntaxProtocol]? {
         switch ts.type {
         case .token:
             let n: String = if ts.defName == "main" {
@@ -188,7 +190,7 @@ enum Lex {
             } else {
                 "\(ts.id)#\(ts.defName)"
             }
-            return VariableDeclSyntax(
+            let variable = VariableDeclSyntax(
                 leadingTrivia: leadingTrivia,
                 modifiers: [
                     DeclModifierSyntax(name: .keyword(.public)),
@@ -202,8 +204,12 @@ enum Lex {
                     )
                 )
             }
+            return [variable]
         case let .procedure(def as HTTPAPITypeDefinition), .query(let def as HTTPAPITypeDefinition):
-            return ts.writeRPC(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap)
+            return [
+                ts.writeErrorDecl(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap),
+                ts.writeRPC(leadingTrivia: .newlines(2), def: def, typeName: typeName, defMap: defMap),
+            ].compactMap { $0 }
         default:
             return nil
         }
@@ -266,6 +272,18 @@ extension String {
             if prev.isWhitespace {
                 prev = $0
                 return Character($0.uppercased())
+            }
+            prev = $0
+            return $0
+        })
+    }
+
+    func camelCased() -> String {
+        var prev = Character(" ")
+        return String(map {
+            if prev.isWhitespace {
+                prev = $0
+                return Character($0.lowercased())
             }
             prev = $0
             return $0

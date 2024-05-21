@@ -158,6 +158,126 @@ class TypeSchema: Codable {
         return (vname, tname)
     }
 
+    func writeErrorDecl(leadingTrivia: Trivia? = nil, def: any HTTPAPITypeDefinition, typeName: String, defMap _: ExtDefMap) -> DeclSyntaxProtocol {
+        let errors = def.errors ?? []
+        return EnumDeclSyntax(
+            leadingTrivia: leadingTrivia,
+            modifiers: [
+                DeclModifierSyntax(name: .keyword(.public)),
+            ],
+            name: .init(stringLiteral: "\(typeName)_Error"),
+            inheritanceClause: InheritanceClauseSyntax {
+                InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "XRPCError"))
+            }
+        ) {
+            for error in errors.sorted() {
+                DeclSyntax(stringLiteral: #"case \#(error.name.camelCased())(String?)"#)
+            }
+            DeclSyntax(stringLiteral: #"case unexpected(error: String?, message: String?)"#)
+
+            InitializerDeclSyntax(
+                leadingTrivia: .newlines(2),
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
+                initKeyword: .keyword(.`init`),
+                signature: FunctionSignatureSyntax(
+                    parameterClause: FunctionParameterClauseSyntax(
+                        leftParen: .leftParenToken(),
+                        parameters: FunctionParameterListSyntax([
+                            .init(firstName: .identifier("error"), type: TypeSyntax(stringLiteral: "UnExpectedError")),
+                        ]),
+                        rightParen: .rightParenToken()
+                    )
+                )
+            ) {
+                SwitchExprSyntax(subject: ExprSyntax(stringLiteral: "error.error")) {
+                    for error in errors {
+                        SwitchCaseSyntax(#"case "\#(raw: error.name)":"#) {
+                            ExprSyntax(#"self = .\#(raw: error.name.camelCased())(error.message)"#)
+                        }
+                    }
+                    SwitchCaseSyntax("default:") {
+                        ExprSyntax(#"self = .unexpected(error: error.error, message: error.message)"#)
+                    }
+                }
+            }
+
+            VariableDeclSyntax(
+                leadingTrivia: .newlines(2),
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
+                bindingSpecifier: .keyword(.var)
+            ) {
+                PatternBindingSyntax(
+                    pattern: PatternSyntax("error"),
+                    typeAnnotation: TypeAnnotationSyntax(
+                        type: TypeSyntax(stringLiteral: "String?")
+                    ),
+                    accessorBlock: AccessorBlockSyntax(accessors: .getter(.init {
+                        AccessorDeclSyntax(
+                            accessorSpecifier: .keyword(.get))
+                        {
+                            SwitchExprSyntax(subject: ExprSyntax(stringLiteral: "self")) {
+                                for error in errors {
+                                    SwitchCaseSyntax(#"case .\#(raw: error.name.camelCased()):"#) {
+                                        ReturnStmtSyntax(
+                                            returnKeyword: .keyword(.return),
+                                            expression: StringLiteralExprSyntax(content: error.name)
+                                        )
+                                    }
+                                }
+                                SwitchCaseSyntax("case let .unexpected(error, _):") {
+                                    ReturnStmtSyntax(
+                                        returnKeyword: .keyword(.return),
+                                        expression: ExprSyntax("error")
+                                    )
+                                }
+                            }
+                        }
+                    }))
+                )
+            }
+            VariableDeclSyntax(
+                leadingTrivia: .newlines(2),
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                ],
+                bindingSpecifier: .keyword(.var)
+            ) {
+                PatternBindingSyntax(
+                    pattern: PatternSyntax("message"),
+                    typeAnnotation: TypeAnnotationSyntax(
+                        type: TypeSyntax(stringLiteral: "String?")
+                    ),
+                    accessorBlock: AccessorBlockSyntax(accessors: .getter(.init {
+                        AccessorDeclSyntax(
+                            accessorSpecifier: .keyword(.get))
+                        {
+                            SwitchExprSyntax(subject: ExprSyntax(stringLiteral: "self")) {
+                                for error in errors {
+                                    SwitchCaseSyntax(#"case let .\#(raw: error.name.camelCased())(message):"#) {
+                                        ReturnStmtSyntax(
+                                            returnKeyword: .keyword(.return),
+                                            expression: ExprSyntax("message")
+                                        )
+                                    }
+                                }
+                                SwitchCaseSyntax("case let .unexpected(_, message):") {
+                                    ReturnStmtSyntax(
+                                        returnKeyword: .keyword(.return),
+                                        expression: ExprSyntax("message")
+                                    )
+                                }
+                            }
+                        }
+                    }))
+                )
+            }
+        }
+    }
+
     var typeName: String {
         guard !id.isEmpty else {
             fatalError("type schema hint fields not set")
@@ -295,25 +415,50 @@ class TypeSchema: Codable {
                     )
                 }
             }
-            ReturnStmtSyntax(
-                returnKeyword: .keyword(.return),
-                expression: TryExprSyntax(expression:
-                    AwaitExprSyntax(expression: ExprSyntax(
-                        FunctionCallExprSyntax(
-                            calledExpression: ExprSyntax("client.fetch"),
-                            leftParen: .leftParenToken(),
-                            arguments: .init([
-                                LabeledExprSyntax(label: "endpoint", colon: .colonToken(), expression: StringLiteralExprSyntax(content: self.id), trailingComma: .commaToken()),
-                                LabeledExprSyntax(label: "contentType", colon: .colonToken(), expression: StringLiteralExprSyntax(content: def.contentType), trailingComma: .commaToken()),
-                                LabeledExprSyntax(label: "httpMethod", colon: .colonToken(), expression: ExprSyntax(stringLiteral: httpMethod), trailingComma: .commaToken()),
-                                LabeledExprSyntax(label: "params", colon: .colonToken(), expression: ExprSyntax("params"), trailingComma: .commaToken()),
-                                LabeledExprSyntax(label: "input", colon: .colonToken(), expression: def.inputRPCValue, trailingComma: .commaToken()),
-                                LabeledExprSyntax(label: "retry", colon: .colonToken(), expression: ExprSyntax("true")),
-                            ]),
-                            rightParen: .rightParenToken()
+            DoStmtSyntax(
+                body: CodeBlockSyntax(statementsBuilder: {
+                    ReturnStmtSyntax(
+                        returnKeyword: .keyword(.return),
+                        expression: TryExprSyntax(expression:
+                            AwaitExprSyntax(expression: ExprSyntax(
+                                FunctionCallExprSyntax(
+                                    calledExpression: ExprSyntax("client.fetch"),
+                                    leftParen: .leftParenToken(),
+                                    arguments: .init([
+                                        LabeledExprSyntax(label: "endpoint", colon: .colonToken(), expression: StringLiteralExprSyntax(content: self.id), trailingComma: .commaToken()),
+                                        LabeledExprSyntax(label: "contentType", colon: .colonToken(), expression: StringLiteralExprSyntax(content: def.contentType), trailingComma: .commaToken()),
+                                        LabeledExprSyntax(label: "httpMethod", colon: .colonToken(), expression: ExprSyntax(stringLiteral: httpMethod), trailingComma: .commaToken()),
+                                        LabeledExprSyntax(label: "params", colon: .colonToken(), expression: ExprSyntax("params"), trailingComma: .commaToken()),
+                                        LabeledExprSyntax(label: "input", colon: .colonToken(), expression: def.inputRPCValue, trailingComma: .commaToken()),
+                                        LabeledExprSyntax(label: "retry", colon: .colonToken(), expression: ExprSyntax("true")),
+                                    ]),
+                                    rightParen: .rightParenToken()
+                                )
+                            ))
                         )
-                    ))
-                )
+                    )
+                }),
+                catchClauses: [
+                    CatchClauseSyntax(
+                        CatchItemListSyntax {
+                            CatchItemSyntax(pattern: ValueBindingPatternSyntax(
+                                bindingSpecifier: .keyword(.let),
+                                pattern: ExpressionPatternSyntax(
+                                    expression: SequenceExprSyntax {
+                                        PatternExprSyntax(
+                                            pattern: IdentifierPatternSyntax(identifier: .identifier("error"))
+                                        )
+                                        UnresolvedAsExprSyntax()
+                                        TypeExprSyntax(type: IdentifierTypeSyntax(name: "UnExpectedError"))
+                                    }
+                                )
+                            )
+                            )
+                        }
+                    ) {
+                        ThrowStmtSyntax(expression: ExprSyntax("\(raw: typeName)_Error(error: error)"))
+                    },
+                ]
             )
         }
     }
@@ -731,6 +876,17 @@ enum FieldTypeDefinition: Codable {
             )
         }
     }
+
+    var errors: [ErrorResponse]? {
+        switch self {
+        case let .procedure(t):
+            t.errors
+        case let .query(t):
+            t.errors
+        default:
+            nil
+        }
+    }
 }
 
 struct TokenTypeDefinition: Codable {
@@ -981,6 +1137,7 @@ protocol HTTPAPITypeDefinition: Codable {
     var output: OutputType? { get }
     var input: InputType? { get }
     var description: String? { get }
+    var errors: [ErrorResponse]? { get }
 
     var contentType: String { get }
     var inputRPCValue: ExprSyntax { get }
@@ -1110,6 +1267,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition {
     let output: OutputType?
     let input: InputType?
     let description: String?
+    let errors: [ErrorResponse]?
 }
 
 struct QueryTypeDefinition: HTTPAPITypeDefinition {
@@ -1118,6 +1276,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition {
     let output: OutputType?
     let input: InputType?
     let description: String?
+    let errors: [ErrorResponse]?
 }
 
 struct SubscriptionDefinition: Codable {
@@ -1136,4 +1295,23 @@ struct RecordDefinition: Codable {
 
     let key: String
     let record: ObjectTypeDefinition
+}
+
+struct ErrorResponse: Codable, Equatable, Hashable {
+    let name: String
+    let description: String?
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+    }
+
+    static func == (lhs: ErrorResponse, rhs: ErrorResponse) -> Bool {
+        lhs.name == rhs.name
+    }
+}
+
+extension ErrorResponse: Comparable {
+    static func < (lhs: ErrorResponse, rhs: ErrorResponse) -> Bool {
+        lhs.name < rhs.name
+    }
 }
