@@ -631,12 +631,23 @@ class TypeSchema: Codable {
                             }
                         }
                         SwitchCaseSyntax("default:") {
-                            FunctionCallExprSyntax(
-                                calledExpression: ExprSyntax("fatalError"),
+                            ThrowStmtSyntax(expression: FunctionCallExprSyntax(
+                                calledExpression: ExprSyntax("DecodingError.dataCorruptedError"),
                                 leftParen: .leftParenToken(),
-                                arguments: .init([]),
+                                arguments: .init([
+                                    LabeledExprSyntax(label: "forKey", colon: .colonToken(), expression: ExprSyntax(".type"), trailingComma: .commaToken()),
+                                    LabeledExprSyntax(label: "in", colon: .colonToken(), expression: ExprSyntax("container"), trailingComma: .commaToken()),
+                                    LabeledExprSyntax(label: "debugDescription", colon: .colonToken(),
+                                                      expression: StringLiteralExprSyntax(
+                                                          openingQuote: .stringQuoteToken(),
+                                                          segments: StringLiteralSegmentListSyntax([
+                                                              .stringSegment(.init(content: "unknown type:\\(type.debugDescription)")),
+                                                          ]),
+                                                          closingQuote: .stringQuoteToken()
+                                                      )),
+                                ]),
                                 rightParen: .rightParenToken()
-                            )
+                            ))
                         }
                     }
                 }
