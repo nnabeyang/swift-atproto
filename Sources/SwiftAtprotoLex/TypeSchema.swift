@@ -588,6 +588,7 @@ class TypeSchema: Codable {
                     let tn = ts.prefix == prefix ? ts.typeName : "\(Lex.structNameFor(prefix: ts.prefix)).\(ts.typeName)"
                     DeclSyntax(stringLiteral: #"case \#(Lex.caseNameFromId(id: id, prefix: prefix))(\#(tn))"#)
                 }
+                DeclSyntax(stringLiteral: #"case unknown(UnknownRecord)"#)
 
                 EnumDeclSyntax(
                     leadingTrivia: .newlines(2),
@@ -631,23 +632,7 @@ class TypeSchema: Codable {
                             }
                         }
                         SwitchCaseSyntax("default:") {
-                            ThrowStmtSyntax(expression: FunctionCallExprSyntax(
-                                calledExpression: ExprSyntax("DecodingError.dataCorruptedError"),
-                                leftParen: .leftParenToken(),
-                                arguments: .init([
-                                    LabeledExprSyntax(label: "forKey", colon: .colonToken(), expression: ExprSyntax(".type"), trailingComma: .commaToken()),
-                                    LabeledExprSyntax(label: "in", colon: .colonToken(), expression: ExprSyntax("container"), trailingComma: .commaToken()),
-                                    LabeledExprSyntax(label: "debugDescription", colon: .colonToken(),
-                                                      expression: StringLiteralExprSyntax(
-                                                          openingQuote: .stringQuoteToken(),
-                                                          segments: StringLiteralSegmentListSyntax([
-                                                              .stringSegment(.init(content: "unknown type:\\(type.debugDescription)")),
-                                                          ]),
-                                                          closingQuote: .stringQuoteToken()
-                                                      )),
-                                ]),
-                                rightParen: .rightParenToken()
-                            ))
+                            ExprSyntax("self = try .unknown(.init(from: decoder))")
                         }
                     }
                 }
@@ -676,6 +661,9 @@ class TypeSchema: Codable {
                                 ExprSyntax(#"try container.encode("\#(raw: id)", forKey: .type)"#)
                                 ExprSyntax("try value.encode(to: encoder)")
                             }
+                        }
+                        SwitchCaseSyntax(#"case let .unknown:"#) {
+                            StmtSyntax("break")
                         }
                     }
                 }

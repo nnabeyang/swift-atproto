@@ -27,7 +27,9 @@ public struct LexiconTypeDecoder: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let typeName = try container.decodeIfPresent(String.self, forKey: .type) {
             guard let type = LexiconTypesMap.shared.map[typeName] as? (any Codable.Type) else {
-                throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "unknown type:\(typeName.debugDescription) ")
+                val = try UnknownRecord(from: decoder)
+                self.typeName = typeName
+                return
             }
             val = try type.init(from: decoder)
             self.typeName = typeName

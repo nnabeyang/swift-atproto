@@ -17,4 +17,14 @@ final class SwiftAtprotoTests: XCTestCase {
         encoder.dataEncodingStrategy = XRPCBaseClient.dataEncodingStrategy
         XCTAssertEqual(try String(decoding: encoder.encode(link), as: UTF8.self), json)
     }
+
+    func testUnknownRecordCodable() throws {
+        let json = #"{"$type":"com.nnabeyang.unknown"}"#
+        let decoder = JSONDecoder()
+        let record = try decoder.decode(UnknownRecord.self, from: Data(json.utf8))
+        XCTAssertEqual(record.type, "com.nnabeyang.unknown")
+        let encoder = JSONEncoder()
+        encoder.dataEncodingStrategy = XRPCBaseClient.dataEncodingStrategy
+        XCTAssertEqual(try String(decoding: encoder.encode(record), as: UTF8.self), json)
+    }
 }

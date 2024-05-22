@@ -144,3 +144,14 @@ public class UnExpectedError: XRPCError {
         self.message = message
     }
 }
+
+public class UnknownRecord: Identifiable, Codable {
+    public let type: String
+    enum CodingKeys: String, CodingKey {
+        case type = "$type"
+    }
+
+    public init(type: String) {
+        self.type = type
+    }
+}
