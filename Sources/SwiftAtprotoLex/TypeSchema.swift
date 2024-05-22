@@ -662,7 +662,7 @@ class TypeSchema: Codable {
                                 ExprSyntax("try value.encode(to: encoder)")
                             }
                         }
-                        SwitchCaseSyntax(#"case let .unknown:"#) {
+                        SwitchCaseSyntax(#"case .unknown:"#) {
                             StmtSyntax("break")
                         }
                     }
