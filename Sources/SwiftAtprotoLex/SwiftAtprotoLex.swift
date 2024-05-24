@@ -94,7 +94,11 @@ enum Lex {
                                                         expression: StringLiteralExprSyntax(content: key),
                                                         trailingComma: .commaToken()),
                                   val: LabeledExprSyntax(label: "val", colon: .colonToken(),
-                                                         expression: ExprSyntax("\(raw: ts.type.typeName).self"))))
+                                                         expression: MemberAccessExprSyntax(
+                                                             base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(ts.type.typeName))),
+                                                             period: .periodToken(),
+                                                             declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                                                         ))))
             }
         }
 
@@ -128,7 +132,15 @@ enum Lex {
                 ) {
                     for argument in arguments {
                         FunctionCallExprSyntax(
-                            calledExpression: ExprSyntax("LexiconTypesMap.shared.register"),
+                            calledExpression: MemberAccessExprSyntax(
+                                base: MemberAccessExprSyntax(
+                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("LexiconTypesMap"))),
+                                    period: .periodToken(),
+                                    declName: DeclReferenceExprSyntax(baseName: .identifier("shared"))
+                                ),
+                                period: .periodToken(),
+                                declName: DeclReferenceExprSyntax(baseName: .identifier("register"))
+                            ),
                             leftParen: .leftParenToken(),
                             arguments: .init([
                                 argument.id,

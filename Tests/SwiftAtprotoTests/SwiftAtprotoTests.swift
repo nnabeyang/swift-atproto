@@ -1,4 +1,7 @@
 import Foundation
+import SwiftParser
+import SwiftSyntax
+import SwiftSyntaxBuilder
 import XCTest
 @testable import SwiftAtproto
 
