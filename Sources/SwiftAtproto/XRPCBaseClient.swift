@@ -5,6 +5,9 @@ public protocol XRPCClientProtocol {
         endpoint: String, contentType: String, httpMethod: XRPCBaseClient.HTTPMethod, params: (some Encodable)?,
         input: (some Encodable)?, retry: Bool
     ) async throws -> T
+
+    func tokenIsExpired(error: UnExpectedError) -> Bool
+
     func refreshSession() async -> Bool
 
     func getAuthorization(endpoint: String) -> String
@@ -91,15 +94,11 @@ open class XRPCBaseClient: XRPCClientProtocol {
         guard 200 ... 299 ~= httpResponse.statusCode else {
             do {
                 let error = try decoder.decode(UnExpectedError.self, from: data)
-                if retry {
-                    if error.error == "ExpiredToken" {
-                        if await refreshSession() {
-                            return try await fetch(
-                                endpoint: endpoint, contentType: contentType, httpMethod: httpMethod,
-                                params: params, input: input, retry: false
-                            )
-                        }
-                    }
+                if tokenIsExpired(error: error), retry, await refreshSession() {
+                    return try await fetch(
+                        endpoint: endpoint, contentType: contentType, httpMethod: httpMethod,
+                        params: params, input: input, retry: false
+                    )
                 }
                 throw error
             } catch {
@@ -121,6 +120,10 @@ open class XRPCBaseClient: XRPCClientProtocol {
     }
 
     open func getAuthorization(endpoint _: String) -> String {
+        _abstract()
+    }
+
+    open func tokenIsExpired(error _: UnExpectedError) -> Bool {
         _abstract()
     }
 }
