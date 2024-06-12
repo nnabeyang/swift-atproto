@@ -94,6 +94,7 @@ class TypeSchema: Codable {
     var defName = ""
 
     let type: FieldTypeDefinition
+    let isRecord: Bool
     let needsType: Bool
 
     init(id: String, prefix: String, defName: String, type: FieldTypeDefinition, needsType: Bool = false) {
@@ -102,11 +103,13 @@ class TypeSchema: Codable {
         self.defName = defName
         self.type = type
         self.needsType = TypeSchema.fix(type: type, needsType: needsType)
+        isRecord = needsType
     }
 
     required init(from decoder: Decoder) throws {
         type = try FieldTypeDefinition(from: decoder)
         needsType = TypeSchema.fix(type: type, needsType: false)
+        isRecord = false
     }
 
     private static func fix(type: FieldTypeDefinition, needsType: Bool) -> Bool {
@@ -134,7 +137,7 @@ class TypeSchema: Codable {
         return rr.type
     }
 
-    func namesFromRef(ref: String, defMap: ExtDefMap) -> (String, String) {
+    func namesFromRef(ref: String, defMap: ExtDefMap, dropPrefix: Bool = true) -> (String, String) {
         let ts = lookupRef(ref: ref, defMap: defMap)
         if ts.prefix == "" {
             fatalError("no prefix for referenced type: \(ts.id)")
@@ -145,7 +148,7 @@ class TypeSchema: Codable {
         if case .string = ts.type {
             return ("INVALID", "String")
         }
-        let tname: String = if ts.prefix == prefix {
+        let tname: String = if dropPrefix, ts.prefix == prefix {
             ts.typeName
         } else {
             "\(Lex.structNameFor(prefix: ts.prefix)).\(ts.typeName)"
@@ -539,7 +542,7 @@ class TypeSchema: Codable {
         }
     }
 
-    static func typeNameForField(name: String, k: String, v: TypeSchema, defMap: ExtDefMap, isRequired: Bool = true) -> String {
+    static func typeNameForField(name: String, k: String, v: TypeSchema, defMap: ExtDefMap, isRequired: Bool = true, dropPrefix: Bool = true) -> String {
         let baseType: String = {
             switch v.type {
             case .boolean:
@@ -557,14 +560,18 @@ class TypeSchema: Codable {
             case .cidLink:
                 return "LexLink"
             case let .ref(def):
-                let (_, tn) = v.namesFromRef(ref: def.ref, defMap: defMap)
+                let (_, tn) = v.namesFromRef(ref: def.ref, defMap: defMap, dropPrefix: dropPrefix)
                 return tn
             case let .array(def):
                 let ts = TypeSchema(id: v.id, prefix: v.prefix, defName: "Elem", type: def.items)
-                let subt = Self.typeNameForField(name: "\(name)_\(k.titleCased())", k: "Elem", v: ts, defMap: defMap)
+                let subt = Self.typeNameForField(name: "\(name)_\(k.titleCased())", k: "Elem", v: ts, defMap: defMap, dropPrefix: dropPrefix)
                 return "[\(subt)]"
             case .union:
-                return "\(name)_\(k.titleCased())"
+                if !dropPrefix {
+                    return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
+                } else {
+                    return "\(name)_\(k.titleCased())"
+                }
             default:
                 fatalError()
             }
@@ -693,7 +700,7 @@ class TypeSchema: Codable {
         }
     }
 
-    private func initializerParameters(name: String, def: ObjectTypeDefinition, required: [String: Bool], defMap: ExtDefMap) -> [FunctionParameterSyntax] {
+    private func initializerParameters(name: String, def: ObjectTypeDefinition, required: [String: Bool], defMap: ExtDefMap, dropPrefix: Bool = true) -> [FunctionParameterSyntax] {
         var parameters = [FunctionParameterSyntax]()
         let properties = def.sortedProperties
         let count = properties.count
@@ -702,7 +709,7 @@ class TypeSchema: Codable {
             i += 1
             let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
             let isRequired = required[key] ?? false
-            let tname = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired)
+            let tname = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: dropPrefix)
             let comma: TokenSyntax? = i == count ? nil : .commaToken()
             parameters.append(.init(firstName: .identifier(key), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
         }
@@ -727,7 +734,7 @@ class TypeSchema: Codable {
                 modifiers: [
                     DeclModifierSyntax(name: .keyword(.public)),
                 ],
-                name: .init(stringLiteral: name),
+                name: .init(stringLiteral: isRecord ? "\(Lex.structNameFor(prefix: prefix))_\(name)" : name),
                 inheritanceClause: InheritanceClauseSyntax {
                     InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "Codable"))
                 }
@@ -750,7 +757,7 @@ class TypeSchema: Codable {
                 for (key, property) in def.sortedProperties {
                     let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
                     let isRequired = required[key] ?? false
-                    let tname = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired)
+                    let tname = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: !isRecord)
                     property.variable(name: key, typeName: tname)
                 }
 
@@ -763,7 +770,7 @@ class TypeSchema: Codable {
                         parameterClause: FunctionParameterClauseSyntax(
                             leftParen: .leftParenToken(),
                             parameters: FunctionParameterListSyntax(
-                                initializerParameters(name: name, def: def, required: required, defMap: defMap)),
+                                initializerParameters(name: name, def: def, required: required, defMap: defMap, dropPrefix: !isRecord)),
                             rightParen: .rightParenToken()
                         )
                     )

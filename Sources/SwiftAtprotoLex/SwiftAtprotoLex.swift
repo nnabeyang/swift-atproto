@@ -37,7 +37,7 @@ public func main(outdir: String, path: String) throws {
         try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
         let enumName = Lex.structNameFor(prefix: prefix)
         let fileUrl = outdirURL.appending(path: "\(enumName).swift")
-        let src = Lex.baseFile(prefix: prefix, defMap: defmap)
+        let src = Lex.baseFile(prefix: prefix)
         try src.write(to: fileUrl, atomically: true, encoding: .utf8)
         for schema in schemas {
             guard schema.id.hasPrefix(prefix) else { continue }
@@ -80,28 +80,7 @@ enum Lex {
         .newlines(2),
     ])
 
-    static func baseFile(prefix: String, defMap: ExtDefMap) -> String {
-        var arguments = [(id: LabeledExprSyntax, val: LabeledExprSyntax)]()
-        for key in defMap.keys.sorted() {
-            guard let ts = defMap[key],
-                  ts.type.prefix == prefix
-            else {
-                continue
-            }
-
-            if case .record = ts.type.type {
-                arguments.append((id: LabeledExprSyntax(label: "id", colon: .colonToken(),
-                                                        expression: StringLiteralExprSyntax(content: key),
-                                                        trailingComma: .commaToken()),
-                                  val: LabeledExprSyntax(label: "val", colon: .colonToken(),
-                                                         expression: MemberAccessExprSyntax(
-                                                             base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(ts.type.typeName))),
-                                                             period: .periodToken(),
-                                                             declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                                                         ))))
-            }
-        }
-
+    static func baseFile(prefix: String) -> String {
         let src = SourceFileSyntax(leadingTrivia: Self.fileHeader, statementsBuilder: {
             ImportDeclSyntax(
                 path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "SwiftAtproto")]),
@@ -111,46 +90,13 @@ enum Lex {
                 modifiers: [
                     DeclModifierSyntax(name: .keyword(.public)),
                 ],
-                name: TokenSyntax(stringLiteral: Lex.structNameFor(prefix: prefix))
-            ) {
-                FunctionDeclSyntax(
-                    leadingTrivia: nil,
-                    modifiers: [
-                        DeclModifierSyntax(name: .keyword(.public)),
-                        DeclModifierSyntax(name: .keyword(.static)),
-                    ],
-                    name: .identifier("registerLexiconTypes"),
-                    signature: FunctionSignatureSyntax(
-                        parameterClause: FunctionParameterClauseSyntax(
-                            leftParen: .leftParenToken(),
-                            parameters: .init([]),
-                            rightParen: .rightParenToken()
-                        ),
-                        effectSpecifiers: nil,
-                        returnClause: nil
-                    )
-                ) {
-                    for argument in arguments {
-                        FunctionCallExprSyntax(
-                            calledExpression: MemberAccessExprSyntax(
-                                base: MemberAccessExprSyntax(
-                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("LexiconTypesMap"))),
-                                    period: .periodToken(),
-                                    declName: DeclReferenceExprSyntax(baseName: .identifier("shared"))
-                                ),
-                                period: .periodToken(),
-                                declName: DeclReferenceExprSyntax(baseName: .identifier("register"))
-                            ),
-                            leftParen: .leftParenToken(),
-                            arguments: .init([
-                                argument.id,
-                                argument.val,
-                            ]),
-                            rightParen: .rightParenToken()
-                        )
-                    }
-                }
-            }
+                name: .identifier(Lex.structNameFor(prefix: prefix)),
+                memberBlock: MemberBlockSyntax(
+                    leftBrace: .leftBraceToken(),
+                    members: MemberBlockItemListSyntax([]),
+                    rightBrace: .rightBraceToken()
+                )
+            )
         },
         trailingTrivia: .newline)
         return src.formatted().description
@@ -159,6 +105,24 @@ enum Lex {
     static func genCode(for schema: Schema, prefix: String, defMap: ExtDefMap) -> String {
         schema.prefix = prefix
         let structName = Lex.structNameFor(prefix: prefix)
+        let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
+            $0.key.localizedStandardCompare($1.key) == .orderedAscending
+        })
+        let recordTypes = allTypes.filter(\.value.isRecord)
+        let otherTypes = allTypes.filter { !$0.value.isRecord }
+        let methods: [DeclSyntaxProtocol]? = if let main = schema.defs["main"],
+                                                main.isMethod
+        {
+            Self.writeMethods(
+                leadingTrivia: otherTypes.isEmpty ? nil : .newlines(2),
+                typeName: Self.nameFromId(id: schema.id, prefix: prefix),
+                typeSchema: main,
+                defMap: defMap
+            )
+        } else {
+            nil
+        }
+        let enumExtensionIsNeeded = !otherTypes.isEmpty || methods != nil
         let src = SourceFileSyntax(leadingTrivia: Self.fileHeader, statementsBuilder: {
             ImportDeclSyntax(
                 path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "SwiftAtproto")])
@@ -167,27 +131,21 @@ enum Lex {
                 path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "Foundation")]),
                 trailingTrivia: .newlines(2)
             )
-            ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: structName)) {
-                let allTypes = schema.allTypes(prefix: prefix)
-                for (i, (name, ot)) in allTypes.sorted(by: {
-                    $0.key.localizedStandardCompare($1.key) == .orderedAscending
-                }).enumerated() {
-                    ot.lex(leadingTrivia: i == 0 ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
-                }
+            if enumExtensionIsNeeded {
+                ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: structName)) {
+                    for (i, (name, ot)) in otherTypes.enumerated() {
+                        ot.lex(leadingTrivia: i == 0 ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
+                    }
 
-                if let main = schema.defs["main"],
-                   main.isMethod,
-                   let methods = Self.writeMethods(
-                       leadingTrivia: allTypes.isEmpty ? nil : .newlines(2),
-                       typeName: Self.nameFromId(id: schema.id, prefix: prefix),
-                       typeSchema: main,
-                       defMap: defMap
-                   )
-                {
-                    for method in methods {
-                        method
+                    if let methods {
+                        for method in methods {
+                            method
+                        }
                     }
                 }
+            }
+            for (i, (name, ot)) in recordTypes.enumerated() {
+                ot.lex(leadingTrivia: (!enumExtensionIsNeeded && i == 0) ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
             }
         },
         trailingTrivia: .newline)

@@ -3,8 +3,8 @@ import Foundation
 
 public class LexiconTypesMap {
     public static let shared = LexiconTypesMap()
-    public var map = [String: Any.Type]()
-    public func register(id: String, val: (some Any).Type) {
+    public var map = [String: Codable.Type]()
+    public func register(id: String, val: any Codable.Type) {
         map[id] = val
     }
 }
@@ -26,7 +26,7 @@ public struct LexiconTypeDecoder: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let typeName = try container.decodeIfPresent(String.self, forKey: .type) {
-            guard let type = LexiconTypesMap.shared.map[typeName] as? (any Codable.Type) else {
+            guard let type = Self.getTypeByName(typeName: typeName) else {
                 val = try UnknownRecord(from: decoder)
                 self.typeName = typeName
                 return
@@ -43,6 +43,64 @@ public struct LexiconTypeDecoder: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(typeName, forKey: .type)
         try val.encode(to: encoder)
+    }
+
+    private static func getTypeByName(typeName nsId: String) -> (any Codable.Type)? {
+        if let type = LexiconTypesMap.shared.map[nsId] {
+            return type
+        }
+        var components = nsId.split(separator: ".")
+        while !components.isEmpty {
+            components.removeLast()
+            let prefix = components.joined(separator: ".")
+            let typeName = "\(XRPCBaseClient.moduleName).\(Self.structNameFor(prefix: prefix))_\(Self.nameFromId(id: nsId, prefix: prefix))"
+            if let type = _typeByName(typeName) as? (any Codable.Type) {
+                LexiconTypesMap.shared.register(id: nsId, val: type)
+                return type
+            }
+        }
+        return nil
+    }
+
+    private static func nameFromId(id: String, prefix: String) -> String {
+        id.trim(prefix: prefix).split(separator: ".").map {
+            String($0).titleCased
+        }.joined()
+    }
+
+    private static func structNameFor(prefix: String) -> String {
+        "\(prefix.split(separator: ".").joined())types"
+    }
+}
+
+extension String {
+    func trim(prefix: String) -> String {
+        guard hasPrefix(prefix) else { return self }
+        return String(dropFirst(prefix.count))
+    }
+
+    var titleCased: String {
+        var prev = Character(" ")
+        return String(map {
+            if prev.isWhitespace {
+                prev = $0
+                return Character($0.uppercased())
+            }
+            prev = $0
+            return $0
+        })
+    }
+
+    func camelCased() -> String {
+        var prev = Character(" ")
+        return String(map {
+            if prev.isWhitespace {
+                prev = $0
+                return Character($0.lowercased())
+            }
+            prev = $0
+            return $0
+        })
     }
 }
 
