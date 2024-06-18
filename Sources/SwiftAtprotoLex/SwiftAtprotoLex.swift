@@ -8,14 +8,13 @@ public func main(outdir: String, path: String) throws {
     let decoder = JSONDecoder()
     var schemas = [Schema]()
     let url = URL(filePath: path)
-    var prefixes = [String]()
+    var prefixes = Set<String>()
     if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
         for case let fileUrl as URL in enumerator {
             do {
                 let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
                 if fileAttributes.isRegularFile!, fileUrl.pathExtension == "json" {
-                    let nsId = fileUrl.nsId(baseURL: url)
-                    update(prefixes: &prefixes, nsId: nsId)
+                    prefixes.insert(fileUrl.prefix(baseURL: url))
                     let json = try String(contentsOf: fileUrl)
                     try schemas.append(decoder.decode(Schema.self, from: Data(json.utf8)))
                 }
@@ -24,8 +23,6 @@ public func main(outdir: String, path: String) throws {
             }
         }
     }
-
-    prefixes = prefixes.map { String($0.dropLast()) }
     let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
     let outdirBaseURL = URL(filePath: outdir)
     for prefix in prefixes {
@@ -48,21 +45,12 @@ public func main(outdir: String, path: String) throws {
     }
 }
 
-func update(prefixes: inout [String], nsId: String) {
-    for (i, prefix) in prefixes.enumerated() {
-        let candidate = prefix.commonPrefix(with: nsId)
-        if !candidate.isEmpty, prefix != nsId, candidate.hasSuffix(".") {
-            prefixes[i] = candidate
-            return
-        }
-    }
-    prefixes.append(nsId)
-}
-
 private extension URL {
-    func nsId(baseURL: URL) -> String {
+    func prefix(baseURL: URL) -> String {
         precondition(path.hasPrefix(baseURL.path))
-        return deletingPathExtension().path.dropFirst(baseURL.path.count + 1).replacingOccurrences(of: "/", with: ".")
+        let relativeCount = pathComponents.count - baseURL.pathComponents.count
+        let url = relativeCount >= 4 ? deletingLastPathComponent() : self
+        return url.deletingLastPathComponent().path.dropFirst(baseURL.path.count + 1).replacingOccurrences(of: "/", with: ".")
     }
 }
 
@@ -185,7 +173,7 @@ enum Lex {
         }
     }
 
-    static func buildExtDefMap(schemas: [Schema], prefixes: [String]) -> ExtDefMap {
+    static func buildExtDefMap(schemas: [Schema], prefixes: Set<String>) -> ExtDefMap {
         var out = ExtDefMap()
         for schema in schemas {
             for (defName, def) in schema.defs {
