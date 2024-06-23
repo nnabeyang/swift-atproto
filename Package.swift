@@ -40,10 +40,14 @@ let package = Package(
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
             ]
         ),
+        .target(
+            name: "SourceControl"
+        ),
         .executableTarget(
             name: "swift-atproto",
             dependencies: [
                 "SwiftAtprotoLex",
+                "SourceControl",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "CommandLineTool"
@@ -57,6 +61,7 @@ let package = Package(
                     intent: .custom(verb: "swift-atproto", description: "Formats Swift source files using SwiftFormat"),
                     permissions: [
                         .writeToPackageDirectory(reason: "This command reformats source files"),
+                        .allowNetworkConnections(scope: .all(ports: [443]), reason: "fetch lexicons")
                     ]
                 ),
                 dependencies: [.target(name: "swift-atproto")],

@@ -3,8 +3,12 @@ import PackagePlugin
 
 @main
 struct SwiftAtprotoPlugin {
-    func codeGenerate(tool: PluginContext.Tool, arguments: [String]) throws {
+    func codeGenerate(tool: PluginContext.Tool, arguments: [String], configurationFilePath: String?) throws {
         let codeGenerationExec = URL(fileURLWithPath: tool.path.string)
+        var arguments = arguments
+        if let configurationFilePath = configurationFilePath {
+            arguments.append(contentsOf: ["--atproto-configuration", configurationFilePath])
+        }
         let process = try Process.run(codeGenerationExec, arguments: arguments)
         process.waitUntilExit()
 
@@ -23,6 +27,13 @@ extension SwiftAtprotoPlugin: CommandPlugin {
         arguments: [String]
     ) async throws {
         let codeGenerationTool = try context.tool(named: "swift-atproto")
-        try codeGenerate(tool: codeGenerationTool, arguments: arguments)
+        var argExtractor = ArgumentExtractor(arguments)
+        let configurationFilePath: String?
+        if argExtractor.extractOption(named: "atproto-configuration").first == nil {
+            configurationFilePath = URL(filePath: context.package.directory.string).appending(component: ".atproto.json").path()
+        } else {
+            configurationFilePath = nil
+        }
+        try codeGenerate(tool: codeGenerationTool, arguments: arguments, configurationFilePath: configurationFilePath)
     }
 }

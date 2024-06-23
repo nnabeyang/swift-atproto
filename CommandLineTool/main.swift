@@ -1,16 +1,19 @@
 import ArgumentParser
 import Foundation
+import SourceControl
 import SwiftAtprotoLex
 
 struct Lexgen: ParsableCommand {
     static var configuration = CommandConfiguration(commandName: "swift-atproto", version: SwiftAtprotoLex.version)
-    @Argument
-    var path: String
+    @Option(name: .customLong("atproto-configuration"))
+    var configuration: String
     @Option(name: .long)
     var outdir: String
 
     mutating func run() throws {
-        try SwiftAtprotoLex.main(outdir: outdir, path: path)
+        let configurationtURL = URL(filePath: configuration)
+        try SourceControl.main(configuration: configurationtURL)
+        try SwiftAtprotoLex.main(outdir: outdir, path: SourceControl.lexiconsDirectoryURL(packageRootURL: configurationtURL.deletingLastPathComponent()).path())
     }
 }
 
