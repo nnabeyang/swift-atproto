@@ -37,9 +37,32 @@ pod 'SwiftAtproto'
 
 Code generation is done as follows:
 ```bash
-swift package plugin --allow-writing-to-package-directory swift-atproto \
-  --outdir <OUTPUT_DIR> \
-  /path/to/bluesky-social/atproto/lexicons
+swift package plugin --allow-writing-to-package-directory swift-atproto --outdir <OUTPUT_DIR> --atproto-configuration ./.atproto.json
+```
+
+Sample configuration file is as follows:
+```json
+{
+  "dependencies": [
+    {
+      "location": "https://github.com/bluesky-social/atproto.git",
+      "lexicons": [
+        { "prefix": "app.bsky", "path": "lexicons/app/bsky" },
+        { "prefix": "com.atproto", "path": "lexicons/com/atproto" }
+      ],
+      "state": {
+        "tag": "@atproto/api@0.12.18"
+      }
+    },
+    {
+      "location": "https://github.com/whtwnd/whitewind-blog.git",
+      "lexicons": [{ "prefix": "com.whtwnd", "path": "lexicons/com/whtwnd" }],
+      "state": {
+        "tag": "v1.0.1"
+      }
+    }
+  ]
+}
 ```
 
 ## License
