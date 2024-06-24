@@ -37,7 +37,8 @@ pod 'SwiftAtproto'
 
 Code generation is done as follows:
 ```bash
-swift package plugin --allow-writing-to-package-directory swift-atproto --outdir <OUTPUT_DIR> --atproto-configuration ./.atproto.json
+swift package plugin --allow-writing-to-package-directory \
+--allow-network-connections all:443 swift-atproto --outdir <OUTPUT_DIR> --atproto-configuration ./.atproto.json
 ```
 
 Sample configuration file is as follows:
