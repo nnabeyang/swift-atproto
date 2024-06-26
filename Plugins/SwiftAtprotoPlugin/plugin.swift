@@ -3,11 +3,14 @@ import PackagePlugin
 
 @main
 struct SwiftAtprotoPlugin {
-    func codeGenerate(tool: PluginContext.Tool, arguments: [String], configurationFilePath: String?) throws {
+    func codeGenerate(tool: PluginContext.Tool, outputDirectoryPath: String?, configurationFilePath: String?) throws {
         let codeGenerationExec = URL(fileURLWithPath: tool.path.string)
-        var arguments = arguments
+        var arguments = [String]()
         if let configurationFilePath = configurationFilePath {
             arguments.append(contentsOf: ["--atproto-configuration", configurationFilePath])
+        }
+        if let outputDirectoryPath = outputDirectoryPath {
+            arguments.append(contentsOf: ["--outdir", outputDirectoryPath])
         }
         let process = try Process.run(codeGenerationExec, arguments: arguments)
         process.waitUntilExit()
@@ -34,6 +37,9 @@ extension SwiftAtprotoPlugin: CommandPlugin {
         } else {
             configurationFilePath = nil
         }
-        try codeGenerate(tool: codeGenerationTool, arguments: arguments, configurationFilePath: configurationFilePath)
+        let outputDirectoryPath = argExtractor.extractOption(named: "outdir").first
+        try codeGenerate(tool: codeGenerationTool,
+                         outputDirectoryPath: outputDirectoryPath,
+                         configurationFilePath: configurationFilePath)
     }
 }
