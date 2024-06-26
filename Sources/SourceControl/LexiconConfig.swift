@@ -2,6 +2,7 @@ import Foundation
 
 public struct LexiconConfig: Codable {
     public let dependencies: [LexiconDependency]
+    public let module: String?
 }
 
 public struct LexiconDependency: Codable {

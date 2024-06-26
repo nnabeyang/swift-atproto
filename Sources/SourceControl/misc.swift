@@ -26,11 +26,7 @@ public func lexiconsDirectoryURL(packageRootURL: URL) -> URL {
     packageRootURL.appending(components: ".lexicons", "lexicons")
 }
 
-public func main(configuration configFile: URL) throws {
-    let rootURL = configFile.deletingLastPathComponent()
-    let data = try Data(contentsOf: configFile)
-    let config = try JSONDecoder().decode(LexiconConfig.self, from: data)
-
+public func main(rootURL: URL, config: LexiconConfig) throws {
     let checkoutDirectory = checkoutDirectoryURL(packageRootURL: rootURL)
     let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
 
