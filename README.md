@@ -62,7 +62,8 @@ Sample configuration file is as follows:
         "tag": "v1.0.1"
       }
     }
-  ]
+  ],
+  "module": "Sources/Lexicon"
 }
 ```
 
