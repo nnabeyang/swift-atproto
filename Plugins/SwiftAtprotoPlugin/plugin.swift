@@ -43,3 +43,25 @@ extension SwiftAtprotoPlugin: CommandPlugin {
                          configurationFilePath: configurationFilePath)
     }
 }
+
+#if canImport(XcodeProjectPlugin)
+import XcodeProjectPlugin
+
+extension SwiftAtprotoPlugin: XcodeCommandPlugin {
+  func performCommand(context: XcodeProjectPlugin.XcodePluginContext, arguments: [String]) throws {
+      let codeGenerationTool = try context.tool(named: "swift-atproto")
+      var argExtractor = ArgumentExtractor(arguments)
+      let configurationFilePath: String?
+      if argExtractor.extractOption(named: "atproto-configuration").first == nil {
+          configurationFilePath = URL(filePath: context.xcodeProject.directory.string).appending(component: ".atproto.json").path()
+      } else {
+          configurationFilePath = nil
+      }
+
+      let outputDirectoryPath = argExtractor.extractOption(named: "outdir").first
+      try codeGenerate(tool: codeGenerationTool,
+                       outputDirectoryPath: outputDirectoryPath,
+                       configurationFilePath: configurationFilePath)
+  }
+}
+#endif
