@@ -105,4 +105,16 @@ public final class GitRepository {
     func checkoutExists() throws -> Bool {
         try !isBare()
     }
+
+    public func resolveRevision(tag: String) throws -> String {
+        let specifier = "\(tag)^{commit}"
+        return try lock.withLock {
+            let output = try callGit([
+                "rev-parse",
+                "--verify",
+                specifier,
+            ])
+            return output.trimmingCharacters(in: .newlines)
+        }
+    }
 }

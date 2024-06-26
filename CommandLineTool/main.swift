@@ -5,7 +5,7 @@ import SwiftAtprotoLex
 
 struct Lexgen: ParsableCommand {
     private static let defaultModulePath = "Sources/Lexicon"
-    static var configuration = CommandConfiguration(commandName: "swift-atproto", version: SwiftAtprotoLex.version)
+    static var configuration = CommandConfiguration(commandName: "swift-atproto", version: SourceControl.version)
     @Option(name: .customLong("atproto-configuration"))
     var configuration: String
     @Option(name: .long)
@@ -15,9 +15,10 @@ struct Lexgen: ParsableCommand {
         let configurationtURL = URL(filePath: configuration)
         let data = try Data(contentsOf: configurationtURL)
         let config = try JSONDecoder().decode(LexiconConfig.self, from: data)
-        try SourceControl.main(rootURL: configurationtURL.deletingLastPathComponent(), config: config)
-        let outdir = outdir ?? config.module ?? Self.defaultModulePath
-        try SwiftAtprotoLex.main(outdir: outdir, path: SourceControl.lexiconsDirectoryURL(packageRootURL: configurationtURL.deletingLastPathComponent()).path())
+        let module = outdir ?? config.module ?? Self.defaultModulePath
+        let rootURL = configurationtURL.deletingLastPathComponent()
+        try SourceControl.main(rootURL: rootURL, config: config, module: module)
+        try SwiftAtprotoLex.main(outdir: module, path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path())
     }
 }
 

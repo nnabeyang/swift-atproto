@@ -1,5 +1,7 @@
 import Foundation
 
+public var version: String { "0.12.1" }
+
 public func getEnvSearchPaths(pathString: String) -> [URL] {
     pathString.split(separator: ":").map { URL(filePath: String($0)) }
 }
@@ -26,14 +28,14 @@ public func lexiconsDirectoryURL(packageRootURL: URL) -> URL {
     packageRootURL.appending(components: ".lexicons", "lexicons")
 }
 
-public func main(rootURL: URL, config: LexiconConfig) throws {
+public func main(rootURL: URL, config: LexiconConfig, module: String) throws {
     let checkoutDirectory = checkoutDirectoryURL(packageRootURL: rootURL)
     let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
 
     if !FileManager.default.fileExists(atPath: lexiconsDirectory.path()) {
         try FileManager.default.createDirectory(at: lexiconsDirectory, withIntermediateDirectories: true)
     }
-
+    var resolvedDendencies = [ResolvedLexiconDependency]()
     for dependency in config.dependencies {
         var name = dependency.location.lastPathComponent
         if name.hasSuffix(".git") {
@@ -43,7 +45,10 @@ public func main(rootURL: URL, config: LexiconConfig) throws {
         if !GitRepositoryProvider.workingCopyExists(at: destURL.path()) {
             let clone = try GitRepositoryProvider.createWorkingCopy(sourcePath: dependency.location.absoluteString,
                                                                     at: destURL.path())
-            try clone.checkout(tag: dependency.state.tag)
+            let tag = dependency.state.tag
+            try clone.checkout(tag: tag)
+            let revision = try clone.resolveRevision(tag: tag)
+            resolvedDendencies.append(.init(config: dependency, revision: revision))
         }
         for lexicon in dependency.lexicons {
             let srcBaseURL = destURL.appending(component: lexicon.path)
@@ -59,5 +64,9 @@ public func main(rootURL: URL, config: LexiconConfig) throws {
                 }
             }
         }
+    }
+    if resolvedDendencies.count == config.dependencies.count {
+        let store = LexiconsStore(generator: version, module: module, dependencies: resolvedDendencies)
+        try store.write(to: rootURL.appending(component: ".atproto-lock.json"))
     }
 }
