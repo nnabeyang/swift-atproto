@@ -306,17 +306,17 @@ class TypeSchema: Codable {
                                     arguments: LabeledExprListSyntax([
                                         LabeledExprSyntax(
                                             label: .identifier("error"),
-                                            colon: .colonToken(trailingTrivia: .space),
+                                            colon: .colonToken(),
                                             expression: ExprSyntax(MemberAccessExprSyntax(
                                                 base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("error"))),
                                                 period: .periodToken(),
                                                 declName: DeclReferenceExprSyntax(baseName: .identifier("error"))
                                             )),
-                                            trailingComma: .commaToken(trailingTrivia: .space)
+                                            trailingComma: .commaToken()
                                         ),
                                         LabeledExprSyntax(
                                             label: .identifier("message"),
-                                            colon: .colonToken(trailingTrivia: .space),
+                                            colon: .colonToken(),
                                             expression: ExprSyntax(MemberAccessExprSyntax(
                                                 base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("error"))),
                                                 period: .periodToken(),
@@ -344,10 +344,10 @@ class TypeSchema: Codable {
                     PatternBindingSyntax(
                         pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("error"))),
                         typeAnnotation: TypeAnnotationSyntax(
-                            colon: .colonToken(trailingTrivia: .space),
+                            colon: .colonToken(),
                             type: OptionalTypeSyntax(
                                 wrappedType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String"))),
-                                questionMark: .postfixQuestionMarkToken(trailingTrivia: .space)
+                                questionMark: .postfixQuestionMarkToken()
                             )
                         ),
                         accessorBlock: AccessorBlockSyntax(
@@ -381,7 +381,7 @@ class TypeSchema: Codable {
                                                 caseKeyword: .keyword(.case),
                                                 caseItems: SwitchCaseItemListSyntax([
                                                     SwitchCaseItemSyntax(pattern: PatternSyntax(ValueBindingPatternSyntax(
-                                                        bindingSpecifier: .keyword(.let, trailingTrivia: .space),
+                                                        bindingSpecifier: .keyword(.let),
                                                         pattern: PatternSyntax(ExpressionPatternSyntax(expression: ExprSyntax(FunctionCallExprSyntax(
                                                             calledExpression: ExprSyntax(MemberAccessExprSyntax(
                                                                 period: .periodToken(),
@@ -391,7 +391,7 @@ class TypeSchema: Codable {
                                                             arguments: LabeledExprListSyntax([
                                                                 LabeledExprSyntax(
                                                                     expression: ExprSyntax(PatternExprSyntax(pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("error"))))),
-                                                                    trailingComma: .commaToken(trailingTrivia: .space)
+                                                                    trailingComma: .commaToken()
                                                                 ),
                                                                 LabeledExprSyntax(expression: ExprSyntax(DiscardAssignmentExprSyntax(wildcard: .wildcardToken()))),
                                                             ]),
@@ -428,10 +428,10 @@ class TypeSchema: Codable {
                     PatternBindingSyntax(
                         pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("message"))),
                         typeAnnotation: TypeAnnotationSyntax(
-                            colon: .colonToken(trailingTrivia: .space),
+                            colon: .colonToken(),
                             type: OptionalTypeSyntax(
                                 wrappedType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String"))),
-                                questionMark: .postfixQuestionMarkToken(trailingTrivia: .space)
+                                questionMark: .postfixQuestionMarkToken()
                             )
                         ),
                         accessorBlock: AccessorBlockSyntax(
@@ -445,7 +445,7 @@ class TypeSchema: Codable {
                                                     caseKeyword: .keyword(.case),
                                                     caseItems: SwitchCaseItemListSyntax([
                                                         SwitchCaseItemSyntax(pattern: PatternSyntax(ValueBindingPatternSyntax(
-                                                            bindingSpecifier: .keyword(.let, trailingTrivia: .space),
+                                                            bindingSpecifier: .keyword(.let),
                                                             pattern: PatternSyntax(ExpressionPatternSyntax(expression: ExprSyntax(FunctionCallExprSyntax(
                                                                 calledExpression: ExprSyntax(MemberAccessExprSyntax(
                                                                     period: .periodToken(),
@@ -476,7 +476,7 @@ class TypeSchema: Codable {
                                                 caseKeyword: .keyword(.case),
                                                 caseItems: SwitchCaseItemListSyntax([
                                                     SwitchCaseItemSyntax(pattern: PatternSyntax(ValueBindingPatternSyntax(
-                                                        bindingSpecifier: .keyword(.let, trailingTrivia: .space),
+                                                        bindingSpecifier: .keyword(.let),
                                                         pattern: PatternSyntax(ExpressionPatternSyntax(expression: ExprSyntax(FunctionCallExprSyntax(
                                                             calledExpression: ExprSyntax(MemberAccessExprSyntax(
                                                                 period: .periodToken(),
@@ -1135,9 +1135,9 @@ class TypeSchema: Codable {
                             ExprSyntax(MemberAccessExprSyntax(
                                 base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
                                 period: .periodToken(),
-                                declName: DeclReferenceExprSyntax(baseName: .identifier(key, trailingTrivia: .space))
+                                declName: DeclReferenceExprSyntax(baseName: .identifier(key))
                             )),
-                            ExprSyntax(AssignmentExprSyntax(equal: .equalToken(trailingTrivia: .space))),
+                            ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
                             ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(key))),
                         ]))
                     }
@@ -1434,7 +1434,7 @@ class TypeSchema: Codable {
                                 ])
                             )) {
                                 TryExprSyntax(
-                                    tryKeyword: .keyword(.try, trailingTrivia: .space),
+                                    tryKeyword: .keyword(.try),
                                     expression: ExprSyntax(FunctionCallExprSyntax(
                                         calledExpression: ExprSyntax(MemberAccessExprSyntax(
                                             base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("container"))),
@@ -1451,24 +1451,23 @@ class TypeSchema: Codable {
                                                     ]),
                                                     closingQuote: .stringQuoteToken()
                                                 )),
-                                                trailingComma: .commaToken(trailingTrivia: .space)
+                                                trailingComma: .commaToken()
                                             ),
                                             LabeledExprSyntax(
                                                 label: .identifier("forKey"),
-                                                colon: .colonToken(trailingTrivia: .space),
+                                                colon: .colonToken(),
                                                 expression: ExprSyntax(MemberAccessExprSyntax(
                                                     period: .periodToken(),
                                                     declName: DeclReferenceExprSyntax(baseName: .identifier("type"))
                                                 ))
                                             ),
                                         ]),
-                                        rightParen: .rightParenToken(),
-                                        additionalTrailingClosures: MultipleTrailingClosureElementListSyntax([])
+                                        rightParen: .rightParenToken()
                                     ))
                                 )
 
                                 TryExprSyntax(
-                                    tryKeyword: .keyword(.try, trailingTrivia: .space),
+                                    tryKeyword: .keyword(.try),
                                     expression: ExprSyntax(FunctionCallExprSyntax(
                                         calledExpression: ExprSyntax(MemberAccessExprSyntax(
                                             base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("value"))),
@@ -1479,7 +1478,7 @@ class TypeSchema: Codable {
                                         arguments: LabeledExprListSyntax([
                                             LabeledExprSyntax(
                                                 label: .identifier("to"),
-                                                colon: .colonToken(trailingTrivia: .space),
+                                                colon: .colonToken(),
                                                 expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("encoder")))
                                             ),
                                         ]),
