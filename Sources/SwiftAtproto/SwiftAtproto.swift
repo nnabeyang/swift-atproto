@@ -92,15 +92,11 @@ extension String {
     }
 
     func camelCased() -> String {
-        var prev = Character(" ")
-        return String(map {
-            if prev.isWhitespace {
-                prev = $0
-                return Character($0.lowercased())
-            }
-            prev = $0
-            return $0
-        })
+        guard !isEmpty else { return "" }
+        let words = components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        let first = words.first!.lowercased()
+        let rest = words.dropFirst().map(\.capitalized)
+        return ([first] + rest).joined()
     }
 }
 
