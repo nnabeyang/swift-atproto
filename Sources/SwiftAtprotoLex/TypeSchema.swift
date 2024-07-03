@@ -2384,18 +2384,28 @@ extension HTTPAPITypeDefinition {
 
     func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol? {
         if let parameters, !parameters.properties.isEmpty {
-            DictionaryExprSyntax {
+            var required = [String: Bool]()
+            for req in parameters.required ?? [] {
+                required[req] = true
+            }
+            return DictionaryExprSyntax {
                 for (name, t) in parameters.sortedProperties {
                     let ts = TypeSchema(id: id, prefix: prefix, defName: name, type: t)
                     let tn = TypeSchema.paramNameForField(typeSchema: ts)
+                    let isRequired = required[name] ?? false
+                    let stringLiteral = if case let .string(def) = t, def.enum != nil || def.knownValues != nil {
+                        isRequired ? ".\(tn)(\(name).rawValue)" : ".\(tn)(\(name)?.rawValue)"
+                    } else {
+                        ".\(tn)(\(name))"
+                    }
                     DictionaryElementSyntax(
                         key: StringLiteralExprSyntax(content: name),
-                        value: ExprSyntax(stringLiteral: ".\(tn)(\(name))")
+                        value: ExprSyntax(stringLiteral: stringLiteral)
                     )
                 }
             }
         } else {
-            nil
+            return nil
         }
     }
 }
