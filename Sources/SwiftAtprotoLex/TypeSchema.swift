@@ -751,11 +751,12 @@ class TypeSchema: Codable {
     private func genCodeStringWithEnum(def _: StringTypeDefinition, leadingTrivia _: Trivia? = nil, name: String, cases: [String]) -> DeclSyntaxProtocol {
         var blocks = [MemberBlockItemSyntax]()
         for value in cases {
+            let isKeyword = isNeedEscapingKeyword(value)
             blocks.append(MemberBlockItemSyntax(decl: EnumCaseDeclSyntax(
                 caseKeyword: .keyword(.case),
                 elements: EnumCaseElementListSyntax([
                     EnumCaseElementSyntax(
-                        name: .identifier(value.camelCased()),
+                        name: .identifier(isKeyword ? "`\(value.camelCased())`" : value.camelCased()),
                         rawValue: InitializerClauseSyntax(
                             equal: .equalToken(),
                             value: ExprSyntax(StringLiteralExprSyntax(
@@ -1043,6 +1044,7 @@ class TypeSchema: Codable {
             trailingTrivia: .newlines(2)
         )))
         for value in knownValues {
+            let isKeyword = isNeedEscapingKeyword(value)
             initCases.append(SwitchCaseListSyntax.Element(SwitchCaseSyntax(
                 label: SwitchCaseSyntax.Label(SwitchCaseLabelSyntax(
                     caseKeyword: .keyword(.case),
@@ -1063,7 +1065,7 @@ class TypeSchema: Codable {
                         ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
                         ExprSyntax(MemberAccessExprSyntax(
                             period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .identifier(value.camelCased()))
+                            declName: DeclReferenceExprSyntax(baseName: .identifier(isKeyword ? "`\(value.camelCased())`" : value.camelCased()))
                         )),
                     ])))),
                 ])
