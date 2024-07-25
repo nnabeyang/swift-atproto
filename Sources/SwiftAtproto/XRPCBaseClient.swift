@@ -104,7 +104,8 @@ open class XRPCBaseClient: XRPCClientProtocol {
                 }
                 throw error
             } catch {
-                throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(httpResponse.statusCode)"])
+                let message = String(decoding: data, as: UTF8.self)
+                throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(httpResponse.statusCode))"])
             }
         }
 
