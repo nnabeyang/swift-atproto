@@ -14,6 +14,7 @@ public protocol XRPCClientProtocol {
 }
 
 open class XRPCBaseClient: XRPCClientProtocol {
+    private static let XRPCErrorDomain = "XRPCErrorDomain"
     private let host: URL
     private let decoder: JSONDecoder
     static var moduleName: String = ""
@@ -90,7 +91,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: 0"])
+            throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: 0"])
         }
 
         guard 200 ... 299 ~= httpResponse.statusCode else {
@@ -105,7 +106,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
                 throw error
             } catch {
                 let message = String(decoding: data, as: UTF8.self)
-                throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(httpResponse.statusCode))"])
+                throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(httpResponse.statusCode))"])
             }
         }
 
