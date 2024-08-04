@@ -16,6 +16,10 @@ public protocol XRPCClientProtocol {
 open class XRPCBaseClient: XRPCClientProtocol {
     private static let XRPCErrorDomain = "XRPCErrorDomain"
     private let host: URL
+    private var serviceEndpoint: URL {
+        auth.serviceEndPoint ?? host
+    }
+
     private let decoder: JSONDecoder
     static var moduleName: String = ""
     public var auth = AuthInfo()
@@ -60,7 +64,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
         endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
     ) async throws -> T {
         let authorization = getAuthorization(endpoint: endpoint)
-        var url = host.appending(path: endpoint)
+        var url = serviceEndpoint.appending(path: endpoint)
         if httpMethod == .get, let params = params?.dictionary {
             url.append(queryItems: Self.makeParameters(params: params))
         }
