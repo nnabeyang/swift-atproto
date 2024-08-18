@@ -1392,12 +1392,13 @@ class TypeSchema: Codable {
         for key in def.nullable ?? [] {
             required[key] = false
         }
-
-        return StructDeclSyntax(
+        let DeclSyntaxType: any ExtendedDeclSyntax.Type = isRecord ? ClassDeclSyntax.self : StructDeclSyntax.self
+        return DeclSyntaxType.init(
             leadingTrivia: leadingTrivia,
             modifiers: [
                 DeclModifierSyntax(name: .keyword(.public)),
             ],
+            typeKeyword: isRecord ? .keyword(.class) : .keyword(.struct),
             name: .init(stringLiteral: isRecord ? "\(Lex.structNameFor(prefix: prefix))_\(name)" : name),
             inheritanceClause: InheritanceClauseSyntax {
                 InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "Codable"))
@@ -2468,5 +2469,52 @@ struct ErrorResponse: Codable, Equatable, Hashable {
 extension ErrorResponse: Comparable {
     static func < (lhs: ErrorResponse, rhs: ErrorResponse) -> Bool {
         lhs.name < rhs.name
+    }
+}
+
+private protocol ExtendedDeclSyntax: DeclSyntaxProtocol {
+    init(
+        leadingTrivia: Trivia?,
+        modifiers: DeclModifierListSyntax,
+        typeKeyword: TokenSyntax,
+        name: TokenSyntax,
+        inheritanceClause: InheritanceClauseSyntax?,
+        @MemberBlockItemListBuilder memberBlockBuilder: () throws -> MemberBlockItemListSyntax
+    ) rethrows
+}
+
+extension StructDeclSyntax: ExtendedDeclSyntax {
+    init(
+        leadingTrivia: Trivia?,
+        modifiers: DeclModifierListSyntax,
+        typeKeyword: TokenSyntax = .keyword(.struct),
+        name: TokenSyntax,
+        inheritanceClause: InheritanceClauseSyntax?,
+        @MemberBlockItemListBuilder memberBlockBuilder: () throws -> MemberBlockItemListSyntax
+    ) rethrows {
+        try self.init(leadingTrivia: leadingTrivia,
+                      modifiers: modifiers,
+                      structKeyword: typeKeyword,
+                      name: name,
+                      inheritanceClause: inheritanceClause,
+                      memberBlockBuilder: memberBlockBuilder)
+    }
+}
+
+extension ClassDeclSyntax: ExtendedDeclSyntax {
+    init(
+        leadingTrivia: Trivia?,
+        modifiers: DeclModifierListSyntax,
+        typeKeyword: TokenSyntax = .keyword(.class),
+        name: TokenSyntax,
+        inheritanceClause: InheritanceClauseSyntax?,
+        @MemberBlockItemListBuilder memberBlockBuilder: () throws -> MemberBlockItemListSyntax
+    ) rethrows {
+        try self.init(leadingTrivia: leadingTrivia,
+                      modifiers: modifiers,
+                      classKeyword: typeKeyword,
+                      name: name,
+                      inheritanceClause: inheritanceClause,
+                      memberBlockBuilder: memberBlockBuilder)
     }
 }
