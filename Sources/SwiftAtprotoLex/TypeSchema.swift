@@ -177,6 +177,7 @@ class TypeSchema: Codable {
             leadingTrivia: leadingTrivia,
             modifiers: [
                 DeclModifierSyntax(name: .keyword(.public)),
+                DeclModifierSyntax(name: .keyword(.indirect)),
             ],
             name: .init(stringLiteral: "\(typeName)_Error"),
             inheritanceClause: InheritanceClauseSyntax {
@@ -1006,6 +1007,7 @@ class TypeSchema: Codable {
         return DeclSyntax(EnumDeclSyntax(
             modifiers: DeclModifierListSyntax([
                 DeclModifierSyntax(name: .keyword(.public)),
+                DeclModifierSyntax(name: .keyword(.indirect)),
             ]),
             enumKeyword: .keyword(.enum),
             name: .identifier(name),
@@ -1359,6 +1361,7 @@ class TypeSchema: Codable {
             leadingTrivia: leadingTrivia,
             modifiers: DeclModifierListSyntax([
                 DeclModifierSyntax(name: .keyword(.public)),
+                DeclModifierSyntax(name: .keyword(.indirect)),
             ]),
             enumKeyword: .keyword(.enum),
             name: .identifier(name),
@@ -1390,7 +1393,7 @@ class TypeSchema: Codable {
             required[key] = false
         }
 
-        return ClassDeclSyntax(
+        return StructDeclSyntax(
             leadingTrivia: leadingTrivia,
             modifiers: [
                 DeclModifierSyntax(name: .keyword(.public)),
@@ -1488,6 +1491,7 @@ class TypeSchema: Codable {
             leadingTrivia: leadingTrivia,
             modifiers: [
                 DeclModifierSyntax(name: .keyword(.public)),
+                DeclModifierSyntax(name: .keyword(.indirect)),
             ],
             name: .init(stringLiteral: name),
             inheritanceClause: InheritanceClauseSyntax {

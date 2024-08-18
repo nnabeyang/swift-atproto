@@ -156,11 +156,13 @@ public class UnExpectedError: XRPCError {
     }
 }
 
-public class UnknownRecord: Identifiable, Codable {
+public struct UnknownRecord: Identifiable, Codable {
     public let type: String
     enum CodingKeys: String, CodingKey {
         case type = "$type"
     }
+
+    public var id: String { UUID().uuidString }
 
     public init(type: String) {
         self.type = type
