@@ -93,14 +93,12 @@ open class XRPCBaseClient: XRPCClientProtocol {
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: 0"])
         }
 
         guard 200 ... 299 ~= httpResponse.statusCode else {
-            do {
-                let error = try decoder.decode(UnExpectedError.self, from: data)
+            if let error = try? decoder.decode(UnExpectedError.self, from: data) {
                 if tokenIsExpired(error: error), retry, await refreshSession() {
                     return try await fetch(
                         endpoint: endpoint, contentType: contentType, httpMethod: httpMethod,
@@ -108,7 +106,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
                     )
                 }
                 throw error
-            } catch {
+            } else {
                 let message = String(decoding: data, as: UTF8.self)
                 throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(httpResponse.statusCode))"])
             }
