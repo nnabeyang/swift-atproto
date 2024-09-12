@@ -599,7 +599,7 @@ class TypeSchema: Codable {
         case .integer:
             "integer"
         case .unknown:
-            "unknown"
+            "other"
         case .array:
             "array"
         default:
@@ -1114,7 +1114,7 @@ class TypeSchema: Codable {
                     ExprSyntax(FunctionCallExprSyntax(
                         calledExpression: ExprSyntax(MemberAccessExprSyntax(
                             period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .identifier("unknown"))
+                            declName: DeclReferenceExprSyntax(baseName: .identifier("other"))
                         )),
                         leftParen: .leftParenToken(),
                         arguments: LabeledExprListSyntax([
@@ -1135,7 +1135,7 @@ class TypeSchema: Codable {
                         pattern: PatternSyntax(ExpressionPatternSyntax(expression: FunctionCallExprSyntax(
                             calledExpression: MemberAccessExprSyntax(
                                 period: .periodToken(),
-                                declName: DeclReferenceExprSyntax(baseName: .identifier("unknown"))
+                                declName: DeclReferenceExprSyntax(baseName: .identifier("other"))
                             ),
                             leftParen: .leftParenToken(),
                             arguments: LabeledExprListSyntax([
@@ -1156,7 +1156,7 @@ class TypeSchema: Codable {
                 caseKeyword: .keyword(.case),
                 elements: EnumCaseElementListSyntax([
                     EnumCaseElementSyntax(
-                        name: .identifier("unknown"),
+                        name: .identifier("other"),
                         parameterClause: EnumCaseParameterClauseSyntax(
                             leftParen: .leftParenToken(),
                             parameters: EnumCaseParameterListSyntax([
@@ -1528,7 +1528,7 @@ class TypeSchema: Codable {
                 caseKeyword: .keyword(.case),
                 elements: EnumCaseElementListSyntax([
                     EnumCaseElementSyntax(
-                        name: .identifier("unknown"),
+                        name: .identifier("other"),
                         parameterClause: EnumCaseParameterClauseSyntax(
                             leftParen: .leftParenToken(),
                             parameters: EnumCaseParameterListSyntax([
@@ -1661,7 +1661,7 @@ class TypeSchema: Codable {
                             DeclReferenceExprSyntax(baseName: .keyword(.self))
                             AssignmentExprSyntax()
                             TryExprSyntax(expression: FunctionCallExprSyntax(
-                                calledExpression: ExprSyntax(".unknown"),
+                                calledExpression: ExprSyntax(".other"),
                                 leftParen: .leftParenToken(),
                                 arguments: .init([
                                     LabeledExprSyntax(expression: FunctionCallExprSyntax(
@@ -1803,7 +1803,7 @@ class TypeSchema: Codable {
                     }
                     SwitchCaseSyntax(label: .case(
                         .init(caseItems: [
-                            .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("unknown")))),
+                            .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("other")))),
                         ])
                     )) {
                         StmtSyntax("break")
