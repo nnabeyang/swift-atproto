@@ -2228,6 +2228,7 @@ enum EncodingType: String, Codable {
     case jsonl = "application/jsonl"
     case car = "application/vnd.ipld.car"
     case text = "text/plain"
+    case mp4 = "video/mp4"
     case any = "*/*"
 
     init(from decoder: Decoder) throws {
@@ -2308,7 +2309,7 @@ extension HTTPAPITypeDefinition {
     var contentType: String {
         if let input {
             switch input.encoding {
-            case .json, .jsonl, .text:
+            case .json, .jsonl, .text, .mp4:
                 return input.encoding.rawValue
             case .cbor, .any, .car:
                 return "*/*"
@@ -2327,7 +2328,7 @@ extension HTTPAPITypeDefinition {
         arguments.append(.init(firstName: .identifier("client"), type: TypeSyntax("any XRPCClientProtocol"), trailingComma: comma))
         if let input {
             switch input.encoding {
-            case .cbor, .any, .car:
+            case .cbor, .any, .car, .mp4:
                 let tname = "Data"
                 let comma: TokenSyntax? = (parameters == nil || (parameters?.properties.isEmpty ?? false)) ? nil : .commaToken()
                 arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
@@ -2382,7 +2383,7 @@ extension HTTPAPITypeDefinition {
                 return ReturnClauseSyntax(type: TypeSyntax(stringLiteral: outname))
             case .text:
                 return ReturnClauseSyntax(type: TypeSyntax(stringLiteral: "String"))
-            case .cbor, .car, .any:
+            case .cbor, .car, .any, .mp4:
                 return ReturnClauseSyntax(type: TypeSyntax(stringLiteral: "Data"))
             }
         }
