@@ -718,9 +718,16 @@ class TypeSchema: Codable {
         var i = 0
         for (key, property) in properties {
             i += 1
-            let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
             let isRequired = required[key] ?? false
-            let tname = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: dropPrefix)
+            let tname: String = {
+                if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
+                    let tname = isRequired ? "\(name)_\(key.titleCased())" : "\(name)_\(key.titleCased())?"
+                    return !dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tname)" : tname
+                } else {
+                    let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
+                    return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: dropPrefix)
+                }
+            }()
             let comma: TokenSyntax? = i == count ? nil : .commaToken()
             parameters.append(.init(firstName: .identifier(key), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
         }
@@ -1420,9 +1427,16 @@ class TypeSchema: Codable {
                 }
             }
             for (key, property) in def.sortedProperties {
-                let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
                 let isRequired = required[key] ?? false
-                let tname = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: !isRecord)
+                let tname: String = {
+                    if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
+                        let tname = isRequired ? "\(name)_\(key.titleCased())" : "\(name)_\(key.titleCased())?"
+                        return isRecord ? "\(Lex.structNameFor(prefix: self.prefix)).\(tname)" : tname
+                    } else {
+                        let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
+                        return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: !isRecord)
+                    }
+                }()
                 property.variable(name: key, typeName: tname)
             }
 
