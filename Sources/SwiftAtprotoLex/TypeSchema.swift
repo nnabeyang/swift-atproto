@@ -2351,7 +2351,12 @@ extension HTTPAPITypeDefinition {
                 let comma: TokenSyntax? = (parameters == nil || (parameters?.properties.isEmpty ?? false)) ? nil : .commaToken()
                 arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
             case .json, .jsonl:
-                let tname = "\(fname)_Input"
+                let tname: String
+                if case let .ref(ref) = input.schema?.type {
+                    (_, tname) = ts.namesFromRef(ref: ref.ref, defMap: defMap)
+                } else {
+                    tname = "\(fname)_Input"
+                }
                 let comma: TokenSyntax? = (parameters == nil || (parameters?.properties.isEmpty ?? false)) ? nil : .commaToken()
                 arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
             }
