@@ -2146,30 +2146,6 @@ class TypeSchema: Codable {
                     effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
                 )
             ) {
-                VariableDeclSyntax(
-                    bindingSpecifier: .keyword(.var)
-                ) {
-                    PatternBindingSyntax(
-                        pattern: PatternSyntax(stringLiteral: "container"),
-                        initializer: InitializerClauseSyntax(
-                            value: FunctionCallExprSyntax(
-                                calledExpression: MemberAccessExprSyntax(
-                                    base: DeclReferenceExprSyntax(baseName: .identifier("encoder")),
-                                    name: .identifier("container")
-                                ),
-                                leftParen: .leftParenToken(),
-                                arguments: .init([
-                                    LabeledExprSyntax(label: "keyedBy", colon: .colonToken(), expression: MemberAccessExprSyntax(
-                                        base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
-                                        name: .keyword(.self)
-                                    )),
-                                ]),
-                                rightParen: .rightParenToken()
-                            )
-                        )
-                    )
-                }
-
                 SwitchExprSyntax(subject: DeclReferenceExprSyntax(baseName: .keyword(.self))) {
                     for ts in tss {
                         let id = ts.defName == "main" ? ts.id : #"\#(ts.id)#\#(ts.defName)"#
@@ -2194,39 +2170,6 @@ class TypeSchema: Codable {
                                 )),
                             ])
                         )) {
-                            TryExprSyntax(
-                                tryKeyword: .keyword(.try),
-                                expression: ExprSyntax(FunctionCallExprSyntax(
-                                    calledExpression: ExprSyntax(MemberAccessExprSyntax(
-                                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("container"))),
-                                        period: .periodToken(),
-                                        declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
-                                    )),
-                                    leftParen: .leftParenToken(),
-                                    arguments: LabeledExprListSyntax([
-                                        LabeledExprSyntax(
-                                            expression: ExprSyntax(StringLiteralExprSyntax(
-                                                openingQuote: .stringQuoteToken(),
-                                                segments: StringLiteralSegmentListSyntax([
-                                                    StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(id))),
-                                                ]),
-                                                closingQuote: .stringQuoteToken()
-                                            )),
-                                            trailingComma: .commaToken()
-                                        ),
-                                        LabeledExprSyntax(
-                                            label: .identifier("forKey"),
-                                            colon: .colonToken(),
-                                            expression: ExprSyntax(MemberAccessExprSyntax(
-                                                period: .periodToken(),
-                                                declName: DeclReferenceExprSyntax(baseName: .identifier("type"))
-                                            ))
-                                        ),
-                                    ]),
-                                    rightParen: .rightParenToken()
-                                ))
-                            )
-
                             TryExprSyntax(
                                 tryKeyword: .keyword(.try),
                                 expression: ExprSyntax(FunctionCallExprSyntax(
