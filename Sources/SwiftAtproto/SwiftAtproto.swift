@@ -121,7 +121,9 @@ extension LexLink: Codable {
         } catch {
             let container = try decoder.singleValueContainer()
             let bytes = try [UInt8](container.decode(Data.self))
-            precondition(bytes[0] == 0)
+            guard bytes[0] == 0 else {
+                throw error
+            }
             self = try CID(Data(bytes[1...]))
         }
     }
