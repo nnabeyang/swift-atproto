@@ -130,7 +130,7 @@ extension AnyCodable: Decodable {
             self.init(unknown)
             return
         }
-        if let dictionary = try? container.decode([AnyCodable: AnyCodable].self) {
+        if let dictionary = try? container.decode([String: AnyCodable].self) {
             self.init(dictionary)
             return
         }
