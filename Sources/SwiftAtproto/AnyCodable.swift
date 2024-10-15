@@ -139,7 +139,6 @@ extension AnyCodable: Decodable {
             return
         }
 
-        // self.init([String: AnyCodable]())
         throw DecodingError.dataCorruptedError(in: container, debugDescription: "AnyCodable value cannot be decoded")
     }
 }
