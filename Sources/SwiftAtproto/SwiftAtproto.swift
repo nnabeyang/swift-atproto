@@ -1,7 +1,7 @@
 import CID
 import Foundation
 
-class LexiconTypesMap {
+class LexiconTypesMap: @unchecked Sendable {
     static let shared = LexiconTypesMap()
     private var map = [String: Codable.Type]()
     private var _moduleName: String = ""
