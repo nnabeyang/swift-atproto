@@ -133,7 +133,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
     }
 }
 
-public protocol XRPCError: Error, LocalizedError, Decodable {
+public protocol XRPCError: Error, LocalizedError, Decodable, Sendable {
     var error: String? { get }
     var message: String? { get }
 }
@@ -144,7 +144,7 @@ public extension XRPCError {
     }
 }
 
-public class UnExpectedError: XRPCError {
+public final class UnExpectedError: XRPCError {
     public let error: String?
     public let message: String?
     public init(error: String?, message: String?) {
