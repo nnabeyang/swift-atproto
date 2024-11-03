@@ -21,7 +21,6 @@ open class XRPCBaseClient: XRPCClientProtocol {
     }
 
     private let decoder: JSONDecoder
-    static var moduleName: String = ""
     public var auth = AuthInfo()
     public enum HTTPMethod {
         case get
@@ -45,7 +44,7 @@ open class XRPCBaseClient: XRPCClientProtocol {
     public init(host: URL) {
         self.host = host.appending(path: "xrpc")
         decoder = JSONDecoder()
-        Self.moduleName = _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? ""
+        LexiconTypesMap.shared.moduleName = _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? ""
     }
 
     static func makeParameters(params: [String: Any]) -> [URLQueryItem] {

@@ -4,7 +4,25 @@ import Foundation
 class LexiconTypesMap {
     static let shared = LexiconTypesMap()
     private var map = [String: Codable.Type]()
+    private var _moduleName: String = ""
     private let lock = NSLock()
+
+    var moduleName: String {
+        get {
+            lock.lock()
+            defer {
+                lock.unlock()
+            }
+            return _moduleName
+        }
+        set {
+            lock.lock()
+            defer {
+                lock.unlock()
+            }
+            _moduleName = newValue
+        }
+    }
 
     subscript(_ id: String) -> Codable.Type? {
         get {
@@ -68,7 +86,7 @@ public struct LexiconTypeDecoder: Codable {
         while !components.isEmpty {
             components.removeLast()
             let prefix = components.joined(separator: ".")
-            let typeName = "\(XRPCBaseClient.moduleName).\(Self.structNameFor(prefix: prefix))_\(Self.nameFromId(id: nsId, prefix: prefix))"
+            let typeName = "\(LexiconTypesMap.shared.moduleName).\(Self.structNameFor(prefix: prefix))_\(Self.nameFromId(id: nsId, prefix: prefix))"
             if let type = _typeByName(typeName) as? (any Codable.Type) {
                 LexiconTypesMap.shared[nsId] = type
                 return type
