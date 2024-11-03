@@ -3,9 +3,15 @@ import Foundation
 
 class LexiconTypesMap {
     static let shared = LexiconTypesMap()
-    var map = [String: Codable.Type]()
-    func register(id: String, val: any Codable.Type) {
-        map[id] = val
+    private var map = [String: Codable.Type]()
+
+    subscript(_ id: String) -> Codable.Type? {
+        get {
+            map[id]
+        }
+        set {
+            map[id] = newValue
+        }
     }
 }
 
@@ -46,7 +52,7 @@ public struct LexiconTypeDecoder: Codable {
     }
 
     private static func getTypeByName(typeName nsId: String) -> (any Codable.Type)? {
-        if let type = LexiconTypesMap.shared.map[nsId] {
+        if let type = LexiconTypesMap.shared[nsId] {
             return type
         }
         var components = nsId.split(separator: ".")
@@ -55,7 +61,7 @@ public struct LexiconTypeDecoder: Codable {
             let prefix = components.joined(separator: ".")
             let typeName = "\(XRPCBaseClient.moduleName).\(Self.structNameFor(prefix: prefix))_\(Self.nameFromId(id: nsId, prefix: prefix))"
             if let type = _typeByName(typeName) as? (any Codable.Type) {
-                LexiconTypesMap.shared.register(id: nsId, val: type)
+                LexiconTypesMap.shared[nsId] = type
                 return type
             }
         }
