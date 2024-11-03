@@ -1,10 +1,10 @@
 import CID
 import Foundation
 
-public class LexiconTypesMap {
-    public static let shared = LexiconTypesMap()
-    public var map = [String: Codable.Type]()
-    public func register(id: String, val: any Codable.Type) {
+class LexiconTypesMap {
+    static let shared = LexiconTypesMap()
+    var map = [String: Codable.Type]()
+    func register(id: String, val: any Codable.Type) {
         map[id] = val
     }
 }
