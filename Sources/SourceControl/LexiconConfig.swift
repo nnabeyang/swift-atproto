@@ -1,17 +1,17 @@
 import Foundation
 
-public struct LexiconConfig: Codable {
+public struct LexiconConfig: Codable, Sendable {
     public let dependencies: [LexiconDependency]
     public let module: String?
 }
 
-public struct LexiconDependency: Codable {
-    public struct Lexicon: Codable {
+public struct LexiconDependency: Codable, Sendable {
+    public struct Lexicon: Codable, Sendable {
         public let prefix: String
         public let path: String
     }
 
-    public struct SourceState: Codable {
+    public struct SourceState: Codable, Sendable {
         public let tag: String
     }
 
