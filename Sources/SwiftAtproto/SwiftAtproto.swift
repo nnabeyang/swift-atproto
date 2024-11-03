@@ -4,12 +4,21 @@ import Foundation
 class LexiconTypesMap {
     static let shared = LexiconTypesMap()
     private var map = [String: Codable.Type]()
+    private let lock = NSLock()
 
     subscript(_ id: String) -> Codable.Type? {
         get {
-            map[id]
+            lock.lock()
+            defer {
+                lock.unlock()
+            }
+            return map[id]
         }
         set {
+            lock.lock()
+            defer {
+                lock.unlock()
+            }
             map[id] = newValue
         }
     }
