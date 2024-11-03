@@ -4,7 +4,7 @@ import PackagePlugin
 @main
 struct SwiftAtprotoPlugin {
     func codeGenerate(tool: PluginContext.Tool, outputDirectoryPath: String?, configurationFilePath: String?) throws {
-        let codeGenerationExec = URL(fileURLWithPath: tool.path.string)
+        let codeGenerationExec = tool.url
         var arguments = [String]()
         if let configurationFilePath = configurationFilePath {
             arguments.append(contentsOf: ["--atproto-configuration", configurationFilePath])
@@ -33,7 +33,7 @@ extension SwiftAtprotoPlugin: CommandPlugin {
         var argExtractor = ArgumentExtractor(arguments)
         let configurationFilePath: String?
         if argExtractor.extractOption(named: "atproto-configuration").first == nil {
-            configurationFilePath = URL(filePath: context.package.directory.string).appending(component: ".atproto.json").path()
+            configurationFilePath = context.package.directoryURL.appending(component: ".atproto.json").path()
         } else {
             configurationFilePath = nil
         }
@@ -53,7 +53,7 @@ extension SwiftAtprotoPlugin: XcodeCommandPlugin {
       var argExtractor = ArgumentExtractor(arguments)
       let configurationFilePath: String?
       if argExtractor.extractOption(named: "atproto-configuration").first == nil {
-          configurationFilePath = URL(filePath: context.xcodeProject.directory.string).appending(component: ".atproto.json").path()
+          configurationFilePath = context.xcodeProject.directoryURL.appending(component: ".atproto.json").path()
       } else {
           configurationFilePath = nil
       }

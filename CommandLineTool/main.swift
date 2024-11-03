@@ -5,7 +5,10 @@ import SwiftAtprotoLex
 
 struct Lexgen: ParsableCommand {
     private static let defaultModulePath = "Sources/Lexicon"
-    static var configuration = CommandConfiguration(commandName: "swift-atproto", version: SourceControl.version)
+    static var configuration: CommandConfiguration {
+        CommandConfiguration(commandName: "swift-atproto", version: SourceControl.version)
+    }
+
     @Option(name: .customLong("atproto-configuration"))
     var configuration: String
     @Option(name: .long)
