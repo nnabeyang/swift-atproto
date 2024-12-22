@@ -1,9 +1,9 @@
 import CID
 import Foundation
 
-class LexiconTypesMap: @unchecked Sendable {
+final class LexiconTypesMap: @unchecked Sendable {
     static let shared = LexiconTypesMap()
-    private var map = [String: Codable.Type]()
+    private var map = [String: any ATProtoRecord.Type]()
     private var _moduleName: String = ""
     private let lock = NSLock()
 
@@ -24,7 +24,7 @@ class LexiconTypesMap: @unchecked Sendable {
         }
     }
 
-    subscript(_ id: String) -> Codable.Type? {
+    subscript(_ id: String) -> (any ATProtoRecord.Type)? {
         get {
             lock.lock()
             defer {
@@ -44,14 +44,16 @@ class LexiconTypesMap: @unchecked Sendable {
 
 public struct EmptyResponse: Codable {}
 
-public struct LexiconTypeDecoder: Codable {
+public typealias ATProtoRecord = Codable & Sendable
+
+public struct LexiconTypeDecoder: Codable, Sendable {
     let typeName: String?
-    public let val: Codable
+    public let val: any Codable & Sendable
     private enum CodingKeys: String, CodingKey {
         case type = "$type"
     }
 
-    public init(typeName: String, val: any Codable) {
+    public init(typeName: String, val: any ATProtoRecord) {
         self.typeName = typeName
         self.val = val
     }
@@ -78,7 +80,7 @@ public struct LexiconTypeDecoder: Codable {
         try val.encode(to: encoder)
     }
 
-    private static func getTypeByName(typeName nsId: String) -> (any Codable.Type)? {
+    private static func getTypeByName(typeName nsId: String) -> (any ATProtoRecord.Type)? {
         if let type = LexiconTypesMap.shared[nsId] {
             return type
         }
@@ -87,7 +89,7 @@ public struct LexiconTypeDecoder: Codable {
             components.removeLast()
             let prefix = components.joined(separator: ".")
             let typeName = "\(LexiconTypesMap.shared.moduleName).\(Self.structNameFor(prefix: prefix))_\(Self.nameFromId(id: nsId, prefix: prefix))"
-            if let type = _typeByName(typeName) as? (any Codable.Type) {
+            if let type = _typeByName(typeName) as? (any ATProtoRecord.Type) {
                 LexiconTypesMap.shared[nsId] = type
                 return type
             }
