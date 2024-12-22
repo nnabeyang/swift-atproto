@@ -45,19 +45,19 @@ public struct AnyCodable {
         _box = .hashable(box)
     }
 
-    public init(_ base: some Encodable) {
+    init(_ base: some Encodable) {
         self.init(encodable: _ConcreateCodableBox(base))
     }
 
-    public init(_ base: some Encodable & Equatable) {
+    init(_ base: some Encodable & Equatable) {
         self.init(equatable: _ConcreateCodableBox(base))
     }
 
-    public init(_ base: some Encodable & Hashable) {
+    init(_ base: some Encodable & Hashable) {
         self.init(hashable: _ConcreateCodableBox(base))
     }
 
-    public var base: Any {
+    var base: Any {
         _box.base
     }
 }
