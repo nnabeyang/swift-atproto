@@ -599,7 +599,7 @@ class TypeSchema: Codable {
         case .integer:
             "integer"
         case .unknown:
-            "other"
+            "_other"
         case .array:
             "array"
         default:
@@ -1125,7 +1125,7 @@ class TypeSchema: Codable {
                     ExprSyntax(FunctionCallExprSyntax(
                         calledExpression: ExprSyntax(MemberAccessExprSyntax(
                             period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .identifier("other"))
+                            declName: DeclReferenceExprSyntax(baseName: .identifier("_other"))
                         )),
                         leftParen: .leftParenToken(),
                         arguments: LabeledExprListSyntax([
@@ -1146,7 +1146,7 @@ class TypeSchema: Codable {
                         pattern: PatternSyntax(ExpressionPatternSyntax(expression: FunctionCallExprSyntax(
                             calledExpression: MemberAccessExprSyntax(
                                 period: .periodToken(),
-                                declName: DeclReferenceExprSyntax(baseName: .identifier("other"))
+                                declName: DeclReferenceExprSyntax(baseName: .identifier("_other"))
                             ),
                             leftParen: .leftParenToken(),
                             arguments: LabeledExprListSyntax([
@@ -1167,7 +1167,7 @@ class TypeSchema: Codable {
                 caseKeyword: .keyword(.case),
                 elements: EnumCaseElementListSyntax([
                     EnumCaseElementSyntax(
-                        name: .identifier("other"),
+                        name: .identifier("_other"),
                         parameterClause: EnumCaseParameterClauseSyntax(
                             leftParen: .leftParenToken(),
                             parameters: EnumCaseParameterListSyntax([
@@ -1464,7 +1464,7 @@ class TypeSchema: Codable {
                 bindingSpecifier: .keyword(isRecord ? .let : .var),
                 bindings: [
                     PatternBindingSyntax(
-                        pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("unknownValues"))),
+                        pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
                         typeAnnotation: TypeAnnotationSyntax(
                             colon: .colonToken(),
                             type: DictionaryTypeSyntax(
@@ -1508,7 +1508,7 @@ class TypeSchema: Codable {
                     ExprSyntax(MemberAccessExprSyntax(
                         base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
                         period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .identifier("unknownValues"))
+                        declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
                     )),
                     ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
                     ExprSyntax(DictionaryExprSyntax(
@@ -1693,7 +1693,7 @@ class TypeSchema: Codable {
                             bindingSpecifier: .keyword(.var),
                             bindings: PatternBindingListSyntax([
                                 PatternBindingSyntax(
-                                    pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("unknownValues"))),
+                                    pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
                                     initializer: InitializerClauseSyntax(
                                         equal: .equalToken(),
                                         value: ExprSyntax(FunctionCallExprSyntax(
@@ -1763,7 +1763,7 @@ class TypeSchema: Codable {
                                     ))),
                                     CodeBlockItemSyntax(item: CodeBlockItemSyntax.Item(SequenceExprSyntax(elements: ExprListSyntax([
                                         ExprSyntax(SubscriptCallExprSyntax(
-                                            calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("unknownValues"))),
+                                            calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))),
                                             leftSquare: .leftSquareToken(),
                                             arguments: LabeledExprListSyntax([
                                                 LabeledExprSyntax(expression: ExprSyntax(MemberAccessExprSyntax(
@@ -1811,10 +1811,10 @@ class TypeSchema: Codable {
                             ExprSyntax(MemberAccessExprSyntax(
                                 base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
                                 period: .periodToken(),
-                                declName: DeclReferenceExprSyntax(baseName: .identifier("unknownValues"))
+                                declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
                             )),
                             ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-                            ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("unknownValues"))),
+                            ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))),
                         ]))))
                     })
                 ))
@@ -1920,7 +1920,7 @@ class TypeSchema: Codable {
                             tryKeyword: .keyword(.try),
                             expression: ExprSyntax(FunctionCallExprSyntax(
                                 calledExpression: ExprSyntax(MemberAccessExprSyntax(
-                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("unknownValues"))),
+                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))),
                                     period: .periodToken(),
                                     declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
                                 )),
@@ -2001,7 +2001,7 @@ class TypeSchema: Codable {
                 caseKeyword: .keyword(.case),
                 elements: EnumCaseElementListSyntax([
                     EnumCaseElementSyntax(
-                        name: .identifier("other"),
+                        name: .identifier("_other"),
                         parameterClause: EnumCaseParameterClauseSyntax(
                             leftParen: .leftParenToken(),
                             parameters: EnumCaseParameterListSyntax([
@@ -2134,7 +2134,7 @@ class TypeSchema: Codable {
                             DeclReferenceExprSyntax(baseName: .keyword(.self))
                             AssignmentExprSyntax()
                             TryExprSyntax(expression: FunctionCallExprSyntax(
-                                calledExpression: ExprSyntax(".other"),
+                                calledExpression: ExprSyntax("._other"),
                                 leftParen: .leftParenToken(),
                                 arguments: .init([
                                     LabeledExprSyntax(expression: FunctionCallExprSyntax(
@@ -2276,7 +2276,7 @@ class TypeSchema: Codable {
                     }
                     SwitchCaseSyntax(label: .case(
                         .init(caseItems: [
-                            .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("other")))),
+                            .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("_other")))),
                         ])
                     )) {
                         StmtSyntax("break")
