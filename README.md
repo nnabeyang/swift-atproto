@@ -49,17 +49,18 @@ Sample configuration file is as follows:
       "location": "https://github.com/bluesky-social/atproto.git",
       "lexicons": [
         { "prefix": "app.bsky", "path": "lexicons/app/bsky" },
-        { "prefix": "com.atproto", "path": "lexicons/com/atproto" }
+        { "prefix": "com.atproto", "path": "lexicons/com/atproto" },
+        { "prefix": "tools/ozone", "path": "lexicons/tools/ozone" }
       ],
       "state": {
-        "tag": "@atproto/api@0.12.18"
+        "tag": "@atproto/api@0.13.22"
       }
     },
     {
       "location": "https://github.com/whtwnd/whitewind-blog.git",
       "lexicons": [{ "prefix": "com.whtwnd", "path": "lexicons/com/whtwnd" }],
       "state": {
-        "tag": "v1.0.1"
+        "tag": "v1.0.16"
       }
     }
   ],
