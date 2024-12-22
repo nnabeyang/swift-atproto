@@ -1,65 +1,37 @@
 import Foundation
 
-public protocol XRPCClientProtocol {
-    func fetch<T: Decodable>(
-        endpoint: String, contentType: String, httpMethod: XRPCBaseClient.HTTPMethod, params: (some Encodable)?,
-        input: (some Encodable)?, retry: Bool
-    ) async throws -> T
-
-    func tokenIsExpired(error: UnExpectedError) -> Bool
-
-    func refreshSession() async -> Bool
-
-    func getAuthorization(endpoint: String) -> String
+public enum HTTPMethod {
+    case get
+    case post
 }
 
-open class XRPCBaseClient: XRPCClientProtocol {
-    private static let XRPCErrorDomain = "XRPCErrorDomain"
-    private let host: URL
-    private var serviceEndpoint: URL {
-        auth.serviceEndPoint ?? host
-    }
+public protocol XRPCClientProtocol: Sendable {
+    var serviceEndpoint: URL { get }
+    var decoder: JSONDecoder { get }
+    var auth: AuthInfo { get set }
 
-    private let decoder: JSONDecoder
-    public var auth = AuthInfo()
-    public enum HTTPMethod {
-        case get
-        case post
-    }
+    func tokenIsExpired(error: UnExpectedError) -> Bool
+    func getAuthorization(endpoint: String) -> String
 
-    static let dataEncodingStrategy: JSONEncoder.DataEncodingStrategy = .custom { data, encoder in
-        do {
-            if !data.isEmpty, data[0] == 0 {
-                try LexLink.dataEncodingStrategy(data: data, encoder: encoder)
-                return
-            }
-        } catch {}
-        if let string = String(data: data, encoding: .utf8) {
-            try string.encode(to: encoder)
-        } else {
-            try data.base64Encoded().encode(to: encoder)
-        }
-    }
+    mutating func fetch<T: Decodable>(
+        endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?,
+        input: (some Encodable)?, retry: Bool
+    ) async throws -> T
+    mutating func refreshSession() async -> Bool
+    mutating func signout()
 
-    public init(host: URL) {
-        self.host = host.appending(path: "xrpc")
-        decoder = JSONDecoder()
+    static var XRPCErrorDomain: String { get }
+    static func setModuleName()
+}
+
+public extension XRPCClientProtocol {
+    static var XRPCErrorDomain: String { "XRPCErrorDomain" }
+
+    static func setModuleName() {
         LexiconTypesMap.shared.moduleName = _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? ""
     }
 
-    static func makeParameters(params: [String: Any]) -> [URLQueryItem] {
-        var items = [URLQueryItem]()
-        for param in params {
-            if let seq = param.value as? [String] {
-                items.append(contentsOf: seq.map { URLQueryItem(name: param.key, value: $0) })
-            } else {
-                items.append(URLQueryItem(name: param.key, value: "\(param.value)"))
-            }
-        }
-        return items
-    }
-
-    public func fetch<T: Decodable>(
+    mutating func fetch<T: Decodable>(
         endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
     ) async throws -> T {
         let authorization = getAuthorization(endpoint: endpoint)
@@ -120,16 +92,32 @@ open class XRPCBaseClient: XRPCClientProtocol {
         return try decoder.decode(T.self, from: data)
     }
 
-    open func refreshSession() async -> Bool {
-        false
+    private static func makeParameters(params: [String: Any]) -> [URLQueryItem] {
+        var items = [URLQueryItem]()
+        for param in params {
+            if let seq = param.value as? [String] {
+                items.append(contentsOf: seq.map { URLQueryItem(name: param.key, value: $0) })
+            } else {
+                items.append(URLQueryItem(name: param.key, value: "\(param.value)"))
+            }
+        }
+        return items
     }
 
-    open func getAuthorization(endpoint _: String) -> String {
-        _abstract()
-    }
-
-    open func tokenIsExpired(error _: UnExpectedError) -> Bool {
-        _abstract()
+    internal static var dataEncodingStrategy: JSONEncoder.DataEncodingStrategy {
+        .custom { data, encoder in
+            do {
+                if !data.isEmpty, data[0] == 0 {
+                    try LexLink.dataEncodingStrategy(data: data, encoder: encoder)
+                    return
+                }
+            } catch {}
+            if let string = String(data: data, encoding: .utf8) {
+                try string.encode(to: encoder)
+            } else {
+                try data.base64Encoded().encode(to: encoder)
+            }
+        }
     }
 }
 
