@@ -1,6 +1,6 @@
 import Foundation
 
-public struct AnyCodable {
+public struct AnyCodable: @unchecked Sendable {
     enum BoxType {
         case encodable(_AnyBaseBox)
         case equatable(_AnyEquatableBox)
