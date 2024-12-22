@@ -105,7 +105,8 @@ enum Lex {
                 leadingTrivia: otherTypes.isEmpty ? nil : .newlines(2),
                 typeName: Self.nameFromId(id: schema.id, prefix: prefix),
                 typeSchema: main,
-                defMap: defMap
+                defMap: defMap,
+                prefix: structNameFor(prefix: prefix)
             )
         } else {
             nil
@@ -125,11 +126,14 @@ enum Lex {
                         ot.lex(leadingTrivia: i == 0 ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
                     }
 
-                    if let methods {
-                        for method in methods {
-                            method
-                        }
+                    if let methods, methods.count == 2 {
+                        methods[0]
                     }
+                }
+            }
+            if let methods, let method = methods.last {
+                ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
+                    method
                 }
             }
             for (i, (name, ot)) in recordTypes.enumerated() {
@@ -140,7 +144,7 @@ enum Lex {
         return src.formatted().description
     }
 
-    static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap) -> [DeclSyntaxProtocol]? {
+    static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> [DeclSyntaxProtocol]? {
         switch ts.type {
         case .token:
             let n: String = if ts.defName == "main" {
@@ -166,7 +170,7 @@ enum Lex {
         case let .procedure(def as HTTPAPITypeDefinition), .query(let def as HTTPAPITypeDefinition):
             return [
                 ts.writeErrorDecl(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap),
-                ts.writeRPC(leadingTrivia: .newlines(2), def: def, typeName: typeName, defMap: defMap),
+                ts.writeRPC(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix),
             ].compactMap { $0 }
         default:
             return nil

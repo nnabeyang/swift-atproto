@@ -618,15 +618,15 @@ class TypeSchema: Codable {
         }
     }
 
-    func writeRPC(leadingTrivia: Trivia? = nil, def: any HTTPAPITypeDefinition, typeName: String, defMap: ExtDefMap) -> DeclSyntaxProtocol {
+    func writeRPC(leadingTrivia: Trivia? = nil, def: any HTTPAPITypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
         let fname = typeName
-        let arguments = def.rpcArguments(ts: self, fname: fname, defMap: defMap)
-        let output = def.rpcOutput(ts: self, fname: fname, defMap: defMap)
+        let arguments = def.rpcArguments(ts: self, fname: fname, defMap: defMap, prefix: prefix)
+        let output = def.rpcOutput(ts: self, fname: fname, defMap: defMap, prefix: prefix)
         return FunctionDeclSyntax(
             leadingTrivia: leadingTrivia,
             modifiers: [
                 DeclModifierSyntax(name: .keyword(.public)),
-                DeclModifierSyntax(name: .keyword(.static)),
+                DeclModifierSyntax(name: .keyword(.mutating)),
             ],
             name: .identifier(typeName),
             signature: FunctionSignatureSyntax(
@@ -670,7 +670,7 @@ class TypeSchema: Codable {
                         returnKeyword: .keyword(.return),
                         expression: TryExprSyntax(expression:
                             AwaitExprSyntax(expression: FunctionCallExprSyntax(
-                                calledExpression: ExprSyntax("client.fetch"),
+                                calledExpression: ExprSyntax("fetch"),
                                 leftParen: .leftParenToken(),
                                 arguments: .init([
                                     LabeledExprSyntax(label: "endpoint", colon: .colonToken(), expression: StringLiteralExprSyntax(content: self.id), trailingComma: .commaToken()),
@@ -704,7 +704,7 @@ class TypeSchema: Codable {
                             )
                         }
                     ) {
-                        ThrowStmtSyntax(expression: ExprSyntax("\(raw: typeName)_Error(error: error)"))
+                        ThrowStmtSyntax(expression: ExprSyntax("\(raw: prefix).\(raw: typeName)_Error(error: error)"))
                     },
                 ]
             )
@@ -1025,7 +1025,11 @@ class TypeSchema: Codable {
                         type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String"))),
                         trailingComma: .commaToken()
                     ),
-                    InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))),
+                    InheritedTypeSyntax(
+                        type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+                        trailingComma: .commaToken()
+                    ),
+                    InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
                 ])
             ),
             memberBlock: MemberBlockSyntax(
@@ -1379,7 +1383,11 @@ class TypeSchema: Codable {
                         type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("RawRepresentable"))),
                         trailingComma: .commaToken()
                     ),
-                    InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable")))),
+                    InheritedTypeSyntax(
+                        type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+                        trailingComma: .commaToken()
+                    ),
+                    InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
                 ])
             ),
             memberBlock: MemberBlockSyntax(
@@ -1400,16 +1408,26 @@ class TypeSchema: Codable {
             required[key] = false
         }
         let DeclSyntaxType: any ExtendedDeclSyntax.Type = isRecord ? ClassDeclSyntax.self : StructDeclSyntax.self
+        let modifiers: DeclModifierListSyntax = if isRecord {
+            [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.final))]
+        } else {
+            [DeclModifierSyntax(name: .keyword(.public))]
+        }
         return DeclSyntaxType.init(
             leadingTrivia: leadingTrivia,
-            modifiers: [
-                DeclModifierSyntax(name: .keyword(.public)),
-            ],
+            modifiers: modifiers,
             typeKeyword: isRecord ? .keyword(.class) : .keyword(.struct),
             name: .init(stringLiteral: isRecord ? "\(Lex.structNameFor(prefix: prefix))_\(name)" : name),
-            inheritanceClause: InheritanceClauseSyntax {
-                InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "Codable"))
-            }
+            inheritanceClause: InheritanceClauseSyntax(
+                colon: .colonToken(),
+                inheritedTypes: InheritedTypeListSyntax([
+                    InheritedTypeSyntax(
+                        type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+                        trailingComma: .commaToken()
+                    ),
+                    InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
+                ])
+            )
         ) {
             if needsType {
                 VariableDeclSyntax(
@@ -1437,13 +1455,13 @@ class TypeSchema: Codable {
                         return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: !isRecord)
                     }
                 }()
-                property.variable(name: key, typeName: tname)
+                property.variable(name: key, typeName: tname, isMutable: !isRecord)
             }
             VariableDeclSyntax(
                 modifiers: [
                     DeclModifierSyntax(name: .keyword(.public)),
                 ],
-                bindingSpecifier: .keyword(.var),
+                bindingSpecifier: .keyword(isRecord ? .let : .var),
                 bindings: [
                     PatternBindingSyntax(
                         pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("unknownValues"))),
@@ -1943,9 +1961,16 @@ class TypeSchema: Codable {
                 DeclModifierSyntax(name: .keyword(.indirect)),
             ],
             name: .init(stringLiteral: name),
-            inheritanceClause: InheritanceClauseSyntax {
-                InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "Codable"))
-            }
+            inheritanceClause: InheritanceClauseSyntax(
+                colon: .colonToken(),
+                inheritedTypes: InheritedTypeListSyntax([
+                    InheritedTypeSyntax(
+                        type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+                        trailingComma: .commaToken()
+                    ),
+                    InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
+                ])
+            )
         ) {
             for ts in tss {
                 let id = ts.defName == "main" ? ts.id : #"\#(ts.id)#\#(ts.defName)"#
@@ -2450,12 +2475,12 @@ enum FieldTypeDefinition: Codable {
         }
     }
 
-    func variable(name: String, typeName: String) -> VariableDeclSyntax {
+    func variable(name: String, typeName: String, isMutable: Bool = true) -> VariableDeclSyntax {
         VariableDeclSyntax(
             modifiers: [
                 DeclModifierSyntax(name: .keyword(.public)),
             ],
-            bindingSpecifier: .keyword(.var)
+            bindingSpecifier: .keyword(isMutable ? .var : .let)
         ) {
             PatternBindingSyntax(
                 pattern: PatternSyntax(stringLiteral: name),
@@ -2731,8 +2756,8 @@ protocol HTTPAPITypeDefinition: Codable {
 
     var contentType: String { get }
     var inputRPCValue: ExprSyntax { get }
-    func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap) -> [FunctionParameterSyntax]
-    func rpcOutput(ts: TypeSchema, fname: String, defMap: ExtDefMap) -> ReturnClauseSyntax
+    func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax]
+    func rpcOutput(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> ReturnClauseSyntax
     func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol?
 }
 
@@ -2770,10 +2795,8 @@ extension HTTPAPITypeDefinition {
         ExprSyntax(stringLiteral: input != nil ? "input" : "Bool?.none")
     }
 
-    func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap) -> [FunctionParameterSyntax] {
+    func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax] {
         var arguments = [FunctionParameterSyntax]()
-        let comma: TokenSyntax? = (input == nil && (parameters == nil || (parameters?.properties.isEmpty ?? false))) ? nil : .commaToken()
-        arguments.append(.init(firstName: .identifier("client"), type: TypeSyntax("any XRPCClientProtocol"), trailingComma: comma))
         if let input {
             switch input.encoding {
             case .cbor, .any, .car, .mp4:
@@ -2792,7 +2815,7 @@ extension HTTPAPITypeDefinition {
                     tname = "\(fname)_Input"
                 }
                 let comma: TokenSyntax? = (parameters == nil || (parameters?.properties.isEmpty ?? false)) ? nil : .commaToken()
-                arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
+                arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: "\(prefix).\(tname)"), trailingComma: comma))
             }
         }
 
@@ -2808,10 +2831,10 @@ extension HTTPAPITypeDefinition {
                 let isRequired = required[name] ?? false
                 let tn: String
                 if case let .string(def) = t, def.enum != nil || def.knownValues != nil {
-                    tn = isRequired ? "\(fname)_\(name.titleCased())" : "\(fname)_\(name.titleCased())?"
+                    tn = isRequired ? "\(prefix).\(fname)_\(name.titleCased())" : "\(prefix).\(fname)_\(name.titleCased())?"
                 } else {
                     let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-                    tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, isRequired: isRequired)
+                    tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: false)
                 }
                 let comma: TokenSyntax? = i == count ? nil : .commaToken()
                 arguments.append(.init(firstName: .identifier(name), type: TypeSyntax(stringLiteral: tn), trailingComma: comma))
@@ -2820,7 +2843,7 @@ extension HTTPAPITypeDefinition {
         return arguments
     }
 
-    func rpcOutput(ts: TypeSchema, fname: String, defMap: ExtDefMap) -> ReturnClauseSyntax {
+    func rpcOutput(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> ReturnClauseSyntax {
         if let output {
             switch output.encoding {
             case .json, .jsonl:
@@ -2833,7 +2856,7 @@ extension HTTPAPITypeDefinition {
                 } else {
                     outname = "\(fname)_Output"
                 }
-                return ReturnClauseSyntax(type: TypeSyntax(stringLiteral: outname))
+                return ReturnClauseSyntax(type: TypeSyntax(stringLiteral: "\(prefix).\(outname)"))
             case .text:
                 return ReturnClauseSyntax(type: TypeSyntax(stringLiteral: "String"))
             case .cbor, .car, .any, .mp4:
