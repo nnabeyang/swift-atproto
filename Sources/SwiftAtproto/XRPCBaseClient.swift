@@ -153,7 +153,7 @@ public final class UnExpectedError: XRPCError {
     }
 }
 
-public struct UnknownRecord: Identifiable, Codable {
+public struct UnknownRecord: Identifiable, Codable, Sendable {
     public let type: String
     enum CodingKeys: String, CodingKey {
         case type = "$type"

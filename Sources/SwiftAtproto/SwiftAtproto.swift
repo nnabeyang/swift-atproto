@@ -170,7 +170,7 @@ extension LexLink: Codable {
     }
 }
 
-public struct LexBlob: Codable {
+public struct LexBlob: Codable, Sendable {
     public let type = "blob"
     public let ref: LexLink
     public let mimeType: String
