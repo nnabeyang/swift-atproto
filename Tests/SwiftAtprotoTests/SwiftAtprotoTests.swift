@@ -5,7 +5,7 @@ import SwiftSyntaxBuilder
 import XCTest
 @testable import SwiftAtproto
 
-struct XRPCBaseClient: XRPCClientProtocol {
+struct XRPCTestClient: XRPCClientProtocol {
     var serviceEndpoint: URL
 
     var decoder: JSONDecoder
@@ -31,7 +31,7 @@ struct XRPCBaseClient: XRPCClientProtocol {
 
 final class SwiftAtprotoTests: XCTestCase {
     func testMakeParameters() throws {
-        let items = XRPCBaseClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello"])
+        let items = XRPCTestClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello"])
         XCTAssertEqual(items.map(\.description).sorted(), ["param1[]=1", "param1[]=2", "param1[]=3", "param2=hello"])
     }
 
@@ -41,7 +41,7 @@ final class SwiftAtprotoTests: XCTestCase {
         let link = try decoder.decode(LexLink.self, from: Data(json.utf8))
         XCTAssertEqual(link.toBaseEncodedString, "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy")
         let encoder = JSONEncoder()
-        encoder.dataEncodingStrategy = XRPCBaseClient.dataEncodingStrategy
+        encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
         XCTAssertEqual(try String(decoding: encoder.encode(link), as: UTF8.self), json)
     }
 
@@ -51,7 +51,7 @@ final class SwiftAtprotoTests: XCTestCase {
         let record = try decoder.decode(UnknownRecord.self, from: Data(json.utf8))
         XCTAssertEqual(record.type, "com.nnabeyang.unknown")
         let encoder = JSONEncoder()
-        encoder.dataEncodingStrategy = XRPCBaseClient.dataEncodingStrategy
+        encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
         XCTAssertEqual(try String(decoding: encoder.encode(record), as: UTF8.self), json)
     }
 }
