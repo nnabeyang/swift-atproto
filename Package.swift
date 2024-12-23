@@ -2,6 +2,7 @@
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
+import CompilerPluginSupport
 
 let package = Package(
     name: "SwiftAtproto",
@@ -11,6 +12,8 @@ let package = Package(
             name: "SwiftAtproto",
             targets: ["SwiftAtproto"]
         ),
+        .library(name: "ATProtoMacro",
+                 targets: ["ATProtoMacro"]),
         .executable(
             name: "swift-atproto",
             targets: ["swift-atproto"]
@@ -52,9 +55,24 @@ let package = Package(
             ],
             path: "CommandLineTool"
         ),
+        .macro(
+            name: "Macros",
+            dependencies: [
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
+            ]
+        ),
+        .target(name: "ATProtoMacro", dependencies: ["Macros", "SwiftAtproto"]),
         .testTarget(
             name: "SwiftAtprotoTests",
             dependencies: ["SwiftAtproto"]
+        ),
+        .testTarget(
+            name: "MacrosTests",
+            dependencies: [
+                "Macros",
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+            ]
         ),
         .plugin(name: "Generate Source Code",
                 capability: .command(
