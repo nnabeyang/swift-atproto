@@ -92,7 +92,7 @@ public extension XRPCClientProtocol {
         return try decoder.decode(T.self, from: data)
     }
 
-    private static func makeParameters(params: [String: Any]) -> [URLQueryItem] {
+    static func makeParameters(params: [String: Any]) -> [URLQueryItem] {
         var items = [URLQueryItem]()
         for param in params {
             if let seq = param.value as? [String] {

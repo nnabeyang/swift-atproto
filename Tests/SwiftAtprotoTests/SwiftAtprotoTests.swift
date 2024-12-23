@@ -5,6 +5,30 @@ import SwiftSyntaxBuilder
 import XCTest
 @testable import SwiftAtproto
 
+struct XRPCBaseClient: XRPCClientProtocol {
+    var serviceEndpoint: URL
+
+    var decoder: JSONDecoder
+
+    var auth: SwiftAtproto.AuthInfo
+
+    func tokenIsExpired(error _: SwiftAtproto.UnExpectedError) -> Bool {
+        fatalError()
+    }
+
+    func getAuthorization(endpoint _: String) -> String {
+        fatalError()
+    }
+
+    func refreshSession() async -> Bool {
+        fatalError()
+    }
+
+    func signout() {
+        fatalError()
+    }
+}
+
 final class SwiftAtprotoTests: XCTestCase {
     func testMakeParameters() throws {
         let items = XRPCBaseClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello"])
