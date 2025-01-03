@@ -190,6 +190,26 @@ public struct LexBlob: Codable, Sendable {
         case mimeType
         case size
     }
+
+    private enum LegacyCodingKeys: String, CodingKey {
+        case cid
+        case mimeType
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.allKeys.contains(.ref) {
+            ref = try container.decode(LexLink.self, forKey: .ref)
+            mimeType = try container.decode(String.self, forKey: .mimeType)
+            size = try container.decode(UInt.self, forKey: .size)
+        } else {
+            let container = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            let cid = try container.decode(String.self, forKey: .cid)
+            ref = try LexLink(cid)
+            mimeType = try container.decode(String.self, forKey: .mimeType)
+            size = 0
+        }
+    }
 }
 
 public enum ParamElement: Encodable {

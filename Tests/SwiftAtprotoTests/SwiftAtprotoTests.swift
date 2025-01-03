@@ -42,6 +42,29 @@ final class SwiftAtprotoTests: XCTestCase {
         XCTAssertEqual(try String(decoding: encoder.encode(link), as: UTF8.self), json)
     }
 
+    func testLexBlobCodable() throws {
+        let json = #"{"$type":"blob","mimeType":"image/jpeg","ref":{"$link":"bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy"},"size":1234}"#
+        let decoder = JSONDecoder()
+        let blob = try decoder.decode(LexBlob.self, from: Data(json.utf8))
+        XCTAssertEqual(blob.ref.toBaseEncodedString, "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
+        XCTAssertEqual(try String(decoding: encoder.encode(blob), as: UTF8.self), json)
+    }
+
+    func testLexBlobCodableLegacyCase() throws {
+        let json = #"{"$type":"blob","mimeType":"image/jpeg","ref":{"$link":"bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy"},"size":0}"#
+        let legacyJson = #"{"cid": "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy","mimeType": "image/jpeg"}"#
+        let decoder = JSONDecoder()
+        let blob = try decoder.decode(LexBlob.self, from: Data(legacyJson.utf8))
+        XCTAssertEqual(blob.ref.toBaseEncodedString, "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
+        XCTAssertEqual(try String(decoding: encoder.encode(blob), as: UTF8.self), json)
+    }
+
     func testUnknownRecordCodable() throws {
         let json = #"{"$type":"com.nnabeyang.unknown"}"#
         let decoder = JSONDecoder()
