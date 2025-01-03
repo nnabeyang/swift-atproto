@@ -171,7 +171,7 @@ enum Lex {
             return [
                 ts.writeErrorDecl(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap),
                 ts.writeRPC(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix),
-            ].compactMap { $0 }
+            ].compactMap(\.self)
         default:
             return nil
         }
