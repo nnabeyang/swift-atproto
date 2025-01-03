@@ -1,5 +1,5 @@
 {
-  "originHash" : "b691db52fadfd71d52045bfbc943cf165582f28ae5c90933f8a02aa2cd0eaab2",
+  "originHash" : "66b38cbec964e45a1519e3892fcdb531f2662827a403e66685adc22d45a88cfc",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nicklockwood/SwiftFormat",
       "state" : {
-        "revision" : "ab238886b8b50f8b678b251f3c28c0c887305407",
-        "version" : "0.53.8"
+        "revision" : "4e92b81311f528cfdca8015d629c650d0aff94ce",
+        "version" : "0.55.4"
       }
     }
   ],
