@@ -28,7 +28,7 @@
 --self remove
 --semicolons inline
 --stripunusedargs always
---swiftversion 5.9
+--swiftversion 6.0
 --trimwhitespace always
 --wraparguments preserve
 --wrapcollections preserve
