@@ -2843,10 +2843,14 @@ extension HTTPAPITypeDefinition {
                 }
                 let type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
                 let comma: TokenSyntax? = i == count ? nil : .commaToken()
+                let defaultValue: InitializerClauseSyntax? = isRequired ? nil : InitializerClauseSyntax(
+                    equal: .equalToken(),
+                    value: ExprSyntax(NilLiteralExprSyntax(nilKeyword: .keyword(.nil)))
+                )
                 arguments.append(.init(firstName: .identifier(name), type: isRequired ? type : TypeSyntax(OptionalTypeSyntax(
                     wrappedType: type,
                     questionMark: .postfixQuestionMarkToken()
-                )), trailingComma: comma))
+                )), defaultValue: defaultValue, trailingComma: comma))
             }
         }
         return arguments
