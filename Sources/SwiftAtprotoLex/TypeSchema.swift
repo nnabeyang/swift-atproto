@@ -2842,13 +2842,17 @@ extension HTTPAPITypeDefinition {
                 let isRequired = required[name] ?? false
                 let tn: String
                 if case let .string(def) = t, def.enum != nil || def.knownValues != nil {
-                    tn = isRequired ? "\(prefix).\(fname)_\(name.titleCased())" : "\(prefix).\(fname)_\(name.titleCased())?"
+                    tn = "\(prefix).\(fname)_\(name.titleCased())"
                 } else {
                     let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-                    tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: false)
+                    tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, isRequired: true, dropPrefix: false)
                 }
+                let type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
                 let comma: TokenSyntax? = i == count ? nil : .commaToken()
-                arguments.append(.init(firstName: .identifier(name), type: TypeSyntax(stringLiteral: tn), trailingComma: comma))
+                arguments.append(.init(firstName: .identifier(name), type: isRequired ? type : TypeSyntax(OptionalTypeSyntax(
+                    wrappedType: type,
+                    questionMark: .postfixQuestionMarkToken()
+                )), trailingComma: comma))
             }
         }
         return arguments
