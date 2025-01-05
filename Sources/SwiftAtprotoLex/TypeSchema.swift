@@ -721,22 +721,31 @@ class TypeSchema: Codable {
                 equal: .equalToken(),
                 value: ExprSyntax(NilLiteralExprSyntax(nilKeyword: .keyword(.nil)))
             )
-            let type: TypeSyntax
-            if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
-                let tn = "\(name)_\(key.titleCased())"
-                type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(!dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tn)" : tn)))
-            } else {
-                let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
-                let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: dropPrefix)
-                type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
-            }
-            parameters.append(.init(firstName: .identifier(key), type: isRequired ? type : TypeSyntax(OptionalTypeSyntax(
-                wrappedType: type,
-                questionMark: .postfixQuestionMarkToken()
-            )), defaultValue: defaultValue, trailingComma: comma))
+            let type = typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: dropPrefix)
+            parameters.append(.init(firstName: .identifier(key), type: type, defaultValue: defaultValue, trailingComma: comma))
         }
 
         return parameters
+    }
+
+    func typeIdentifier(name: String, property: FieldTypeDefinition, defMap: ExtDefMap, key: String, isRequired: Bool, dropPrefix: Bool = true) -> TypeSyntax {
+        let type: TypeSyntax
+        if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
+            let tn = "\(name)_\(key.titleCased())"
+            type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(!dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tn)" : tn)))
+        } else {
+            let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
+            let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: dropPrefix)
+            type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
+        }
+        if isRequired {
+            return type
+        } else {
+            return TypeSyntax(OptionalTypeSyntax(
+                wrappedType: type,
+                questionMark: .postfixQuestionMarkToken()
+            ))
+        }
     }
 
     func lex(leadingTrivia: Trivia? = nil, name: String, type typeName: String, defMap: ExtDefMap) -> DeclSyntaxProtocol {
@@ -1450,20 +1459,8 @@ class TypeSchema: Codable {
             }
             for (key, property) in def.sortedProperties {
                 let isRequired = required[key] ?? false
-                let type: TypeSyntax = {
-                    if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
-                        let tn = "\(name)_\(key.titleCased())"
-                        return TypeSyntax(IdentifierTypeSyntax(name: .identifier(isRecord ? "\(Lex.structNameFor(prefix: self.prefix)).\(tn)" : tn)))
-                    } else {
-                        let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
-                        let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: !isRecord)
-                        return TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
-                    }
-                }()
-                property.variable(name: key, type: isRequired ? type : TypeSyntax(OptionalTypeSyntax(
-                    wrappedType: type,
-                    questionMark: .postfixQuestionMarkToken()
-                )), isMutable: !isRecord)
+                let type = typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: !isRecord)
+                property.variable(name: key, type: type, isMutable: !isRecord)
             }
             VariableDeclSyntax(
                 modifiers: [
