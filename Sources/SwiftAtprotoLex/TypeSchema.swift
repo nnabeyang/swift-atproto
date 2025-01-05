@@ -553,41 +553,38 @@ class TypeSchema: Codable {
         }
     }
 
-    static func typeNameForField(name: String, k: String, v: TypeSchema, defMap: ExtDefMap, isRequired: Bool = true, dropPrefix: Bool = true) -> String {
-        let baseType: String = {
-            switch v.type {
-            case .boolean:
-                return "Bool"
-            case .blob:
-                return "LexBlob"
-            case .bytes:
-                return "Data"
-            case .string:
-                return "String"
-            case .integer:
-                return "Int"
-            case .unknown:
-                return "LexiconTypeDecoder"
-            case .cidLink:
-                return "LexLink"
-            case let .ref(def):
-                let (_, tn) = v.namesFromRef(ref: def.ref, defMap: defMap, dropPrefix: dropPrefix)
-                return tn
-            case let .array(def):
-                let ts = TypeSchema(id: v.id, prefix: v.prefix, defName: "Elem", type: def.items)
-                let subt = Self.typeNameForField(name: "\(name)_\(k.titleCased())", k: "Elem", v: ts, defMap: defMap, dropPrefix: dropPrefix)
-                return "[\(subt)]"
-            case .union:
-                if !dropPrefix {
-                    return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
-                } else {
-                    return "\(name)_\(k.titleCased())"
-                }
-            default:
-                fatalError()
+    static func typeNameForField(name: String, k: String, v: TypeSchema, defMap: ExtDefMap, dropPrefix: Bool = true) -> String {
+        switch v.type {
+        case .boolean:
+            return "Bool"
+        case .blob:
+            return "LexBlob"
+        case .bytes:
+            return "Data"
+        case .string:
+            return "String"
+        case .integer:
+            return "Int"
+        case .unknown:
+            return "LexiconTypeDecoder"
+        case .cidLink:
+            return "LexLink"
+        case let .ref(def):
+            let (_, tn) = v.namesFromRef(ref: def.ref, defMap: defMap, dropPrefix: dropPrefix)
+            return tn
+        case let .array(def):
+            let ts = TypeSchema(id: v.id, prefix: v.prefix, defName: "Elem", type: def.items)
+            let subt = Self.typeNameForField(name: "\(name)_\(k.titleCased())", k: "Elem", v: ts, defMap: defMap, dropPrefix: dropPrefix)
+            return "[\(subt)]"
+        case .union:
+            if !dropPrefix {
+                return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
+            } else {
+                return "\(name)_\(k.titleCased())"
             }
-        }()
-        return isRequired ? baseType : "\(baseType)?"
+        default:
+            fatalError()
+        }
     }
 
     static func paramNameForField(typeSchema: TypeSchema) -> String {
@@ -730,7 +727,7 @@ class TypeSchema: Codable {
                 type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(!dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tn)" : tn)))
             } else {
                 let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
-                let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: true, dropPrefix: dropPrefix)
+                let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: dropPrefix)
                 type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
             }
             parameters.append(.init(firstName: .identifier(key), type: isRequired ? type : TypeSyntax(OptionalTypeSyntax(
@@ -1459,7 +1456,7 @@ class TypeSchema: Codable {
                         return TypeSyntax(IdentifierTypeSyntax(name: .identifier(isRecord ? "\(Lex.structNameFor(prefix: self.prefix)).\(tn)" : tn)))
                     } else {
                         let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
-                        let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: true, dropPrefix: !isRecord)
+                        let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: !isRecord)
                         return TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
                     }
                 }()
@@ -1624,7 +1621,7 @@ class TypeSchema: Codable {
                                     return isRecord ? "\(Lex.structNameFor(prefix: self.prefix)).\(tname)" : tname
                                 } else {
                                     let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
-                                    return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: true, dropPrefix: !isRecord)
+                                    return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: !isRecord)
                                 }
                             }()
                             CodeBlockItemSyntax(item: CodeBlockItemSyntax.Item(SequenceExprSyntax(elements: ExprListSyntax([
@@ -2845,7 +2842,7 @@ extension HTTPAPITypeDefinition {
                     tn = "\(prefix).\(fname)_\(name.titleCased())"
                 } else {
                     let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-                    tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, isRequired: true, dropPrefix: false)
+                    tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
                 }
                 let type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
                 let comma: TokenSyntax? = i == count ? nil : .commaToken()
