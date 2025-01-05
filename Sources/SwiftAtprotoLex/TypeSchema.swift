@@ -1453,16 +1453,20 @@ class TypeSchema: Codable {
             }
             for (key, property) in def.sortedProperties {
                 let isRequired = required[key] ?? false
-                let tname: String = {
+                let type: TypeSyntax = {
                     if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
-                        let tname = isRequired ? "\(name)_\(key.titleCased())" : "\(name)_\(key.titleCased())?"
-                        return isRecord ? "\(Lex.structNameFor(prefix: self.prefix)).\(tname)" : tname
+                        let tn = "\(name)_\(key.titleCased())"
+                        return TypeSyntax(IdentifierTypeSyntax(name: .identifier(isRecord ? "\(Lex.structNameFor(prefix: self.prefix)).\(tn)" : tn)))
                     } else {
                         let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
-                        return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: !isRecord)
+                        let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: true, dropPrefix: !isRecord)
+                        return TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
                     }
                 }()
-                property.variable(name: key, typeName: tname, isMutable: !isRecord)
+                property.variable(name: key, type: isRequired ? type : TypeSyntax(OptionalTypeSyntax(
+                    wrappedType: type,
+                    questionMark: .postfixQuestionMarkToken()
+                )), isMutable: !isRecord)
             }
             VariableDeclSyntax(
                 modifiers: [
@@ -2482,7 +2486,7 @@ enum FieldTypeDefinition: Codable {
         }
     }
 
-    func variable(name: String, typeName: String, isMutable: Bool = true) -> VariableDeclSyntax {
+    func variable(name: String, type: TypeSyntax, isMutable: Bool = true) -> VariableDeclSyntax {
         VariableDeclSyntax(
             modifiers: [
                 DeclModifierSyntax(name: .keyword(.public)),
@@ -2492,7 +2496,7 @@ enum FieldTypeDefinition: Codable {
             PatternBindingSyntax(
                 pattern: PatternSyntax(stringLiteral: name),
                 typeAnnotation: TypeAnnotationSyntax(
-                    type: TypeSyntax(stringLiteral: typeName)
+                    type: type
                 )
             )
         }
