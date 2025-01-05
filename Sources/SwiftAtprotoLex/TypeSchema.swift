@@ -719,17 +719,24 @@ class TypeSchema: Codable {
         for (key, property) in properties {
             i += 1
             let isRequired = required[key] ?? false
-            let tname: String = {
-                if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
-                    let tname = isRequired ? "\(name)_\(key.titleCased())" : "\(name)_\(key.titleCased())?"
-                    return !dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tname)" : tname
-                } else {
-                    let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
-                    return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: isRequired, dropPrefix: dropPrefix)
-                }
-            }()
             let comma: TokenSyntax? = i == count ? nil : .commaToken()
-            parameters.append(.init(firstName: .identifier(key), type: TypeSyntax(stringLiteral: tname), trailingComma: comma))
+            let defaultValue: InitializerClauseSyntax? = isRequired ? nil : InitializerClauseSyntax(
+                equal: .equalToken(),
+                value: ExprSyntax(NilLiteralExprSyntax(nilKeyword: .keyword(.nil)))
+            )
+            let type: TypeSyntax
+            if case let .string(def) = property, def.enum != nil || def.knownValues != nil {
+                let tn = "\(name)_\(key.titleCased())"
+                type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(!dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tn)" : tn)))
+            } else {
+                let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
+                let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, isRequired: true, dropPrefix: dropPrefix)
+                type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
+            }
+            parameters.append(.init(firstName: .identifier(key), type: isRequired ? type : TypeSyntax(OptionalTypeSyntax(
+                wrappedType: type,
+                questionMark: .postfixQuestionMarkToken()
+            )), defaultValue: defaultValue, trailingComma: comma))
         }
 
         return parameters
