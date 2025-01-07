@@ -1,17 +1,15 @@
 import Foundation
 
-public struct AuthInfo: Codable, Sendable {
-    public var accessJwt: String
-    public var refreshJwt: String
-    public var handle: String
-    public var did: String
-    public var serviceEndPoint: URL?
+public protocol AuthInfo: Sendable, Equatable, Hashable {
+    var accessJwt: String { get set }
+    var refreshJwt: String { get set }
+    var handle: String { get set }
+    var did: String { get set }
+    var serviceEndPoint: URL? { get set }
+}
 
-    public init(accessJwt: String = "", refreshJwt: String = "", handle: String = "", did: String = "", serviceEndPoint: URL? = nil) {
-        self.accessJwt = accessJwt
-        self.refreshJwt = refreshJwt
-        self.handle = handle
-        self.did = did
-        self.serviceEndPoint = serviceEndPoint
+public extension AuthInfo {
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.accessJwt == rhs.accessJwt && lhs.refreshJwt == rhs.refreshJwt
     }
 }
