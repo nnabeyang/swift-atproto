@@ -1,6 +1,6 @@
 import Foundation
 
-public var version: String { "0.23.0" }
+public var version: String { "0.24.0" }
 
 public func getEnvSearchPaths(pathString: String) -> [URL] {
     pathString.split(separator: ":").map { URL(filePath: String($0)) }
