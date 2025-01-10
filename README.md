@@ -68,6 +68,12 @@ Sample configuration file is as follows:
 }
 ```
 
+## Apps Using
+
+<p float="left">
+    <a href="https://apps.apple.com/app/soyokaze/id6738971639"><img src="https://raw.githubusercontent.com/nnabeyang/swift-atproto/refs/heads/main/.github/assets/soyokaze.png" height="65"></a>
+</p>
+
 ## License
 
 swift-atproto is published under the MIT License, see LICENSE.
