@@ -27,6 +27,12 @@ struct XRPCTestClient: XRPCClientProtocol {
 }
 
 final class SwiftAtprotoTests: XCTestCase {
+    func testURLAppendPercentEncodedQueryItems() {
+        var url = URL(string: "https://example.com")!
+        url.append(percentEncodedQueryItems: [.init(name: #"%3B%2C%2F%3F%3A%40%26%3D%2B%24%23-"#, value: #"_.%21%7E%2A%27%28%29%5B%5D"#)])
+        XCTAssertEqual(url.absoluteString, "https://example.com?%3B%2C%2F%3F%3A%40%26%3D%2B%24%23-=_.%21%7E%2A%27%28%29%5B%5D")
+    }
+
     func testMakeParameters() throws {
         let items = XRPCTestClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello"])
         XCTAssertEqual(items.map(\.description).sorted(), ["param1[]=1", "param1[]=2", "param1[]=3", "param2=hello"])
