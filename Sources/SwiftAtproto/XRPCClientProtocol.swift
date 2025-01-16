@@ -31,13 +31,22 @@ public extension XRPCClientProtocol {
         LexiconTypesMap.shared.moduleName = _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? ""
     }
 
+    private static func encode(_ string: String, component: XRPCComponent) -> String {
+        switch component {
+        case .nsid:
+            string.addingPercentEncoding(withAllowedCharacters: .nsidAllowed) ?? string
+        case .parameter:
+            string.addingPercentEncoding(withAllowedCharacters: .parameterAllowed) ?? string
+        }
+    }
+
     mutating func fetch<T: Decodable>(
-        endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
+        endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
     ) async throws -> T {
-        let authorization = getAuthorization(endpoint: endpoint)
-        var url = serviceEndpoint.appending(path: endpoint)
+        let authorization = getAuthorization(endpoint: nsid)
+        var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
         if httpMethod == .get, let params = params?.dictionary {
-            url.append(queryItems: Self.makeParameters(params: params))
+            url.append(percentEncodedQueryItems: Self.makeParameters(params: params))
         }
 
         var request = URLRequest(url: url)
@@ -72,7 +81,7 @@ public extension XRPCClientProtocol {
             if let error = try? decoder.decode(UnExpectedError.self, from: data) {
                 if tokenIsExpired(error: error), retry, await refreshSession() {
                     return try await fetch(
-                        endpoint: endpoint, contentType: contentType, httpMethod: httpMethod,
+                        endpoint: Self.encode(nsid, component: .nsid), contentType: contentType, httpMethod: httpMethod,
                         params: params, input: input, retry: false
                     )
                 }
@@ -96,9 +105,9 @@ public extension XRPCClientProtocol {
         var items = [URLQueryItem]()
         for param in params {
             if let seq = param.value as? [String] {
-                items.append(contentsOf: seq.map { URLQueryItem(name: param.key, value: $0) })
+                items.append(contentsOf: seq.map { URLQueryItem(name: encode(param.key, component: .parameter), value: encode($0, component: .parameter)) })
             } else {
-                items.append(URLQueryItem(name: param.key, value: "\(param.value)"))
+                items.append(URLQueryItem(name: encode(param.key, component: .parameter), value: encode("\(param.value)", component: .parameter)))
             }
         }
         return items
@@ -152,4 +161,9 @@ public struct UnknownRecord: Identifiable, Codable, Sendable {
     public init(type: String) {
         self.type = type
     }
+}
+
+enum XRPCComponent {
+    case nsid
+    case parameter
 }

@@ -34,8 +34,8 @@ final class SwiftAtprotoTests: XCTestCase {
     }
 
     func testMakeParameters() throws {
-        let items = XRPCTestClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello"])
-        XCTAssertEqual(items.map(\.description).sorted(), ["param1[]=1", "param1[]=2", "param1[]=3", "param2=hello"])
+        let items = XRPCTestClient.makeParameters(params: ["param1[]": ["1", "2", "3"], "param2": "hello", ";,/?:@&=+$#-_.!~*'()[]": ";,/?:@&=+$#-_.!~*'()[]"])
+        XCTAssertEqual(items.map(\.description).sorted(), [#"%3B%2C%2F%3F%3A%40%26%3D%2B%24%23-_.%21%7E%2A%27%28%29%5B%5D=%3B%2C%2F%3F%3A%40%26%3D%2B%24%23-_.%21%7E%2A%27%28%29%5B%5D"#, "param1%5B%5D=1", "param1%5B%5D=2", "param1%5B%5D=3", "param2=hello"])
     }
 
     func testLexLinkCodable() throws {

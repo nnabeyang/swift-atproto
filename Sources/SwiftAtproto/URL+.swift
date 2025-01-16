@@ -7,6 +7,15 @@
 
 import Foundation
 
+extension CharacterSet {
+    private static let alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    private static let digit = "0123456789"
+    private static let hexdig = digit + "ABCDEFabcdef"
+    private static let unreserved = alpha + digit + "-._~"
+    static let parameterAllowed = CharacterSet(charactersIn: alpha + digit + "-._")
+    static let nsidAllowed = CharacterSet(charactersIn: unreserved + "!'()*")
+}
+
 extension URL {
     func appending(percentEncodedQueryItems queryItems: [URLQueryItem]) -> URL {
         if var c = URLComponents(url: self, resolvingAgainstBaseURL: true) {
