@@ -27,13 +27,17 @@ let package = Package(
         .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "510.0.3"),
         .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.3.1"),
-        .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.55.4")
+        .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.55.4"),
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
     ],
     targets: [
         .target(
             name: "SwiftAtproto",
             dependencies: [
-                .product(name: "CID", package: "swift-cid")
+                .product(name: "CID", package: "swift-cid"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client", condition: .when(platforms: [.linux])),
+                .product(name: "NIOHTTP1", package: "swift-nio", condition: .when(platforms: [.linux])),
             ]
         ),
         .target(

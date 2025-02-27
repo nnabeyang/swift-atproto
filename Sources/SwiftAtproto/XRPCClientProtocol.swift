@@ -1,4 +1,9 @@
 import Foundation
+#if os(Linux)
+    import AsyncHTTPClient
+    import NIOFoundationCompat
+    import NIOHTTP1
+#endif
 
 public enum HTTPMethod {
     case get
@@ -23,6 +28,62 @@ public protocol XRPCClientProtocol: Sendable {
     static var XRPCErrorDomain: String { get }
     static func setModuleName()
 }
+
+#if os(Linux)
+    typealias URLRequest = HTTPClientRequest
+    extension URLRequest {
+        init(url: URL) {
+            self.init(url: url.absoluteString)
+        }
+
+        mutating func addValue(_ value: String, forHTTPHeaderField field: String) {
+            headers.add(name: field, value: value)
+        }
+
+        var httpBody: Data? {
+            get {
+                // Not Implemented
+                nil
+            }
+
+            set {
+                guard let newValue else { return }
+                body = .bytes(newValue)
+            }
+        }
+
+        var httpMethod: String? {
+            get {
+                method.rawValue
+            }
+            set {
+                guard let newValue else { return }
+                method = .init(rawValue: newValue)
+            }
+        }
+    }
+
+    extension HTTPClient {
+        func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
+            let response = try await execute(request, timeout: .seconds(30))
+            let expectedBytes = response.headers.first(name: "content-length").flatMap(Int.init) ?? 0
+            var body = try await response.body.collect(upTo: expectedBytes)
+            let data = body.readData(length: body.readableBytes)!
+            return (data, response.status.code)
+        }
+    }
+#else
+    typealias HTTPClient = URLSession
+    extension HTTPClient {
+        func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                fatalError()
+            }
+            return (data, UInt(httpResponse.statusCode))
+        }
+    }
+#endif
 
 public extension XRPCClientProtocol {
     static var XRPCErrorDomain: String { "XRPCErrorDomain" }
@@ -63,22 +124,20 @@ public extension XRPCClientProtocol {
                 let encoder = JSONEncoder()
                 encoder.dataEncodingStrategy = Self.dataEncodingStrategy
                 encoder.outputFormatting = [.withoutEscapingSlashes]
-                switch input {
+                let body: Data = switch input {
                 case let data as Data:
-                    request.httpBody = data
+                    data
                 default:
-                    request.httpBody = try? encoder.encode(input)
+                    try encoder.encode(input)
                 }
-                request.addValue("\(request.httpBody?.count ?? 0)", forHTTPHeaderField: "Content-Length")
+                request.httpBody = body
+                request.addValue("\(body.count)", forHTTPHeaderField: "Content-Length")
             }
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: 0"])
-        }
+        let (data, statusCode) = try await HTTPClient.shared.executeTask(for: request)
 
-        guard 200 ... 299 ~= httpResponse.statusCode else {
+        guard 200 ... 299 ~= statusCode else {
             if let error = try? decoder.decode(UnExpectedError.self, from: data) {
                 if tokenIsExpired(error: error), retry, await refreshSession() {
                     return try await fetch(
@@ -89,7 +148,7 @@ public extension XRPCClientProtocol {
                 throw error
             } else {
                 let message = String(decoding: data, as: UTF8.self)
-                throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(httpResponse.statusCode))"])
+                throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(statusCode))"])
             }
         }
 
