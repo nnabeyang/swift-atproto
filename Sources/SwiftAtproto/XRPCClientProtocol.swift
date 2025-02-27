@@ -11,7 +11,7 @@ public protocol XRPCClientProtocol: Sendable {
     var auth: any AuthInfo { get set }
 
     func tokenIsExpired(error: UnExpectedError) -> Bool
-    func getAuthorization(endpoint: String) -> String
+    func getAuthorization(endpoint: String) -> String?
 
     mutating func fetch<T: Decodable>(
         endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?,
@@ -43,7 +43,6 @@ public extension XRPCClientProtocol {
     mutating func fetch<T: Decodable>(
         endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
     ) async throws -> T {
-        let authorization = getAuthorization(endpoint: nsid)
         var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
         if httpMethod == .get, let params = params?.dictionary {
             url.append(percentEncodedQueryItems: Self.makeParameters(params: params))
@@ -51,7 +50,9 @@ public extension XRPCClientProtocol {
 
         var request = URLRequest(url: url)
         request.addValue("application/json", forHTTPHeaderField: "Accept")
-        request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
+        if let authorization = getAuthorization(endpoint: nsid) {
+            request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
+        }
         switch httpMethod {
         case .get:
             request.httpMethod = "GET"

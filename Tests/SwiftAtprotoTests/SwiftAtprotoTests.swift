@@ -13,7 +13,7 @@ struct XRPCTestClient: XRPCClientProtocol {
         fatalError()
     }
 
-    func getAuthorization(endpoint _: String) -> String {
+    func getAuthorization(endpoint _: String) -> String? {
         fatalError()
     }
 
