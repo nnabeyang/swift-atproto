@@ -1,4 +1,9 @@
 import Foundation
+#if !canImport(Darwin)
+    import AsyncHTTPClient
+    import NIOFoundationCompat
+    import NIOHTTP1
+#endif
 
 public enum HTTPMethod {
     case get
@@ -40,67 +45,133 @@ public extension XRPCClientProtocol {
         }
     }
 
-    mutating func fetch<T: Decodable>(
-        endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
-    ) async throws -> T {
-        var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
-        if httpMethod == .get, let params = params?.dictionary {
-            url.append(percentEncodedQueryItems: Self.makeParameters(params: params))
-        }
-
-        var request = URLRequest(url: url)
-        request.addValue("application/json", forHTTPHeaderField: "Accept")
-        if let authorization = getAuthorization(endpoint: nsid) {
-            request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
-        }
-        switch httpMethod {
-        case .get:
-            request.httpMethod = "GET"
-        case .post:
-            request.httpMethod = "POST"
-            request.addValue(contentType, forHTTPHeaderField: "Content-Type")
-            if let input {
-                let encoder = JSONEncoder()
-                encoder.dataEncodingStrategy = Self.dataEncodingStrategy
-                encoder.outputFormatting = [.withoutEscapingSlashes]
-                switch input {
-                case let data as Data:
-                    request.httpBody = data
-                default:
-                    request.httpBody = try? encoder.encode(input)
-                }
-                request.addValue("\(request.httpBody?.count ?? 0)", forHTTPHeaderField: "Content-Length")
+    #if canImport(Darwin)
+        mutating func fetch<T: Decodable>(
+            endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
+        ) async throws -> T {
+            var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
+            if httpMethod == .get, let params = params?.dictionary {
+                url.append(percentEncodedQueryItems: Self.makeParameters(params: params))
             }
-        }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: 0"])
-        }
-
-        guard 200 ... 299 ~= httpResponse.statusCode else {
-            if let error = try? decoder.decode(UnExpectedError.self, from: data) {
-                if tokenIsExpired(error: error), retry, await refreshSession() {
-                    return try await fetch(
-                        endpoint: Self.encode(nsid, component: .nsid), contentType: contentType, httpMethod: httpMethod,
-                        params: params, input: input, retry: false
-                    )
-                }
-                throw error
-            } else {
-                let message = String(decoding: data, as: UTF8.self)
-                throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(httpResponse.statusCode))"])
+            var request = URLRequest(url: url)
+            request.addValue("application/json", forHTTPHeaderField: "Accept")
+            if let authorization = getAuthorization(endpoint: nsid) {
+                request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
             }
-        }
+            switch httpMethod {
+            case .get:
+                request.httpMethod = "GET"
+            case .post:
+                request.httpMethod = "POST"
+                request.addValue(contentType, forHTTPHeaderField: "Content-Type")
+                if let input {
+                    let encoder = JSONEncoder()
+                    encoder.dataEncodingStrategy = Self.dataEncodingStrategy
+                    encoder.outputFormatting = [.withoutEscapingSlashes]
+                    switch input {
+                    case let data as Data:
+                        request.httpBody = data
+                    default:
+                        request.httpBody = try? encoder.encode(input)
+                    }
+                    request.addValue("\(request.httpBody?.count ?? 0)", forHTTPHeaderField: "Content-Length")
+                }
+            }
 
-        if T.self == Bool.self {
-            return true as! T
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: 0"])
+            }
+
+            guard 200 ... 299 ~= httpResponse.statusCode else {
+                if let error = try? decoder.decode(UnExpectedError.self, from: data) {
+                    if tokenIsExpired(error: error), retry, await refreshSession() {
+                        return try await fetch(
+                            endpoint: Self.encode(nsid, component: .nsid), contentType: contentType, httpMethod: httpMethod,
+                            params: params, input: input, retry: false
+                        )
+                    }
+                    throw error
+                } else {
+                    let message = String(decoding: data, as: UTF8.self)
+                    throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(httpResponse.statusCode))"])
+                }
+            }
+
+            if T.self == Bool.self {
+                return true as! T
+            }
+            if T.self == Data.self {
+                return data as! T
+            }
+            return try decoder.decode(T.self, from: data)
         }
-        if T.self == Data.self {
-            return data as! T
+    #else
+        mutating func fetch<T: Decodable>(
+            endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
+        ) async throws -> T {
+            var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
+            if httpMethod == .get, let params = params?.dictionary {
+                url.append(percentEncodedQueryItems: Self.makeParameters(params: params))
+            }
+
+            var request = HTTPClientRequest(url: url.absoluteString)
+            var headers = HTTPHeaders()
+            headers.add(name: "Accept", value: "application/json")
+            if let authorization = getAuthorization(endpoint: nsid) {
+                headers.add(name: "Authorization", value: "Bearer \(authorization)")
+            }
+            switch httpMethod {
+            case .get:
+                request.method = .GET
+            case .post:
+                request.method = .POST
+                headers.add(name: "Content-Type", value: contentType)
+                if let input {
+                    let encoder = JSONEncoder()
+                    encoder.dataEncodingStrategy = Self.dataEncodingStrategy
+                    encoder.outputFormatting = [.withoutEscapingSlashes]
+                    let body: Data = switch input {
+                    case let data as Data:
+                        data
+                    default:
+                        try encoder.encode(input)
+                    }
+                    request.body = .bytes(body)
+                    headers.add(name: "Content-Length", value: "\(body.count)")
+                }
+            }
+            request.headers = headers
+            let response = try await HTTPClient.shared.execute(request, timeout: .seconds(30))
+            let expectedBytes = response.headers.first(name: "content-length").flatMap(Int.init) ?? 0
+            var body = try await response.body.collect(upTo: expectedBytes)
+            let data = body.readData(length: body.readableBytes)!
+
+            guard 200 ... 299 ~= response.status.code else {
+                if let error = try? decoder.decode(UnExpectedError.self, from: body) {
+                    if tokenIsExpired(error: error), retry, await refreshSession() {
+                        return try await fetch(
+                            endpoint: Self.encode(nsid, component: .nsid), contentType: contentType, httpMethod: httpMethod,
+                            params: params, input: input, retry: false
+                        )
+                    }
+                    throw error
+                } else {
+                    let message = String(decoding: data, as: UTF8.self)
+                    throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(response.status.code))"])
+                }
+            }
+
+            if T.self == Bool.self {
+                return true as! T
+            }
+            if T.self == Data.self {
+                return data as! T
+            }
+            return try decoder.decode(T.self, from: data)
         }
-        return try decoder.decode(T.self, from: data)
-    }
+    #endif
 
     static func makeParameters(params: [String: Any]) -> [URLQueryItem] {
         var items = [URLQueryItem]()
