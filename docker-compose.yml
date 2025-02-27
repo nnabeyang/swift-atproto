@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+      args:
+        - USERNAME=user
+        - GROUPNAME=user
+        - UID=1000
+        - GID=1000
+    command: sleep infinity
+    environment:
+      - LANG=C.UTF-8
+    volumes:
+      - ".:/home/user/work"
