@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol AuthInfo: Sendable, Equatable, Hashable {
+public protocol XRPCAuth: Sendable, Equatable, Hashable {
     var accessJwt: String { get set }
     var refreshJwt: String { get set }
     var handle: String { get set }
@@ -8,7 +8,7 @@ public protocol AuthInfo: Sendable, Equatable, Hashable {
     var serviceEndPoint: URL? { get set }
 }
 
-public extension AuthInfo {
+public extension XRPCAuth {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.accessJwt == rhs.accessJwt && lhs.refreshJwt == rhs.refreshJwt
     }

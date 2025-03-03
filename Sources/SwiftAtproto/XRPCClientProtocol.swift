@@ -13,7 +13,7 @@ public enum HTTPMethod {
 public protocol XRPCClientProtocol: Sendable {
     var serviceEndpoint: URL { get }
     var decoder: JSONDecoder { get }
-    var auth: any AuthInfo { get set }
+    var auth: any XRPCAuth { get set }
 
     func tokenIsExpired(error: UnExpectedError) -> Bool
     func getAuthorization(endpoint: String) -> String?
