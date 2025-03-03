@@ -10,10 +10,9 @@ public enum HTTPMethod {
     case post
 }
 
-public protocol XRPCClientProtocol: Sendable {
+public protocol ATPClientProtocol: Sendable {
     var serviceEndpoint: URL { get }
     var decoder: JSONDecoder { get }
-    var auth: any XRPCAuth { get set }
 
     func tokenIsExpired(error: UnExpectedError) -> Bool
     func getAuthorization(endpoint: String) -> String?
@@ -23,9 +22,15 @@ public protocol XRPCClientProtocol: Sendable {
         input: (some Encodable)?, retry: Bool
     ) async throws -> T
     mutating func refreshSession() async -> Bool
+
+    static var errorDomain: String { get }
+}
+
+public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
+    var auth: any XRPCAuth { get set }
+
     mutating func signout()
 
-    static var XRPCErrorDomain: String { get }
     static func setModuleName()
 }
 
@@ -86,11 +91,15 @@ public protocol XRPCClientProtocol: Sendable {
 #endif
 
 public extension XRPCClientProtocol {
-    static var XRPCErrorDomain: String { "XRPCErrorDomain" }
+    static var errorDomain: String { "XRPCErrorDomain" }
 
     static func setModuleName() {
         LexiconTypesMap.shared.moduleName = _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? ""
     }
+}
+
+public extension ATPClientProtocol {
+    static var errorDomain: String { "ATPErrorDomain" }
 
     private static func encode(_ string: String, component: XRPCComponent) -> String {
         switch component {
@@ -148,7 +157,7 @@ public extension XRPCClientProtocol {
                 throw error
             } else {
                 let message = String(decoding: data, as: UTF8.self)
-                throw NSError(domain: Self.XRPCErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(statusCode))"])
+                throw NSError(domain: Self.errorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(statusCode))"])
             }
         }
 
