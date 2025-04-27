@@ -14,11 +14,11 @@ import SwiftSyntaxMacros
 public struct XRPCClientMacro {}
 
 extension XRPCClientMacro: MemberMacro {
-    public static func expansion(
-        of _: AttributeSyntax,
-        providingMembersOf declaration: some DeclGroupSyntax,
-        in _: some MacroExpansionContext
-    ) throws -> [DeclSyntax] {
+    public static func expansion(of _: AttributeSyntax,
+                                 providingMembersOf declaration: some DeclGroupSyntax,
+                                 conformingTo _: [TypeSyntax],
+                                 in _: some MacroExpansionContext) throws -> [DeclSyntax]
+    {
         var parameters = [FunctionParameterSyntax]()
         var variables = [VariableDeclSyntax]()
         var codeblocks = [CodeBlockItemSyntax]()
