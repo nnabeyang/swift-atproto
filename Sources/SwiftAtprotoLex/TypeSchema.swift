@@ -632,7 +632,10 @@ class TypeSchema: Codable {
                     parameters: FunctionParameterListSyntax(arguments),
                     rightParen: .rightParenToken()
                 ),
-                effectSpecifiers: FunctionEffectSpecifiersSyntax(asyncSpecifier: .keyword(.async), throwsSpecifier: .keyword(.throws)),
+                effectSpecifiers: FunctionEffectSpecifiersSyntax(
+                    asyncSpecifier: .keyword(.async),
+                    throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+                ),
                 returnClause: output
             )
         ) {
@@ -814,7 +817,8 @@ class TypeSchema: Codable {
                         ]),
                         rightParen: .rightParenToken()
                     ),
-                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
+                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
+
                 ),
                 body: CodeBlockSyntax(
                     leftBrace: .leftBraceToken(),
@@ -994,7 +998,7 @@ class TypeSchema: Codable {
                         ]),
                         rightParen: .rightParenToken()
                     ),
-                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
+                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
                 ),
                 body: CodeBlockSyntax(
                     leftBrace: .leftBraceToken(),
@@ -1276,7 +1280,7 @@ class TypeSchema: Codable {
                         ]),
                         rightParen: .rightParenToken()
                     ),
-                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
+                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
                 ),
                 body: CodeBlockSyntax(
                     leftBrace: .leftBraceToken(),
@@ -1353,7 +1357,7 @@ class TypeSchema: Codable {
                         ]),
                         rightParen: .rightParenToken()
                     ),
-                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
+                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
                 ),
                 body: CodeBlockSyntax(
                     leftBrace: .leftBraceToken(),
@@ -1570,7 +1574,8 @@ class TypeSchema: Codable {
                             ]),
                             rightParen: .rightParenToken(trailingTrivia: .space)
                         ),
-                        effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws, trailingTrivia: .space))
+                        effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause:
+                            ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws, trailingTrivia: .space)))
                     ),
                     body: CodeBlockSyntax(statementsBuilder: {
                         if !def.properties.isEmpty {
@@ -1849,7 +1854,7 @@ class TypeSchema: Codable {
                             ]),
                             rightParen: .rightParenToken()
                         ),
-                        effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
+                        effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
                     ),
                     body: CodeBlockSyntax(statementsBuilder: {
                         if !def.properties.isEmpty {
@@ -2046,7 +2051,7 @@ class TypeSchema: Codable {
                         ]),
                         rightParen: .rightParenToken()
                     ),
-                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
+                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
                 )
             ) {
                 VariableDeclSyntax(
@@ -2173,7 +2178,7 @@ class TypeSchema: Codable {
                         ]),
                         rightParen: .rightParenToken()
                     ),
-                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsSpecifier: .keyword(.throws))
+                    effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
                 )
             ) {
                 VariableDeclSyntax(
