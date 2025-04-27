@@ -1,3 +1,8 @@
+--exclude .build
+--exclude .devcontainer
+--exclude .vscode
+--exclude .github
+
 # file options
 
 # format options
