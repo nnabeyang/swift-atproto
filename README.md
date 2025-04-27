@@ -53,7 +53,7 @@ Sample configuration file is as follows:
         { "prefix": "tools/ozone", "path": "lexicons/tools/ozone" }
       ],
       "state": {
-        "tag": "@atproto/api@0.13.22"
+        "tag": "@atproto/api@0.15.5"
       }
     },
     {
