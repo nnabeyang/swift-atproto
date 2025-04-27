@@ -6,10 +6,10 @@ struct SwiftAtprotoPlugin {
     func codeGenerate(tool: PluginContext.Tool, outputDirectoryPath: String?, configurationFilePath: String?) throws {
         let codeGenerationExec = tool.url
         var arguments = [String]()
-        if let configurationFilePath = configurationFilePath {
+        if let configurationFilePath {
             arguments.append(contentsOf: ["--atproto-configuration", configurationFilePath])
         }
-        if let outputDirectoryPath = outputDirectoryPath {
+        if let outputDirectoryPath {
             arguments.append(contentsOf: ["--outdir", outputDirectoryPath])
         }
         let process = try Process.run(codeGenerationExec, arguments: arguments)
@@ -31,11 +31,10 @@ extension SwiftAtprotoPlugin: CommandPlugin {
     ) async throws {
         let codeGenerationTool = try context.tool(named: "swift-atproto")
         var argExtractor = ArgumentExtractor(arguments)
-        let configurationFilePath: String?
-        if argExtractor.extractOption(named: "atproto-configuration").first == nil {
-            configurationFilePath = context.package.directoryURL.appending(component: ".atproto.json").path()
+        let configurationFilePath: String? = if argExtractor.extractOption(named: "atproto-configuration").first == nil {
+            context.package.directoryURL.appending(component: ".atproto.json").path()
         } else {
-            configurationFilePath = nil
+            nil
         }
         let outputDirectoryPath = argExtractor.extractOption(named: "outdir").first
         try codeGenerate(tool: codeGenerationTool,
@@ -45,23 +44,22 @@ extension SwiftAtprotoPlugin: CommandPlugin {
 }
 
 #if canImport(XcodeProjectPlugin)
-import XcodeProjectPlugin
+    import XcodeProjectPlugin
 
-extension SwiftAtprotoPlugin: XcodeCommandPlugin {
-  func performCommand(context: XcodeProjectPlugin.XcodePluginContext, arguments: [String]) throws {
-      let codeGenerationTool = try context.tool(named: "swift-atproto")
-      var argExtractor = ArgumentExtractor(arguments)
-      let configurationFilePath: String?
-      if argExtractor.extractOption(named: "atproto-configuration").first == nil {
-          configurationFilePath = context.xcodeProject.directoryURL.appending(component: ".atproto.json").path()
-      } else {
-          configurationFilePath = nil
-      }
+    extension SwiftAtprotoPlugin: XcodeCommandPlugin {
+        func performCommand(context: XcodeProjectPlugin.XcodePluginContext, arguments: [String]) throws {
+            let codeGenerationTool = try context.tool(named: "swift-atproto")
+            var argExtractor = ArgumentExtractor(arguments)
+            let configurationFilePath: String? = if argExtractor.extractOption(named: "atproto-configuration").first == nil {
+                context.xcodeProject.directoryURL.appending(component: ".atproto.json").path()
+            } else {
+                nil
+            }
 
-      let outputDirectoryPath = argExtractor.extractOption(named: "outdir").first
-      try codeGenerate(tool: codeGenerationTool,
-                       outputDirectoryPath: outputDirectoryPath,
-                       configurationFilePath: configurationFilePath)
-  }
-}
+            let outputDirectoryPath = argExtractor.extractOption(named: "outdir").first
+            try codeGenerate(tool: codeGenerationTool,
+                             outputDirectoryPath: outputDirectoryPath,
+                             configurationFilePath: configurationFilePath)
+        }
+    }
 #endif

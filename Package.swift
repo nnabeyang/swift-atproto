@@ -1,8 +1,8 @@
 // swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
-import PackageDescription
 import CompilerPluginSupport
+import PackageDescription
 
 let package = Package(
     name: "SwiftAtproto",
@@ -63,7 +63,7 @@ let package = Package(
             name: "Macros",
             dependencies: [
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             ]
         ),
         .target(name: "ATProtoMacro", dependencies: ["Macros", "SwiftAtproto"]),
@@ -83,7 +83,7 @@ let package = Package(
                     intent: .custom(verb: "swift-atproto", description: "Formats Swift source files using SwiftFormat"),
                     permissions: [
                         .writeToPackageDirectory(reason: "This command reformats source files"),
-                        .allowNetworkConnections(scope: .all(ports: [443]), reason: "fetch lexicons")
+                        .allowNetworkConnections(scope: .all(ports: [443]), reason: "fetch lexicons"),
                     ]
                 ),
                 dependencies: [.target(name: "swift-atproto")],
