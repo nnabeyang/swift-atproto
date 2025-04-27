@@ -7,7 +7,7 @@ struct XRPCTestClient: XRPCClientProtocol {
 
     var decoder: JSONDecoder
 
-    var auth: any AuthInfo
+    var auth: any XRPCAuth
 
     func tokenIsExpired(error _: SwiftAtproto.UnExpectedError) -> Bool {
         fatalError()
