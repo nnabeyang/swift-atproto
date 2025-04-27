@@ -42,8 +42,7 @@ final class Schema: Codable {
                     let ts = TypeSchema(id: id, prefix: prefix, defName: childname, type: val)
                     walk?(childname, ts)
                 }
-            case let .union(def):
-                guard !def.refs.isEmpty else { return }
+            case .union:
                 out[name] = ts
             case let .array(def):
                 let key = "\(name)_Elem"
