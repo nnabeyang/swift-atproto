@@ -2356,16 +2356,38 @@ enum AtpType {
     case primary
 }
 
-enum StringFormat: String, Codable {
-    case atIdentifier = "at-identifier"
-    case atUri = "at-uri"
-    case cid
-    case datetime
-    case did
-    case handle
-    case nsid
-    case uri
-    case language
+struct StringFormat: Codable, RawRepresentable {
+    typealias RawValue = String
+    let rawValue: String
+
+    init?(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self.rawValue = rawValue
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    static let atIdentifier: Self = .init("at-identifier")
+    static let atUri: Self = .init("at-uri")
+    static let cid: Self = .init("cid")
+    static let datetime: Self = .init("datetime")
+    static let did: Self = .init("did")
+    static let handle: Self = .init("handle")
+    static let nsid: Self = .init("nsid")
+    static let uri: Self = .init("uri")
+    static let language: Self = .init("language")
 }
 
 struct RecordSchema {
