@@ -2388,6 +2388,8 @@ struct StringFormat: Codable, RawRepresentable {
     static let nsid: Self = .init("nsid")
     static let uri: Self = .init("uri")
     static let language: Self = .init("language")
+    static let tid: Self = .init("tid")
+    static let recordKey: Self = .init("record-key")
 }
 
 struct RecordSchema {
