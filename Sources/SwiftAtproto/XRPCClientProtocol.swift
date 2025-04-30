@@ -11,6 +11,7 @@ public enum HTTPMethod {
 }
 
 public protocol ATPClientProtocol: Sendable {
+    var proxy: String? { get }
     var serviceEndpoint: URL { get }
     var decoder: JSONDecoder { get }
 
@@ -99,6 +100,7 @@ public extension XRPCClientProtocol {
 }
 
 public extension ATPClientProtocol {
+    var proxy: String? { nil }
     static var errorDomain: String { "ATPErrorDomain" }
 
     private static func encode(_ string: String, component: XRPCComponent) -> String {
@@ -122,6 +124,9 @@ public extension ATPClientProtocol {
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         if let authorization = getAuthorization(endpoint: nsid) {
             request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
+        }
+        if let proxy {
+            request.addValue(proxy, forHTTPHeaderField: "atproto-proxy")
         }
         switch httpMethod {
         case .get:
