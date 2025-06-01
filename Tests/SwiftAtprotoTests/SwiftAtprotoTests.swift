@@ -1,4 +1,7 @@
+import CID
 import Foundation
+import Multicodec
+import Multihash
 import XCTest
 @testable import SwiftAtproto
 
@@ -39,10 +42,11 @@ final class SwiftAtprotoTests: XCTestCase {
     }
 
     func testLexLinkCodable() throws {
-        let json = #"{"$link":"bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy"}"#
+        let json = #"{"$link":"bafkreibxn7ww5xcnkgwii3cndu46ike6reqllouvapfevfrxscpm3ovveq"}"#
         let decoder = JSONDecoder()
         let link = try decoder.decode(LexLink.self, from: Data(json.utf8))
-        XCTAssertEqual(link.toBaseEncodedString, "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy")
+        let cid = try CID(version: .v1, codec: .raw, multihash: Multihash(raw: "cids(1)", hashedWith: .sha2_256))
+        XCTAssertEqual(link.toBaseEncodedString, cid.toBaseEncodedString)
         let encoder = JSONEncoder()
         encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
         XCTAssertEqual(try String(decoding: encoder.encode(link), as: UTF8.self), json)
