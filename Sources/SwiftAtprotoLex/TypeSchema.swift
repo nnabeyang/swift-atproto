@@ -2285,10 +2285,45 @@ class TypeSchema: Codable {
                     }
                     SwitchCaseSyntax(label: .case(
                         .init(caseItems: [
-                            .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("_other")))),
+                            .init(pattern: ValueBindingPatternSyntax(
+                                bindingSpecifier: .keyword(.let),
+                                pattern: ExpressionPatternSyntax(
+                                    expression: FunctionCallExprSyntax(
+                                        calledExpression: MemberAccessExprSyntax(name: .identifier("_other")),
+                                        leftParen: .leftParenToken(),
+                                        arguments: LabeledExprListSyntax([
+                                            .init(
+                                                expression: PatternExprSyntax(
+                                                    pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
+                                                )
+                                            ),
+                                        ]),
+                                        rightParen: .rightParenToken()
+                                    )
+                                )
+                            )),
                         ])
                     )) {
-                        StmtSyntax("break")
+                        TryExprSyntax(
+                            tryKeyword: .keyword(.try),
+                            expression: ExprSyntax(FunctionCallExprSyntax(
+                                calledExpression: ExprSyntax(MemberAccessExprSyntax(
+                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("value"))),
+                                    period: .periodToken(),
+                                    declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
+                                )),
+                                leftParen: .leftParenToken(),
+                                arguments: LabeledExprListSyntax([
+                                    LabeledExprSyntax(
+                                        label: .identifier("to"),
+                                        colon: .colonToken(),
+                                        expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("encoder")))
+                                    ),
+                                ]),
+                                rightParen: .rightParenToken(),
+                                additionalTrailingClosures: MultipleTrailingClosureElementListSyntax([])
+                            ))
+                        )
                     }
                 }
             }
