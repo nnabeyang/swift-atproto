@@ -226,6 +226,8 @@ public final class UnExpectedError: XRPCError {
 
 public struct UnknownRecord: Identifiable, Codable, Sendable {
     public let type: String
+    public var _unknownValues: [String: AnyCodable]
+
     enum CodingKeys: String, CodingKey {
         case type = "$type"
     }
@@ -234,6 +236,27 @@ public struct UnknownRecord: Identifiable, Codable, Sendable {
 
     public init(type: String) {
         self.type = type
+        _unknownValues = [:]
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
+        type = try keyedContainer.decode(String.self, forKey: .type)
+        let unknownContainer = try decoder.container(keyedBy: AnyCodingKeys.self)
+        var _unknownValues = [String: AnyCodable]()
+        for key in unknownContainer.allKeys {
+            guard CodingKeys(rawValue: key.stringValue) == nil else {
+                continue
+            }
+            _unknownValues[key.stringValue] = try unknownContainer.decode(AnyCodable.self, forKey: key)
+        }
+        self._unknownValues = _unknownValues
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        try _unknownValues.encode(to: encoder)
     }
 }
 

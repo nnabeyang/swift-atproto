@@ -72,12 +72,30 @@ final class SwiftAtprotoTests: XCTestCase {
     }
 
     func testUnknownRecordCodable() throws {
-        let json = #"{"$type":"com.nnabeyang.unknown"}"#
+        let json = #"""
+        {
+          "$type" : "app.bsky.actor.defs#skyfeedBuilderFeedsPref",
+          "key1" : {
+            "nest_key1" : 123
+          },
+          "key2" : [
+            {
+              "nest_key2" : "abc",
+              "nest_key3" : true
+            },
+            {
+              "nest_key2" : "xyz",
+              "nest_key3" : false
+            }
+          ]
+        }
+        """#
         let decoder = JSONDecoder()
         let record = try decoder.decode(UnknownRecord.self, from: Data(json.utf8))
-        XCTAssertEqual(record.type, "com.nnabeyang.unknown")
+        XCTAssertEqual(record.type, "app.bsky.actor.defs#skyfeedBuilderFeedsPref")
         let encoder = JSONEncoder()
         encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         XCTAssertEqual(try String(decoding: encoder.encode(record), as: UTF8.self), json)
     }
 }
