@@ -11,10 +11,10 @@ public enum HTTPMethod {
 }
 
 public protocol ATPClientProtocol: Sendable {
-    var proxy: String? { get }
     var serviceEndpoint: URL { get }
     var decoder: JSONDecoder { get }
 
+    func getProxy(nsid: String) -> String?
     func tokenIsExpired(error: UnExpectedError) -> Bool
     func getAuthorization(endpoint: String) -> String?
 
@@ -100,7 +100,7 @@ public extension XRPCClientProtocol {
 }
 
 public extension ATPClientProtocol {
-    var proxy: String? { nil }
+    func getProxy(nsid _: String) -> String? { nil }
     static var errorDomain: String { "ATPErrorDomain" }
 
     private static func encode(_ string: String, component: XRPCComponent) -> String {
@@ -125,7 +125,7 @@ public extension ATPClientProtocol {
         if let authorization = getAuthorization(endpoint: nsid) {
             request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
         }
-        if let proxy {
+        if let proxy = getProxy(nsid: nsid) {
             request.addValue(proxy, forHTTPHeaderField: "atproto-proxy")
         }
         switch httpMethod {
