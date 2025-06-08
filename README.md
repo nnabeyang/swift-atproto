@@ -57,10 +57,15 @@ Sample configuration file is as follows:
       }
     },
     {
-      "location": "https://github.com/whtwnd/whitewind-blog.git",
-      "lexicons": [{ "prefix": "com.whtwnd", "path": "lexicons/com/whtwnd" }],
+      "location": "https://github.com/nnabeyang/soyokaze-lexicons.git",
+      "lexicons": [
+        {
+          "prefix": "com.nnabeyang.soyokaze",
+          "path": "lexicons/com/nnabeyang/soyokaze"
+        }
+      ],
       "state": {
-        "tag": "v1.0.16"
+        "tag": "0.0.1"
       }
     }
   ],
