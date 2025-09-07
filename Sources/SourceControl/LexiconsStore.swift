@@ -20,7 +20,7 @@ public struct ResolvedLexiconDependency: Codable {
     }
 
     public struct SourceState: Codable {
-        public let tag: String
+        public let tag: String?
         public let revision: String
     }
 

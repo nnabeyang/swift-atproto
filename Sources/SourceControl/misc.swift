@@ -45,9 +45,15 @@ public func main(rootURL: URL, config: LexiconConfig, module: String) throws {
         if !GitRepositoryProvider.workingCopyExists(at: destURL.path()) {
             let clone = try GitRepositoryProvider.createWorkingCopy(sourcePath: dependency.location.absoluteString,
                                                                     at: destURL.path())
-            let tag = dependency.state.tag
-            try clone.checkout(tag: tag)
-            let revision = try clone.resolveRevision(tag: tag)
+            let revision: String
+            switch dependency.state {
+            case let .tag(tag):
+                try clone.checkout(tag: tag)
+                revision = try clone.resolveRevision(tag: tag)
+            case let .revision(identifier):
+                revision = try clone.resolveRevision(identifier: identifier)
+                try clone.checkout(revision: revision)
+            }
             resolvedDendencies.append(.init(config: dependency, revision: revision))
         }
         for lexicon in dependency.lexicons {
