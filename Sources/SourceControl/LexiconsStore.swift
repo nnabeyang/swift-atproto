@@ -20,8 +20,8 @@ public struct ResolvedLexiconDependency: Codable {
     }
 
     public struct SourceState: Codable {
-        public let tag: String
-        public let revison: String
+        public let tag: String?
+        public let revision: String
     }
 
     public let location: URL
@@ -31,6 +31,6 @@ public struct ResolvedLexiconDependency: Codable {
     public init(config: LexiconDependency, revision: String) {
         location = config.location
         lexicons = config.lexicons
-        state = SourceState(tag: config.state.tag, revison: revision)
+        state = SourceState(tag: config.state.tag, revision: revision)
     }
 }

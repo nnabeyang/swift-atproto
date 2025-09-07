@@ -11,8 +11,46 @@ public struct LexiconDependency: Codable, Sendable {
         public let path: String
     }
 
-    public struct SourceState: Codable, Sendable {
-        public let tag: String
+    public enum SourceState: Codable, Sendable {
+        case tag(String)
+        case revision(String)
+
+        enum CodingKeys: String, CodingKey {
+            case tag
+            case revision
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            guard container.allKeys.count == 1 else {
+                throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Exactly one of 'tag' or 'revision' must be specified"))
+            }
+            switch container.allKeys[0] {
+            case .tag:
+                self = try .tag(container.decode(String.self, forKey: .tag))
+            case .revision:
+                self = try .revision(container.decode(String.self, forKey: .revision))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case let .tag(value):
+                try container.encode(value, forKey: .tag)
+            case let .revision(value):
+                try container.encode(value, forKey: .revision)
+            }
+        }
+
+        public var tag: String? {
+            switch self {
+            case let .tag(tag):
+                tag
+            case .revision:
+                nil
+            }
+        }
     }
 
     public let location: URL

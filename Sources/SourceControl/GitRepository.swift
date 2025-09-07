@@ -92,6 +92,16 @@ public final class GitRepository {
         }
     }
 
+    public func checkout(revision: String) throws {
+        try lock.withLock {
+            _ = try callGit([
+                "checkout",
+                "-f",
+                revision,
+            ])
+        }
+    }
+
     func isBare() throws -> Bool {
         try lock.withLock {
             let output = try callGit([
@@ -107,8 +117,15 @@ public final class GitRepository {
     }
 
     public func resolveRevision(tag: String) throws -> String {
-        let specifier = "\(tag)^{commit}"
-        return try lock.withLock {
+        try resolveHash(specifier: "\(tag)^{commit}")
+    }
+
+    public func resolveRevision(identifier: String) throws -> String {
+        try resolveHash(specifier: "\(identifier)^{commit}")
+    }
+
+    func resolveHash(specifier: String) throws -> String {
+        try lock.withLock {
             let output = try callGit([
                 "rev-parse",
                 "--verify",
