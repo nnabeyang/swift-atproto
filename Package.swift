@@ -25,7 +25,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "601.0.1"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.3.1"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.55.5"),
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
