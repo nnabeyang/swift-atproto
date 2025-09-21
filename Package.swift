@@ -76,6 +76,7 @@ let package = Package(
             dependencies: [
                 "Macros",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
             ]
         ),
         .plugin(name: "Generate Source Code",
