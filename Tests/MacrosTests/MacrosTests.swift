@@ -12,12 +12,12 @@ import SwiftSyntaxMacrosTestSupport
 import XCTest
 @testable import Macros
 
-let testMacros: [String: Macro.Type] = [
-    "XRPCClientMacro": XRPCClientMacro.self,
-]
-
 final class MacroExampleTests: XCTestCase {
     func testXRPCClientMacro() throws {
+        let testMacros: [String: Macro.Type] = [
+            "XRPCClientMacro": XRPCClientMacro.self,
+        ]
+
         assertMacroExpansion(
             """
             @XRPCClientMacro
