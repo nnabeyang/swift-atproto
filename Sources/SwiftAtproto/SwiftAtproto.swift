@@ -138,7 +138,7 @@ extension String {
 public typealias LexLink = CID
 extension CID: @unchecked @retroactive Sendable {}
 
-extension LexLink: Codable {
+extension LexLink: @retroactive Codable {
     static func dataEncodingStrategy(data: Data, encoder: any Encoder) throws {
         let cid = try CID(data[1...])
         var container = encoder.container(keyedBy: LexLink.CodingKeys.self)
