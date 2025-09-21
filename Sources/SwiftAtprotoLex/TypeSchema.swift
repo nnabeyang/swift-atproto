@@ -2395,7 +2395,7 @@ struct StringFormat: Codable, RawRepresentable {
     typealias RawValue = String
     let rawValue: String
 
-    init?(rawValue: String) {
+    init(rawValue: String) {
         self.rawValue = rawValue
     }
 
