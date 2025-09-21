@@ -1202,7 +1202,6 @@ class TypeSchema: Codable {
                     DeclModifierSyntax(name: .keyword(.public)),
                 ]),
                 initKeyword: .keyword(.`init`),
-                optionalMark: .postfixQuestionMarkToken(),
                 signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(
                     leftParen: .leftParenToken(),
                     parameters: FunctionParameterListSyntax([
@@ -1313,20 +1312,17 @@ class TypeSchema: Codable {
                         CodeBlockItemSyntax(item: CodeBlockItemSyntax.Item(SequenceExprSyntax(elements: ExprListSyntax([
                             ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
                             ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-                            ExprSyntax(ForceUnwrapExprSyntax(
-                                expression: FunctionCallExprSyntax(
-                                    calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.Self))),
-                                    leftParen: .leftParenToken(),
-                                    arguments: LabeledExprListSyntax([
-                                        LabeledExprSyntax(
-                                            label: .identifier("rawValue"),
-                                            colon: .colonToken(),
-                                            expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
-                                        ),
-                                    ]),
-                                    rightParen: .rightParenToken()
-                                ),
-                                exclamationMark: .exclamationMarkToken()
+                            ExprSyntax(FunctionCallExprSyntax(
+                                calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.Self))),
+                                leftParen: .leftParenToken(),
+                                arguments: LabeledExprListSyntax([
+                                    LabeledExprSyntax(
+                                        label: .identifier("rawValue"),
+                                        colon: .colonToken(),
+                                        expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
+                                    ),
+                                ]),
+                                rightParen: .rightParenToken()
                             )),
                         ])))),
                     ]),
@@ -2399,7 +2395,7 @@ struct StringFormat: Codable, RawRepresentable {
     typealias RawValue = String
     let rawValue: String
 
-    init?(rawValue: String) {
+    init(rawValue: String) {
         self.rawValue = rawValue
     }
 
