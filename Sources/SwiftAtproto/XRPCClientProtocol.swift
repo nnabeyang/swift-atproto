@@ -32,6 +32,7 @@ public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
 
     mutating func signout()
 
+    static var moduleName: String { get }
     static func setModuleName()
 }
 
@@ -93,9 +94,10 @@ public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
 
 public extension XRPCClientProtocol {
     static var errorDomain: String { "XRPCErrorDomain" }
+    static var moduleName: String { _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? "" }
 
     static func setModuleName() {
-        LexiconTypesMap.shared.moduleName = _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? ""
+        LexiconTypesMap.shared.moduleName = moduleName
     }
 }
 
