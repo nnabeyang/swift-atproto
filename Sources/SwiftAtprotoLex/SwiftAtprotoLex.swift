@@ -13,8 +13,8 @@ public func main(outdir: String, path: String) throws {
                 let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
                 if fileAttributes.isRegularFile!, fileUrl.pathExtension == "json" {
                     prefixes.insert(fileUrl.prefix(baseURL: url))
-                    let json = try String(contentsOf: fileUrl, encoding: .utf8)
-                    try schemas.append(decoder.decode(Schema.self, from: Data(json.utf8)))
+                    let data = try Data(contentsOf: fileUrl)
+                    try schemas.append(decoder.decode(Schema.self, from: data))
                 }
             } catch {
                 print(error, fileUrl)
