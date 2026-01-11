@@ -103,7 +103,7 @@ class TypeSchema: Codable {
     var defName = ""
 
     let type: FieldTypeDefinition
-    let isRecord: Bool
+    var isRecord: Bool
     let needsType: Bool
 
     init(id: String, prefix: String, defName: String, type: FieldTypeDefinition, needsType: Bool = false) {
@@ -137,13 +137,19 @@ class TypeSchema: Codable {
     func lookupRef(ref: String, defMap: ExtDefMap) -> TypeSchema {
         let fqref: String = if ref.hasPrefix("#") {
             "\(id)\(ref)"
+        } else if ref.hasSuffix("#main") {
+            String(ref.dropLast(5))
         } else {
             ref
         }
         guard let rr = defMap[fqref] else {
             fatalError("no such ref: \(fqref)")
         }
-        return rr.type
+        let t = rr.type
+        if ref.hasSuffix("#main") {
+            t.isRecord = true
+        }
+        return t
     }
 
     func namesFromRef(ref: String, defMap: ExtDefMap, dropPrefix: Bool = true) -> (String, String) {
@@ -157,7 +163,9 @@ class TypeSchema: Codable {
         if case let .string(def) = ts.type, def.knownValues == nil, def.enum == nil {
             return ("INVALID", "String")
         }
-        let tname: String = if dropPrefix, ts.prefix == prefix {
+        let tname: String = if ts.isRecord {
+            "\(Lex.structNameFor(prefix: ts.prefix))_\(ts.typeName)"
+        } else if dropPrefix, ts.prefix == prefix {
             ts.typeName
         } else {
             "\(Lex.structNameFor(prefix: ts.prefix)).\(ts.typeName)"
