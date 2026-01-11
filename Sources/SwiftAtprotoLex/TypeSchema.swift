@@ -2384,12 +2384,14 @@ enum FieldType: String, Codable {
     case array
     case object
     case ref
+    case permission
     case token
     case unknown
     case procedure
     case query
     case subscription
     case record
+    case permissionSet = "permission-set"
 }
 
 enum AtpType {
@@ -2455,12 +2457,14 @@ enum FieldTypeDefinition: Codable {
     case array(ArrayTypeDefinition)
     case object(ObjectTypeDefinition)
     case ref(ReferenceTypeDefinition)
+    case permission(PermissionTypeDefinition)
     case unknown(UnknownTypeDefinition)
     case cidLink(CidLinkTypeDefinition)
     case procedure(ProcedureTypeDefinition)
     case query(QueryTypeDefinition)
     case subscription(SubscriptionDefinition)
     case record(RecordDefinition)
+    case permissionSet(PermissionSetTypeDefinition)
     private enum CodingKeys: String, CodingKey {
         case type
     }
@@ -2493,6 +2497,8 @@ enum FieldTypeDefinition: Codable {
             self = try .object(ObjectTypeDefinition(from: decoder))
         case .ref:
             self = try .ref(ReferenceTypeDefinition(from: decoder))
+        case .permission:
+            self = try .permission(PermissionTypeDefinition(from: decoder))
         case .unknown:
             self = try .unknown(UnknownTypeDefinition(from: decoder))
         case .cidLink:
@@ -2505,6 +2511,8 @@ enum FieldTypeDefinition: Codable {
             self = try .subscription(SubscriptionDefinition(from: decoder))
         case .record:
             self = try .record(RecordDefinition(from: decoder))
+        case .permissionSet:
+            self = try .permissionSet(PermissionSetTypeDefinition(from: decoder))
         }
     }
 
@@ -2523,6 +2531,8 @@ enum FieldTypeDefinition: Codable {
         case let .bytes(def):
             try def.encode(to: encoder)
         case let .string(def):
+            try def.encode(to: encoder)
+        case let .permission(def):
             try def.encode(to: encoder)
         case let .union(def):
             try def.encode(to: encoder)
@@ -2543,6 +2553,8 @@ enum FieldTypeDefinition: Codable {
         case let .subscription(def):
             try def.encode(to: encoder)
         case let .record(def):
+            try def.encode(to: encoder)
+        case let .permissionSet(def):
             try def.encode(to: encoder)
         }
     }
@@ -2714,6 +2726,16 @@ struct ReferenceTypeDefinition: Codable {
     }
 }
 
+struct PermissionTypeDefinition: Codable {
+    var type: FieldType { .permission }
+    let description: String?
+    let resource: String
+    let inheritAud: Bool?
+    let lxm: [String]?
+    let action: [String]?
+    let collection: [String]?
+}
+
 struct UnionTypeDefinition: Codable {
     var type: FieldType { .union }
     let description: String?
@@ -2756,6 +2778,26 @@ struct ArrayTypeDefinition: Codable {
         try container.encodeIfPresent(items, forKey: .items)
         try container.encodeIfPresent(maxLength, forKey: .maxLength)
         try container.encodeIfPresent(minLength, forKey: .minLength)
+    }
+}
+
+struct PermissionSetTypeDefinition: Codable {
+    let type: FieldType
+    let description: String?
+    let title: String?
+    let titleLang: [String: String]?
+    let detail: String?
+    let detailLang: [String: String]?
+    let permissions: [PermissionTypeDefinition]
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case description
+        case title
+        case titleLang = "title:lang"
+        case detail
+        case detailLang = "detail:lang"
+        case permissions
     }
 }
 
