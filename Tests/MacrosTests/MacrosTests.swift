@@ -5,6 +5,7 @@
 //  Created by Noriaki Watanabe on 2024/12/23.
 //
 
+#if os(macOS)
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -55,3 +56,4 @@ final class MacroExampleTests: XCTestCase {
         )
     }
 }
+#endif
