@@ -5,7 +5,7 @@
 //  Created by Noriaki Watanabe on 2024/12/23.
 //
 
-#if os(macOS)
+#if os(macOS) || os(Linux)
   import SwiftCompilerPlugin
   import SwiftDiagnostics
   import SwiftSyntax
