@@ -151,28 +151,6 @@ enum Lex {
 
   static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> [DeclSyntaxProtocol]? {
     switch ts.type {
-    case .token:
-      let n: String =
-        if ts.defName == "main" {
-          ts.id
-        } else {
-          "\(ts.id)#\(ts.defName)"
-        }
-      let variable = VariableDeclSyntax(
-        leadingTrivia: leadingTrivia,
-        modifiers: [
-          DeclModifierSyntax(name: .keyword(.public))
-        ],
-        bindingSpecifier: .keyword(.let)
-      ) {
-        PatternBindingSyntax(
-          pattern: PatternSyntax(stringLiteral: typeName),
-          initializer: InitializerClauseSyntax(
-            value: StringLiteralExprSyntax(content: n)
-          )
-        )
-      }
-      return [variable]
     case .procedure(let def as HTTPAPITypeDefinition), .query(let def as HTTPAPITypeDefinition):
       return [
         ts.writeErrorDecl(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap),
