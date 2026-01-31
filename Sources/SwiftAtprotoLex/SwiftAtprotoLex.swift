@@ -37,8 +37,9 @@ public func main(outdir: String, path: String) throws {
     for schema in schemas {
       guard schema.id.hasPrefix(prefix) else { continue }
       let fileUrl = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
-      let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap)
-      try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+      if let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap) {
+        try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+      }
     }
   }
 }
@@ -92,7 +93,7 @@ enum Lex {
     return src.formatted().description
   }
 
-  static func genCode(for schema: Schema, prefix: String, defMap: ExtDefMap) -> String {
+  static func genCode(for schema: Schema, prefix: String, defMap: ExtDefMap) -> String? {
     schema.prefix = prefix
     let structName = Lex.structNameFor(prefix: prefix)
     let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
@@ -115,6 +116,9 @@ enum Lex {
         nil
       }
     let enumExtensionIsNeeded = !otherTypes.isEmpty || methods != nil
+    if otherTypes.isEmpty && methods == nil && recordTypes.isEmpty {
+      return nil
+    }
     let src = SourceFileSyntax(
       leadingTrivia: Self.fileHeader,
       statementsBuilder: {
