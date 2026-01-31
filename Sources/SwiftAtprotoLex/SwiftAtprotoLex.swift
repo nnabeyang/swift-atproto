@@ -9,6 +9,7 @@ public func main(outdir: String, path: String) throws {
   let (schemas, prefixes) = try decodeSchemas(fileURLs, baseURL: url)
   let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
   let outdirBaseURL = URL(filePath: outdir)
+
   for prefix in prefixes {
     let filePrefix = prefix.split(separator: ".").joined()
     let outdirURL = outdirBaseURL.appending(path: filePrefix)
@@ -16,6 +17,11 @@ public func main(outdir: String, path: String) throws {
       try FileManager.default.removeItem(at: outdirURL)
     }
     try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
+  }
+
+  for prefix in prefixes {
+    let filePrefix = prefix.split(separator: ".").joined()
+    let outdirURL = outdirBaseURL.appending(path: filePrefix)
     let enumName = Lex.structNameFor(prefix: prefix)
     let fileUrl = outdirURL.appending(path: "\(enumName).swift")
     let src = Lex.baseFile(prefix: prefix)
