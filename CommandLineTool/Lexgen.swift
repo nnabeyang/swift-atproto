@@ -27,6 +27,8 @@
         let rootURL = configurationtURL.deletingLastPathComponent()
         try SourceControl.main(rootURL: rootURL, config: config, module: module)
         try SwiftAtprotoLex.main(outdir: module, path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path())
+      #else
+        print(Self.helpMessage())
       #endif
     }
   }
