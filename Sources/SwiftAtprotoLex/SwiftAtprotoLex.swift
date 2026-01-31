@@ -4,27 +4,9 @@ import SwiftSyntaxBuilder
 
 public func main(outdir: String, path: String) throws {
   let url = URL(filePath: path)
-  var fileURLs = [URL]()
-  if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
-    for case let fileUrl as URL in enumerator {
-      do {
-        let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
-        if fileAttributes.isRegularFile!, fileUrl.pathExtension == "json" {
-          fileURLs.append(fileUrl)
-        }
-      } catch {
-        print(error, fileUrl)
-      }
-    }
-  }
-  let decoder = JSONDecoder()
-  var schemas = [Schema]()
-  var prefixes = Set<String>()
-  for fileUrl in fileURLs {
-    let data = try Data(contentsOf: fileUrl)
-    try schemas.append(decoder.decode(Schema.self, from: data))
-    prefixes.insert(fileUrl.prefix(baseURL: url))
-  }
+
+  let fileURLs = collectJSONFileURLs(at: url)
+  let (schemas, prefixes) = try decodeSchemas(fileURLs, baseURL: url)
   let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
   let outdirBaseURL = URL(filePath: outdir)
   for prefix in prefixes {
@@ -46,6 +28,36 @@ public func main(outdir: String, path: String) throws {
       }
     }
   }
+}
+
+func collectJSONFileURLs(at baseURL: URL) -> [URL] {
+  var fileURLs = [URL]()
+  if let enumerator = FileManager.default.enumerator(at: baseURL, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+    for case let fileUrl as URL in enumerator {
+      do {
+        let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
+        if fileAttributes.isRegularFile!, fileUrl.pathExtension == "json" {
+          fileURLs.append(fileUrl)
+        }
+      } catch {
+        print(error, fileUrl)
+      }
+    }
+  }
+  return fileURLs
+}
+
+func decodeSchemas(_ fileURLs: [URL], baseURL: URL) throws -> (schemas: [Schema], prefixes: Set<String>) {
+  let decoder = JSONDecoder()
+  var schemas: [Schema] = []
+  var prefixes = Set<String>()
+
+  for fileUrl in fileURLs {
+    let data = try Data(contentsOf: fileUrl)
+    try schemas.append(decoder.decode(Schema.self, from: data))
+    prefixes.insert(fileUrl.prefix(baseURL: baseURL))
+  }
+  return (schemas, prefixes)
 }
 
 extension URL {
