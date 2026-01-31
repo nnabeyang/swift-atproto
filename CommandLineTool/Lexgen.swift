@@ -27,6 +27,9 @@
         let rootURL = configurationtURL.deletingLastPathComponent()
         try SourceControl.main(rootURL: rootURL, config: config, module: module)
         try SwiftAtprotoLex.main(outdir: module, path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path())
+      #else
+        print("swift-atproto lexgen is not supported on Linux yet.\n")
+        print(Self.helpMessage())
       #endif
     }
   }
