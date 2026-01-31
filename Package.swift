@@ -54,7 +54,7 @@ let package = Package(
       name: "swift-atproto",
       dependencies: [
         "SwiftAtprotoLex",
-        .target(name: "SourceControl", condition: .when(platforms: [.macOS])),
+        .target(name: "SourceControl", condition: .when(platforms: [.macOS, .linux])),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
       path: "CommandLineTool"
