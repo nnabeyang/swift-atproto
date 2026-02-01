@@ -674,14 +674,14 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       let ts = TypeSchema(id: v.id, prefix: v.prefix, defName: "Elem", type: def.items)
       let subt = Self.typeNameForField(name: "\(name)_\(k.titleCased())", k: "Elem", v: ts, defMap: defMap, dropPrefix: dropPrefix)
       return "[\(subt)]"
-    case .union:
+    case .union, .object:
       if !dropPrefix {
         return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
       } else {
         return "\(name)_\(k.titleCased())"
       }
     default:
-      fatalError()
+      fatalError("field \(k) in \(name) has unsupported type name (\(v.type))")
     }
   }
 
