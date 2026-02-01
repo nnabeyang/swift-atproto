@@ -3042,17 +3042,13 @@ struct UnionTypeDefinition: Codable {
   let closed: Bool?
 }
 
-struct ArrayTypeDefinition: Codable {
+final class ArrayTypeDefinition: Codable {
   var type: FieldType { .array }
-  var items: FieldTypeDefinition {
-    _items as! FieldTypeDefinition
-  }
 
+  let items: FieldTypeDefinition
   let description: String?
   let minLength: Int?
   let maxLength: Int?
-
-  private let _items: Any
 
   private enum CodingKeys: String, CodingKey {
     case type
@@ -3065,7 +3061,7 @@ struct ArrayTypeDefinition: Codable {
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     description = try container.decodeIfPresent(String.self, forKey: .description)
-    _items = try container.decode(FieldTypeDefinition.self, forKey: .items)
+    items = try container.decode(FieldTypeDefinition.self, forKey: .items)
     minLength = try container.decodeIfPresent(Int.self, forKey: .minLength)
     maxLength = try container.decodeIfPresent(Int.self, forKey: .maxLength)
   }
