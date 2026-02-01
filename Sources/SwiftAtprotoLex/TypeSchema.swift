@@ -65,8 +65,13 @@ final class Schema: Codable {
           }
         }
       case .record(let def):
-        let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: "", type: .object(def.record), needsType: true)
-        walk?(name, ts)
+        let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: "", type: .record(def))
+        out[name] = ts
+        for (key, val) in def.record.properties {
+          let childname = "\(name)_\(key.titleCased())"
+          let ts = TypeSchema(id: id, prefix: prefix, defName: childname, type: val)
+          walk?(childname, ts)
+        }
       case .string(let def):
         guard def.knownValues != nil || def.enum != nil else { break }
         out[name] = ts
@@ -104,31 +109,34 @@ class TypeSchema: Codable {
   var defName = ""
 
   let type: FieldTypeDefinition
-  var isRecord: Bool
-  let needsType: Bool
 
-  init(id: String, prefix: String, defName: String, type: FieldTypeDefinition, needsType: Bool = false) {
+  var isRecord: Bool {
+    switch type {
+    case .record: return true
+    default:
+      return false
+    }
+  }
+
+  var needsType: Bool {
+    switch type {
+    case .record: return true
+    case .object(let def):
+      return def.properties.isEmpty ? true : false
+    default:
+      return false
+    }
+  }
+
+  init(id: String, prefix: String, defName: String, type: FieldTypeDefinition) {
     self.id = id
     self.prefix = prefix
     self.defName = defName
     self.type = type
-    self.needsType = TypeSchema.fix(type: type, needsType: needsType)
-    isRecord = needsType
   }
 
   required init(from decoder: Decoder) throws {
     type = try FieldTypeDefinition(from: decoder)
-    needsType = TypeSchema.fix(type: type, needsType: false)
-    isRecord = false
-  }
-
-  private static func fix(type: FieldTypeDefinition, needsType: Bool) -> Bool {
-    switch type {
-    case .object(let def):
-      def.properties.isEmpty ? true : needsType
-    default:
-      needsType
-    }
   }
 
   func encode(to encoder: Encoder) throws {
@@ -148,9 +156,6 @@ class TypeSchema: Codable {
       fatalError("no such ref: \(fqref)")
     }
     let t = rr.type
-    if ref.hasSuffix("#main") {
-      t.isRecord = true
-    }
     return t
   }
 
@@ -838,6 +843,8 @@ class TypeSchema: Codable {
       }
     case .object(let def):
       genCodeObject(def: def, leadingTrivia: leadingTrivia, name: name, type: typeName, defMap: defMap)
+    case .record(let def):
+      genCodeObject(def: def.record, leadingTrivia: leadingTrivia, name: name, type: typeName, defMap: defMap)
     case .union(let def):
       genCodeUnion(def: def, leadingTrivia: leadingTrivia, name: name, type: typeName, defMap: defMap)
     case .array(let def):
