@@ -5,7 +5,7 @@
   import SwiftAtprotoLex
 
   @main
-  struct Lexgen: ParsableCommand {
+  struct Lexgen: AsyncParsableCommand {
     static var configuration: CommandConfiguration {
       CommandConfiguration(commandName: "swift-atproto", version: SourceControl.version)
     }
@@ -18,7 +18,7 @@
       var outdir: String?
     #endif
 
-    mutating func run() throws {
+    mutating func run() async throws {
       #if os(macOS)
         let configurationtURL = URL(filePath: configuration)
         let data = try Data(contentsOf: configurationtURL)
@@ -26,7 +26,7 @@
         let module = outdir ?? config.module ?? Self.defaultModulePath
         let rootURL = configurationtURL.deletingLastPathComponent()
         try SourceControl.main(rootURL: rootURL, config: config, module: module)
-        try SwiftAtprotoLex.main(outdir: module, path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path())
+        try await SwiftAtprotoLex.main(outdir: module, path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path())
       #else
         print("swift-atproto lexgen is not supported on Linux yet.\n")
         print(Self.helpMessage())

@@ -2,45 +2,95 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-public func main(outdir: String, path: String) throws {
-  let decoder = JSONDecoder()
-  var schemas = [Schema]()
+public func main(outdir: String, path: String) async throws {
   let url = URL(filePath: path)
-  var prefixes = Set<String>()
-  if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+
+  let fileURLs = collectJSONFileURLs(at: url)
+  let schemasMap = try await decodeSchemasByPrefix(from: fileURLs, baseURL: url)
+  let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
+  let outdirBaseURL = URL(filePath: outdir)
+  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL)
+}
+
+func collectJSONFileURLs(at baseURL: URL) -> [URL] {
+  var fileURLs = [URL]()
+  if let enumerator = FileManager.default.enumerator(at: baseURL, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
     for case let fileUrl as URL in enumerator {
       do {
         let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
         if fileAttributes.isRegularFile!, fileUrl.pathExtension == "json" {
-          prefixes.insert(fileUrl.prefix(baseURL: url))
-          let data = try Data(contentsOf: fileUrl)
-          try schemas.append(decoder.decode(Schema.self, from: data))
+          fileURLs.append(fileUrl)
         }
       } catch {
         print(error, fileUrl)
       }
     }
   }
-  let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
-  let outdirBaseURL = URL(filePath: outdir)
-  for prefix in prefixes {
-    let filePrefix = prefix.split(separator: ".").joined()
-    let outdirURL = outdirBaseURL.appending(path: filePrefix)
-    if FileManager.default.fileExists(atPath: outdirURL.path) {
-      try FileManager.default.removeItem(at: outdirURL)
-    }
-    try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
-    let enumName = Lex.structNameFor(prefix: prefix)
-    let fileUrl = outdirURL.appending(path: "\(enumName).swift")
-    let src = Lex.baseFile(prefix: prefix)
-    try src.write(to: fileUrl, atomically: true, encoding: .utf8)
-    for schema in schemas {
-      guard schema.id.hasPrefix(prefix) else { continue }
-      let fileUrl = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
-      if let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap) {
-        try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+  return fileURLs
+}
+
+func decodeSchemasByPrefix(from fileURLs: [URL], baseURL: URL) async throws -> [String: [Schema]] {
+  let decoder = JSONDecoder()
+  return try await withThrowingTaskGroup(of: Schema.self) { group in
+    for fileURL in fileURLs {
+      group.addTask {
+        let data = try Data(contentsOf: fileURL)
+        let prefix = fileURL.prefix(baseURL: baseURL)
+        return try decoder.decode(Schema.self, from: data, configuration: prefix)
       }
     }
+    var schemasMap = [String: [Schema]]()
+    for try await schema in group {
+      schemasMap[schema.prefix, default: []].append(schema)
+    }
+    return schemasMap
+  }
+}
+
+func createOutputDirectory(for prefix: String, baseURL: URL) throws {
+  let filePrefix = prefix.split(separator: ".").joined()
+  let outdirURL = baseURL.appending(path: filePrefix)
+
+  if FileManager.default.fileExists(atPath: outdirURL.path) {
+    try FileManager.default.removeItem(at: outdirURL)
+  }
+  try FileManager.default.createDirectory(
+    at: outdirURL,
+    withIntermediateDirectories: true
+  )
+}
+
+func writeSchemaCode(
+  for schemasMap: [String: [Schema]],
+  with defMap: ExtDefMap,
+  to baseURL: URL
+) async throws {
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for (prefix, schemas) in schemasMap {
+      try createOutputDirectory(for: prefix, baseURL: baseURL)
+      group.addTask {
+        let filePrefix = prefix.split(separator: ".").joined()
+        let outdirURL = baseURL.appending(path: filePrefix)
+
+        let enumName = Lex.structNameFor(prefix: prefix)
+        let baseFileURL = outdirURL.appending(path: "\(enumName).swift")
+        let baseSrc = Lex.baseFile(prefix: prefix)
+        try baseSrc.write(to: baseFileURL, atomically: true, encoding: .utf8)
+
+        try await withThrowingTaskGroup(of: Void.self) { innerGroup in
+          for schema in schemas {
+            innerGroup.addTask {
+              if let src = Lex.genCode(for: schema, defMap: defMap) {
+                let schemaURL = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
+                try src.write(to: schemaURL, atomically: true, encoding: .utf8)
+              }
+            }
+          }
+          try await innerGroup.waitForAll()
+        }
+      }
+    }
+    try await group.waitForAll()
   }
 }
 
@@ -93,8 +143,8 @@ enum Lex {
     return src.formatted().description
   }
 
-  static func genCode(for schema: Schema, prefix: String, defMap: ExtDefMap) -> String? {
-    schema.prefix = prefix
+  static func genCode(for schema: Schema, defMap: ExtDefMap) -> String? {
+    let prefix = schema.prefix
     let structName = Lex.structNameFor(prefix: prefix)
     let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
       $0.key.localizedStandardCompare($1.key) == .orderedAscending
@@ -155,7 +205,7 @@ enum Lex {
 
   static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> [DeclSyntaxProtocol]? {
     switch ts.type {
-    case .procedure(let def as HTTPAPITypeDefinition), .query(let def as HTTPAPITypeDefinition):
+    case .procedure(let def as any HTTPAPITypeDefinition), .query(let def as any HTTPAPITypeDefinition):
       return [
         ts.writeErrorDecl(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap),
         ts.writeRPC(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix),
@@ -165,29 +215,19 @@ enum Lex {
     }
   }
 
-  static func buildExtDefMap(schemas: [Schema], prefixes: Set<String>) -> ExtDefMap {
+  static func buildExtDefMap(schemasMap: [String: [Schema]]) -> ExtDefMap {
     var out = ExtDefMap()
-    for schema in schemas {
-      for (defName, def) in schema.defs {
-        def.id = schema.id
-        def.defName = defName
-
-        def.prefix = {
-          for p in prefixes {
-            if schema.id.hasPrefix(p) {
-              return p
+    for (_, schemas) in schemasMap {
+      for schema in schemas {
+        for (defName, def) in schema.defs {
+          let key = {
+            if defName == "main" {
+              return schema.id
             }
-          }
-          return ""
-        }()
-
-        let key = {
-          if defName == "main" {
-            return schema.id
-          }
-          return "\(schema.id)#\(defName)"
-        }()
-        out[key] = ExtDef(type: def)
+            return "\(schema.id)#\(defName)"
+          }()
+          out[key] = ExtDef(type: def)
+        }
       }
     }
     return out
