@@ -2,15 +2,15 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-public func main(outdir: String, path: String) throws {
+public func main(outdir: String, path: String) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
-  let (schemas, prefixes) = try decodeSchemas(fileURLs, baseURL: url)
+  let (schemas, prefixes) = try await decodeSchemas(fileURLs, baseURL: url)
   let defMap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
   let outdirBaseURL = URL(filePath: outdir)
   try buildOutputDirectories(prefixes: prefixes, baseURL: outdirBaseURL)
-  try generateCodeFiles(schemas: schemas, prefixes: prefixes, defMap: defMap, baseURL: outdirBaseURL)
+  try await generateCodeFiles(schemas: schemas, prefixes: prefixes, defMap: defMap, baseURL: outdirBaseURL)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -30,16 +30,30 @@ func collectJSONFileURLs(at baseURL: URL) -> [URL] {
   return fileURLs
 }
 
-func decodeSchemas(_ fileURLs: [URL], baseURL: URL) throws -> (schemas: [Schema], prefixes: Set<String>) {
+func decodeSchemas(_ fileURLs: [URL], baseURL: URL) async throws -> (schemas: [Schema], prefixes: Set<String>) {
   let decoder = JSONDecoder()
   var schemas: [Schema] = []
   var prefixes = Set<String>()
 
-  for fileUrl in fileURLs {
-    let data = try Data(contentsOf: fileUrl)
-    let prefix = fileUrl.prefix(baseURL: baseURL)
-    try schemas.append(decoder.decode(Schema.self, from: data, configuration: prefix))
-    prefixes.insert(prefix)
+  await withTaskGroup(of: (URL, Schema?).self) { group in
+    for fileURL in fileURLs {
+      group.addTask {
+        do {
+          let data = try Data(contentsOf: fileURL)
+          let prefix = fileURL.prefix(baseURL: baseURL)
+          let schema = try decoder.decode(Schema.self, from: data, configuration: prefix)
+          return (fileURL, schema)
+        } catch {
+          return (fileURL, nil)
+        }
+      }
+    }
+    for await (fileURL, schema) in group {
+      if let schema {
+        schemas.append(schema)
+        prefixes.insert(fileURL.prefix(baseURL: baseURL))
+      }
+    }
   }
   return (schemas, prefixes)
 }
@@ -64,21 +78,32 @@ func generateCodeFiles(
   prefixes: Set<String>,
   defMap: ExtDefMap,
   baseURL: URL
-) throws {
-  for prefix in prefixes {
-    let filePrefix = prefix.split(separator: ".").joined()
-    let outdirURL = baseURL.appending(path: filePrefix)
-    let enumName = Lex.structNameFor(prefix: prefix)
-    let fileUrl = outdirURL.appending(path: "\(enumName).swift")
-    let src = Lex.baseFile(prefix: prefix)
-    try src.write(to: fileUrl, atomically: true, encoding: .utf8)
-    for schema in schemas {
-      guard schema.id.hasPrefix(prefix) else { continue }
-      let fileUrl = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
-      if let src = Lex.genCode(for: schema, defMap: defMap) {
-        try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+) async throws {
+  try await withThrowingTaskGroup(of: Void.self) { group in
+    for prefix in prefixes {
+      group.addTask {
+        let filePrefix = prefix.split(separator: ".").joined()
+        let outdirURL = baseURL.appending(path: filePrefix)
+
+        let enumName = Lex.structNameFor(prefix: prefix)
+        let baseFileURL = outdirURL.appending(path: "\(enumName).swift")
+        let baseSrc = Lex.baseFile(prefix: prefix)
+        try baseSrc.write(to: baseFileURL, atomically: true, encoding: .utf8)
+
+        try await withThrowingTaskGroup(of: Void.self) { innerGroup in
+          for schema in schemas where schema.id.hasPrefix(prefix) {
+            innerGroup.addTask {
+              if let src = Lex.genCode(for: schema, defMap: defMap) {
+                let schemaURL = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
+                try src.write(to: schemaURL, atomically: true, encoding: .utf8)
+              }
+            }
+          }
+          try await innerGroup.waitForAll()
+        }
       }
     }
+    try await group.waitForAll()
   }
 }
 
