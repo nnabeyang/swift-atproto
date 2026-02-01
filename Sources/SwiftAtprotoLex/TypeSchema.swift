@@ -681,7 +681,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         return "\(name)_\(k.titleCased())"
       }
     default:
-      fatalError()
+      fatalError("field \(k) in \(name) has unsupported type name (\(v.type))")
     }
   }
 
