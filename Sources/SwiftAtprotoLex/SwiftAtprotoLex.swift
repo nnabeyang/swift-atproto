@@ -7,33 +7,10 @@ public func main(outdir: String, path: String) throws {
 
   let fileURLs = collectJSONFileURLs(at: url)
   let (schemas, prefixes) = try decodeSchemas(fileURLs, baseURL: url)
-  let defmap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
+  let defMap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
   let outdirBaseURL = URL(filePath: outdir)
-
-  for prefix in prefixes {
-    let filePrefix = prefix.split(separator: ".").joined()
-    let outdirURL = outdirBaseURL.appending(path: filePrefix)
-    if FileManager.default.fileExists(atPath: outdirURL.path) {
-      try FileManager.default.removeItem(at: outdirURL)
-    }
-    try FileManager.default.createDirectory(at: outdirURL, withIntermediateDirectories: true)
-  }
-
-  for prefix in prefixes {
-    let filePrefix = prefix.split(separator: ".").joined()
-    let outdirURL = outdirBaseURL.appending(path: filePrefix)
-    let enumName = Lex.structNameFor(prefix: prefix)
-    let fileUrl = outdirURL.appending(path: "\(enumName).swift")
-    let src = Lex.baseFile(prefix: prefix)
-    try src.write(to: fileUrl, atomically: true, encoding: .utf8)
-    for schema in schemas {
-      guard schema.id.hasPrefix(prefix) else { continue }
-      let fileUrl = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
-      if let src = Lex.genCode(for: schema, prefix: prefix, defMap: defmap) {
-        try src.write(to: fileUrl, atomically: true, encoding: .utf8)
-      }
-    }
-  }
+  try buildOutputDirectories(prefixes: prefixes, baseURL: outdirBaseURL)
+  try generateCodeFiles(schemas: schemas, prefixes: prefixes, defMap: defMap, baseURL: outdirBaseURL)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -64,6 +41,44 @@ func decodeSchemas(_ fileURLs: [URL], baseURL: URL) throws -> (schemas: [Schema]
     prefixes.insert(fileUrl.prefix(baseURL: baseURL))
   }
   return (schemas, prefixes)
+}
+
+func buildOutputDirectories(prefixes: Set<String>, baseURL: URL) throws {
+  for prefix in prefixes {
+    let filePrefix = prefix.split(separator: ".").joined()
+    let outdirURL = baseURL.appending(path: filePrefix)
+
+    if FileManager.default.fileExists(atPath: outdirURL.path) {
+      try FileManager.default.removeItem(at: outdirURL)
+    }
+    try FileManager.default.createDirectory(
+      at: outdirURL,
+      withIntermediateDirectories: true
+    )
+  }
+}
+
+func generateCodeFiles(
+  schemas: [Schema],
+  prefixes: Set<String>,
+  defMap: ExtDefMap,
+  baseURL: URL
+) throws {
+  for prefix in prefixes {
+    let filePrefix = prefix.split(separator: ".").joined()
+    let outdirURL = baseURL.appending(path: filePrefix)
+    let enumName = Lex.structNameFor(prefix: prefix)
+    let fileUrl = outdirURL.appending(path: "\(enumName).swift")
+    let src = Lex.baseFile(prefix: prefix)
+    try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+    for schema in schemas {
+      guard schema.id.hasPrefix(prefix) else { continue }
+      let fileUrl = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
+      if let src = Lex.genCode(for: schema, prefix: prefix, defMap: defMap) {
+        try src.write(to: fileUrl, atomically: true, encoding: .utf8)
+      }
+    }
+  }
 }
 
 extension URL {
