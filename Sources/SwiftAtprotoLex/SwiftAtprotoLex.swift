@@ -6,10 +6,10 @@ public func main(outdir: String, path: String) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
-  let schemasMap = try await decodeSchemasMap(fileURLs, baseURL: url)
+  let schemasMap = try await decodeSchemasByPrefix(from: fileURLs, baseURL: url)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
   let outdirBaseURL = URL(filePath: outdir)
-  try await generateCodeFiles(schemasMap: schemasMap, defMap: defMap, baseURL: outdirBaseURL)
+  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -29,7 +29,7 @@ func collectJSONFileURLs(at baseURL: URL) -> [URL] {
   return fileURLs
 }
 
-func decodeSchemasMap(_ fileURLs: [URL], baseURL: URL) async throws -> [String: [Schema]] {
+func decodeSchemasByPrefix(from fileURLs: [URL], baseURL: URL) async throws -> [String: [Schema]] {
   let decoder = JSONDecoder()
   return try await withThrowingTaskGroup(of: Schema.self) { group in
     for fileURL in fileURLs {
@@ -47,7 +47,7 @@ func decodeSchemasMap(_ fileURLs: [URL], baseURL: URL) async throws -> [String: 
   }
 }
 
-func buildOutputDirectory(prefix: String, baseURL: URL) throws {
+func createOutputDirectory(for prefix: String, baseURL: URL) throws {
   let filePrefix = prefix.split(separator: ".").joined()
   let outdirURL = baseURL.appending(path: filePrefix)
 
@@ -60,14 +60,14 @@ func buildOutputDirectory(prefix: String, baseURL: URL) throws {
   )
 }
 
-func generateCodeFiles(
-  schemasMap: [String: [Schema]],
-  defMap: ExtDefMap,
-  baseURL: URL
+func writeSchemaCode(
+  for schemasMap: [String: [Schema]],
+  with defMap: ExtDefMap,
+  to baseURL: URL
 ) async throws {
   try await withThrowingTaskGroup(of: Void.self) { group in
     for (prefix, schemas) in schemasMap {
-      try buildOutputDirectory(prefix: prefix, baseURL: baseURL)
+      try createOutputDirectory(for: prefix, baseURL: baseURL)
       group.addTask {
         let filePrefix = prefix.split(separator: ".").joined()
         let outdirURL = baseURL.appending(path: filePrefix)
