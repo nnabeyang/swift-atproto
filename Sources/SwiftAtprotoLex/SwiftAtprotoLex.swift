@@ -6,11 +6,10 @@ public func main(outdir: String, path: String) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
-  let (schemas, prefixes) = try await decodeSchemas(fileURLs, baseURL: url)
-  let defMap = Lex.buildExtDefMap(schemas: schemas, prefixes: prefixes)
+  let schemasMap = try await decodeSchemasMap(fileURLs, baseURL: url)
+  let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
   let outdirBaseURL = URL(filePath: outdir)
-  try buildOutputDirectories(prefixes: prefixes, baseURL: outdirBaseURL)
-  try await generateCodeFiles(schemas: schemas, prefixes: prefixes, defMap: defMap, baseURL: outdirBaseURL)
+  try await generateCodeFiles(schemasMap: schemasMap, defMap: defMap, baseURL: outdirBaseURL)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -30,57 +29,45 @@ func collectJSONFileURLs(at baseURL: URL) -> [URL] {
   return fileURLs
 }
 
-func decodeSchemas(_ fileURLs: [URL], baseURL: URL) async throws -> (schemas: [Schema], prefixes: Set<String>) {
+func decodeSchemasMap(_ fileURLs: [URL], baseURL: URL) async throws -> [String: [Schema]] {
   let decoder = JSONDecoder()
-  var schemas: [Schema] = []
-  var prefixes = Set<String>()
-
-  await withTaskGroup(of: (URL, Schema?).self) { group in
+  return try await withThrowingTaskGroup(of: Schema.self) { group in
     for fileURL in fileURLs {
       group.addTask {
-        do {
-          let data = try Data(contentsOf: fileURL)
-          let prefix = fileURL.prefix(baseURL: baseURL)
-          let schema = try decoder.decode(Schema.self, from: data, configuration: prefix)
-          return (fileURL, schema)
-        } catch {
-          return (fileURL, nil)
-        }
+        let data = try Data(contentsOf: fileURL)
+        let prefix = fileURL.prefix(baseURL: baseURL)
+        return try decoder.decode(Schema.self, from: data, configuration: prefix)
       }
     }
-    for await (fileURL, schema) in group {
-      if let schema {
-        schemas.append(schema)
-        prefixes.insert(fileURL.prefix(baseURL: baseURL))
-      }
+    var schemasMap = [String: [Schema]]()
+    for try await schema in group {
+      schemasMap[schema.prefix, default: []].append(schema)
     }
+    return schemasMap
   }
-  return (schemas, prefixes)
 }
 
-func buildOutputDirectories(prefixes: Set<String>, baseURL: URL) throws {
-  for prefix in prefixes {
-    let filePrefix = prefix.split(separator: ".").joined()
-    let outdirURL = baseURL.appending(path: filePrefix)
+func buildOutputDirectory(prefix: String, baseURL: URL) throws {
+  let filePrefix = prefix.split(separator: ".").joined()
+  let outdirURL = baseURL.appending(path: filePrefix)
 
-    if FileManager.default.fileExists(atPath: outdirURL.path) {
-      try FileManager.default.removeItem(at: outdirURL)
-    }
-    try FileManager.default.createDirectory(
-      at: outdirURL,
-      withIntermediateDirectories: true
-    )
+  if FileManager.default.fileExists(atPath: outdirURL.path) {
+    try FileManager.default.removeItem(at: outdirURL)
   }
+  try FileManager.default.createDirectory(
+    at: outdirURL,
+    withIntermediateDirectories: true
+  )
 }
 
 func generateCodeFiles(
-  schemas: [Schema],
-  prefixes: Set<String>,
+  schemasMap: [String: [Schema]],
   defMap: ExtDefMap,
   baseURL: URL
 ) async throws {
   try await withThrowingTaskGroup(of: Void.self) { group in
-    for prefix in prefixes {
+    for (prefix, schemas) in schemasMap {
+      try buildOutputDirectory(prefix: prefix, baseURL: baseURL)
       group.addTask {
         let filePrefix = prefix.split(separator: ".").joined()
         let outdirURL = baseURL.appending(path: filePrefix)
@@ -91,7 +78,7 @@ func generateCodeFiles(
         try baseSrc.write(to: baseFileURL, atomically: true, encoding: .utf8)
 
         try await withThrowingTaskGroup(of: Void.self) { innerGroup in
-          for schema in schemas where schema.id.hasPrefix(prefix) {
+          for schema in schemas {
             innerGroup.addTask {
               if let src = Lex.genCode(for: schema, defMap: defMap) {
                 let schemaURL = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
@@ -228,17 +215,19 @@ enum Lex {
     }
   }
 
-  static func buildExtDefMap(schemas: [Schema], prefixes: Set<String>) -> ExtDefMap {
+  static func buildExtDefMap(schemasMap: [String: [Schema]]) -> ExtDefMap {
     var out = ExtDefMap()
-    for schema in schemas {
-      for (defName, def) in schema.defs {
-        let key = {
-          if defName == "main" {
-            return schema.id
-          }
-          return "\(schema.id)#\(defName)"
-        }()
-        out[key] = ExtDef(type: def)
+    for (_, schemas) in schemasMap {
+      for schema in schemas {
+        for (defName, def) in schema.defs {
+          let key = {
+            if defName == "main" {
+              return schema.id
+            }
+            return "\(schema.id)#\(defName)"
+          }()
+          out[key] = ExtDef(type: def)
+        }
       }
     }
     return out
