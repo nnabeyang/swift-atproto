@@ -37,8 +37,9 @@ func decodeSchemas(_ fileURLs: [URL], baseURL: URL) throws -> (schemas: [Schema]
 
   for fileUrl in fileURLs {
     let data = try Data(contentsOf: fileUrl)
-    try schemas.append(decoder.decode(Schema.self, from: data))
-    prefixes.insert(fileUrl.prefix(baseURL: baseURL))
+    let prefix = fileUrl.prefix(baseURL: baseURL)
+    try schemas.append(decoder.decode(Schema.self, from: data, configuration: prefix))
+    prefixes.insert(prefix)
   }
   return (schemas, prefixes)
 }
@@ -74,7 +75,7 @@ func generateCodeFiles(
     for schema in schemas {
       guard schema.id.hasPrefix(prefix) else { continue }
       let fileUrl = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
-      if let src = Lex.genCode(for: schema, prefix: prefix, defMap: defMap) {
+      if let src = Lex.genCode(for: schema, defMap: defMap) {
         try src.write(to: fileUrl, atomically: true, encoding: .utf8)
       }
     }
@@ -130,8 +131,8 @@ enum Lex {
     return src.formatted().description
   }
 
-  static func genCode(for schema: Schema, prefix: String, defMap: ExtDefMap) -> String? {
-    schema.prefix = prefix
+  static func genCode(for schema: Schema, defMap: ExtDefMap) -> String? {
+    let prefix = schema.prefix
     let structName = Lex.structNameFor(prefix: prefix)
     let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
       $0.key.localizedStandardCompare($1.key) == .orderedAscending
@@ -192,7 +193,7 @@ enum Lex {
 
   static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> [DeclSyntaxProtocol]? {
     switch ts.type {
-    case .procedure(let def as HTTPAPITypeDefinition), .query(let def as HTTPAPITypeDefinition):
+    case .procedure(let def as any HTTPAPITypeDefinition), .query(let def as any HTTPAPITypeDefinition):
       return [
         ts.writeErrorDecl(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap),
         ts.writeRPC(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix),
@@ -206,18 +207,6 @@ enum Lex {
     var out = ExtDefMap()
     for schema in schemas {
       for (defName, def) in schema.defs {
-        def.id = schema.id
-        def.defName = defName
-
-        def.prefix = {
-          for p in prefixes {
-            if schema.id.hasPrefix(p) {
-              return p
-            }
-          }
-          return ""
-        }()
-
         let key = {
           if defName == "main" {
             return schema.id

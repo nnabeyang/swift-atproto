@@ -7,9 +7,8 @@ struct TypeInfo {
   let type: TypeSchema
 }
 
-final class Schema: Codable {
-  var prefix = ""
-
+final class Schema: Encodable, DecodableWithConfiguration, Sendable {
+  let prefix: String
   let lexicon: Int
   let id: String
   let revision: Int?
@@ -24,6 +23,21 @@ final class Schema: Codable {
     case defs
   }
 
+  init(from decoder: any Decoder, configuration prefix: String) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.lexicon = try container.decode(Int.self, forKey: .lexicon)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.revision = try container.decodeIfPresent(Int.self, forKey: .revision)
+    self.description = try container.decodeIfPresent(String.self, forKey: .description)
+    let nestedContainer = try container.nestedContainer(keyedBy: AnyCodingKeys.self, forKey: .defs)
+    var defs = [String: TypeSchema]()
+    for key in nestedContainer.allKeys {
+      defs[key.stringValue] = try nestedContainer.decode(TypeSchema.self, forKey: key, configuration: .init(prefix: prefix, id: id, defName: key.stringValue))
+    }
+    self.defs = defs
+    self.prefix = prefix
+  }
+
   func allTypes(prefix: String) -> [String: TypeSchema] {
     var out = [String: TypeSchema]()
     let id = id
@@ -32,8 +46,6 @@ final class Schema: Codable {
       guard let ts else {
         fatalError(#"nil type schema in "\#(name)"(\#(self.id)) "#)
       }
-      ts.prefix = prefix
-      ts.id = id
       switch ts.type {
       case .object(let def):
         out[name] = ts
@@ -50,7 +62,7 @@ final class Schema: Codable {
         walk?(key, ts)
       case .ref:
         break
-      case .procedure(let def as HTTPAPITypeDefinition), .query(let def as HTTPAPITypeDefinition):
+      case .procedure(let def as any HTTPAPITypeDefinition), .query(let def as any HTTPAPITypeDefinition):
         if let input = def.input, let schema = input.schema {
           walk?("\(name)_Input", schema)
         }
@@ -103,10 +115,20 @@ final class Schema: Codable {
 
 typealias ExtDefMap = [String: ExtDef]
 
-class TypeSchema: Codable {
-  var prefix = ""
-  var id = ""
-  var defName = ""
+final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
+  struct DecodingConfiguration {
+    let prefix: String
+    let id: String
+    let defName: String
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case type
+  }
+
+  let prefix: String
+  let id: String
+  let defName: String
 
   let type: FieldTypeDefinition
 
@@ -135,8 +157,12 @@ class TypeSchema: Codable {
     self.type = type
   }
 
-  required init(from decoder: Decoder) throws {
-    type = try FieldTypeDefinition(from: decoder)
+  required init(from decoder: Decoder, configuration: DecodingConfiguration) throws {
+    type = try FieldTypeDefinition(from: decoder, configuration: configuration)
+
+    id = configuration.id
+    prefix = configuration.prefix
+    defName = configuration.defName
   }
 
   func encode(to encoder: Encoder) throws {
@@ -2744,7 +2770,8 @@ struct RecordSchema {
   let nullable: [String]?
 }
 
-enum FieldTypeDefinition: Codable {
+enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
+  typealias DecodingConfiguration = TypeSchema.DecodingConfiguration
   case token(TokenTypeDefinition)
   case null(NullTypeDefinition)
   case boolean(BooleanTypeDefinition)
@@ -2768,7 +2795,7 @@ enum FieldTypeDefinition: Codable {
     case type
   }
 
-  init(from decoder: Decoder) throws {
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     guard let type = try FieldType(rawValue: container.decode(String.self, forKey: .type)) else {
       throw DecodingError.typeMismatch(FieldTypeDefinition.self, DecodingError.Context(codingPath: container.codingPath, debugDescription: "Invalid number of keys found, expected one.", underlyingError: nil))
@@ -2791,9 +2818,9 @@ enum FieldTypeDefinition: Codable {
     case .union:
       self = try .union(UnionTypeDefinition(from: decoder))
     case .array:
-      self = try .array(ArrayTypeDefinition(from: decoder))
+      self = try .array(ArrayTypeDefinition(from: decoder, configuration: configuration))
     case .object:
-      self = try .object(ObjectTypeDefinition(from: decoder))
+      self = try .object(ObjectTypeDefinition(from: decoder, configuration: configuration))
     case .ref:
       self = try .ref(ReferenceTypeDefinition(from: decoder))
     case .permission:
@@ -2803,13 +2830,13 @@ enum FieldTypeDefinition: Codable {
     case .cidLink:
       self = try .cidLink(CidLinkTypeDefinition(from: decoder))
     case .procedure:
-      self = try .procedure(ProcedureTypeDefinition(from: decoder))
+      self = try .procedure(ProcedureTypeDefinition(from: decoder, configuration: configuration))
     case .query:
-      self = try .query(QueryTypeDefinition(from: decoder))
+      self = try .query(QueryTypeDefinition(from: decoder, configuration: configuration))
     case .subscription:
-      self = try .subscription(SubscriptionDefinition(from: decoder))
+      self = try .subscription(SubscriptionDefinition(from: decoder, configuration: configuration))
     case .record:
-      self = try .record(RecordDefinition(from: decoder))
+      self = try .record(RecordDefinition(from: decoder, configuration: configuration))
     case .permissionSet:
       self = try .permissionSet(PermissionSetTypeDefinition(from: decoder))
     }
@@ -2990,7 +3017,9 @@ struct StringTypeDefinition: Codable {
   }
 }
 
-struct ObjectTypeDefinition: Codable {
+struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration {
+  typealias DecodingConfiguration = TypeSchema.DecodingConfiguration
+
   var type: FieldType { .object }
   let description: String?
   let properties: [String: FieldTypeDefinition]
@@ -3003,6 +3032,19 @@ struct ObjectTypeDefinition: Codable {
     case properties
     case required
     case nullable
+  }
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: TypedCodingKeys.self)
+    description = try container.decodeIfPresent(String.self, forKey: .description)
+    let nestedContainer = try container.nestedContainer(keyedBy: AnyCodingKeys.self, forKey: .properties)
+    var properties = [String: FieldTypeDefinition]()
+    for key in nestedContainer.allKeys {
+      properties[key.stringValue] = try nestedContainer.decode(FieldTypeDefinition.self, forKey: key, configuration: configuration)
+    }
+    self.properties = properties
+    required = try container.decodeIfPresent([String].self, forKey: .required)
+    nullable = try container.decodeIfPresent([String].self, forKey: .nullable)
   }
 
   var sortedProperties: [(String, FieldTypeDefinition)] {
@@ -3042,7 +3084,7 @@ struct UnionTypeDefinition: Codable {
   let closed: Bool?
 }
 
-final class ArrayTypeDefinition: Codable {
+final class ArrayTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
   var type: FieldType { .array }
 
   let items: FieldTypeDefinition
@@ -3058,10 +3100,10 @@ final class ArrayTypeDefinition: Codable {
     case maxLength
   }
 
-  init(from decoder: Decoder) throws {
+  init(from decoder: Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     description = try container.decodeIfPresent(String.self, forKey: .description)
-    items = try container.decode(FieldTypeDefinition.self, forKey: .items)
+    items = try container.decode(FieldTypeDefinition.self, forKey: .items, configuration: configuration)
     minLength = try container.decodeIfPresent(Int.self, forKey: .minLength)
     maxLength = try container.decodeIfPresent(Int.self, forKey: .maxLength)
   }
@@ -3127,20 +3169,33 @@ enum EncodingType: String, Codable {
   }
 }
 
-struct OutputType: Codable {
+struct OutputType: Encodable, DecodableWithConfiguration {
   let encoding: EncodingType
   let schema: TypeSchema?
   let description: String?
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    encoding = try container.decode(EncodingType.self, forKey: .encoding)
+    schema = try container.decodeIfPresent(TypeSchema.self, forKey: .schema, configuration: configuration)
+    description = try container.decodeIfPresent(String.self, forKey: .description)
+  }
 }
 
-struct MessageType: Codable {
+struct MessageType: Encodable, DecodableWithConfiguration {
   let description: String?
   let schema: TypeSchema
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    description = try container.decodeIfPresent(String.self, forKey: .description)
+    schema = try container.decode(TypeSchema.self, forKey: .schema, configuration: configuration)
+  }
 }
 
 typealias InputType = OutputType
 
-struct Parameters: Codable {
+struct Parameters: Encodable, DecodableWithConfiguration {
   var type: String {
     "params"
   }
@@ -3153,9 +3208,21 @@ struct Parameters: Codable {
       return ($0, property)
     }
   }
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    required = try container.decodeIfPresent([String].self, forKey: .required)
+    var properties = [String: FieldTypeDefinition]()
+    let nestedContainer = try container.nestedContainer(keyedBy: AnyCodingKeys.self, forKey: .properties)
+    for key in nestedContainer.allKeys {
+      properties[key.stringValue] = try nestedContainer.decode(FieldTypeDefinition.self, forKey: key, configuration: configuration)
+    }
+    self.properties = properties
+  }
 }
 
-protocol HTTPAPITypeDefinition: Codable {
+protocol HTTPAPITypeDefinition: Encodable, DecodableWithConfiguration {
+  associatedtype DecodingConfiguration = TypeSchema.DecodingConfiguration
   var type: FieldType { get }
   var parameters: Parameters? { get }
   var output: OutputType? { get }
@@ -3328,6 +3395,24 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition {
   let input: InputType?
   let description: String?
   let errors: [ErrorResponse]?
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case parameters
+    case output
+    case input
+    case description
+    case errors
+  }
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    parameters = try container.decodeIfPresent(Parameters.self, forKey: .parameters, configuration: configuration)
+    output = try container.decodeIfPresent(OutputType.self, forKey: .output, configuration: configuration)
+    input = try container.decodeIfPresent(InputType.self, forKey: .input, configuration: configuration)
+    description = try container.decodeIfPresent(String.self, forKey: .description)
+    errors = try container.decodeIfPresent([ErrorResponse].self, forKey: .errors)
+  }
 }
 
 struct QueryTypeDefinition: HTTPAPITypeDefinition {
@@ -3337,24 +3422,82 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition {
   let input: InputType?
   let description: String?
   let errors: [ErrorResponse]?
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case parameters
+    case output
+    case input
+    case description
+    case errors
+  }
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    parameters = try container.decodeIfPresent(Parameters.self, forKey: .parameters, configuration: configuration)
+    output = try container.decodeIfPresent(OutputType.self, forKey: .output, configuration: configuration)
+    input = try container.decodeIfPresent(InputType.self, forKey: .input, configuration: configuration)
+    description = try container.decodeIfPresent(String.self, forKey: .description)
+    errors = try container.decodeIfPresent([ErrorResponse].self, forKey: .errors)
+  }
 }
 
-struct SubscriptionDefinition: Codable {
+struct SubscriptionDefinition: Encodable, DecodableWithConfiguration {
   var type: FieldType {
     .subscription
   }
 
   let parameters: Parameters?
   let message: MessageType?
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case parameters
+    case message
+  }
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    parameters = try container.decodeIfPresent(Parameters.self, forKey: .parameters, configuration: configuration)
+    message = try container.decodeIfPresent(MessageType.self, forKey: .message, configuration: configuration)
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(type, forKey: .type)
+    try container.encodeIfPresent(parameters, forKey: .parameters)
+    try container.encodeIfPresent(message, forKey: .message)
+  }
 }
 
-struct RecordDefinition: Codable {
+struct RecordDefinition: Encodable, DecodableWithConfiguration {
+  typealias DecodingConfiguration = TypeSchema.DecodingConfiguration
+
   var type: FieldType {
     .record
   }
 
   let key: String
   let record: ObjectTypeDefinition
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case key
+    case record
+  }
+
+  init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    key = try container.decode(String.self, forKey: .key)
+    record = try container.decode(ObjectTypeDefinition.self, forKey: .record, configuration: configuration)
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(type, forKey: .type)
+    try container.encode(key, forKey: .key)
+    try container.encode(record, forKey: .record)
+  }
 }
 
 struct ErrorResponse: Codable, Equatable, Hashable {
