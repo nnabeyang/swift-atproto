@@ -272,9 +272,14 @@ extension String {
   func camelCased() -> String {
     guard !isEmpty else { return "" }
     let words = components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+    if words.isEmpty { return self }
     let first = words.first!.lowercased()
     let rest = words.dropFirst().map(\.capitalized)
     return ([first] + rest).joined()
+  }
+
+  var escapedSwiftKeyword: String {
+    isNeedEscapingKeyword(self) ? "`\(self)`" : self
   }
 }
 
