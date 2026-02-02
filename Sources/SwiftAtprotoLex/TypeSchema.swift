@@ -1725,7 +1725,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                   declName: DeclReferenceExprSyntax(baseName: .identifier(key))
                 )),
               ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-              ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(key))),
+              ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(key.escapedSwiftKeyword))),
             ]))
         }
         SequenceExprSyntax(
@@ -1765,7 +1765,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
             ]))
         }
         for key in def.properties.keys.sorted() {
-          EnumCaseDeclSyntax(elements: EnumCaseElementListSyntax([EnumCaseElementSyntax(name: .init(stringLiteral: key))]))
+          EnumCaseDeclSyntax(elements: EnumCaseElementListSyntax([EnumCaseElementSyntax(name: .init(stringLiteral: key.escapedSwiftKeyword))]))
         }
       }
 
@@ -2893,7 +2893,7 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
       bindingSpecifier: .keyword(isMutable ? .var : .let)
     ) {
       PatternBindingSyntax(
-        pattern: PatternSyntax(stringLiteral: name),
+        pattern: PatternSyntax(stringLiteral: name.escapedSwiftKeyword),
         typeAnnotation: TypeAnnotationSyntax(
           type: type
         )

@@ -277,6 +277,10 @@ extension String {
     let rest = words.dropFirst().map(\.capitalized)
     return ([first] + rest).joined()
   }
+
+  var escapedSwiftKeyword: String {
+    isNeedEscapingKeyword(self) ? "`\(self)`" : self
+  }
 }
 
 extension Substring {
