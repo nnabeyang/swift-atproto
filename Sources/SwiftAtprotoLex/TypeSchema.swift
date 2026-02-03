@@ -623,10 +623,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         Lex.nameFromId(id: id, prefix: prefix)
       }
     if case .array(let def) = type {
-      if case .union = def.items {
-        return "[\(baseType)_Elem]"
-      } else {
+      if def.items.isPrimitive {
         return "[\(baseType)]"
+      } else {
+        return "[\(baseType)_Elem]"
       }
     } else {
       return baseType
@@ -648,10 +648,24 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       return "LexBlob"
     case .bytes:
       return "Data"
-    case .string:
-      return "String"
-    case .integer:
-      return "Int"
+    case .string(let def):
+      if def.isPrimitive {
+        return "String"
+      }
+      if !dropPrefix {
+        return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
+      } else {
+        return "\(name)_\(k.titleCased())"
+      }
+    case .integer(let def):
+      if def.isPrimitive {
+        return "Int"
+      }
+      if !dropPrefix {
+        return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
+      } else {
+        return "\(name)_\(k.titleCased())"
+      }
     case .unknown:
       return "LexiconTypeDecoder"
     case .cidLink:
@@ -2795,6 +2809,19 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
     case type
   }
 
+  var isPrimitive: Bool {
+    switch self {
+    case .integer(let def):
+      def.isPrimitive
+    case .string(let def):
+      def.isPrimitive
+    case .union:
+      false
+    default:
+      true
+    }
+  }
+
   init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     guard let type = try FieldType(rawValue: container.decode(String.self, forKey: .type)) else {
@@ -2965,6 +2992,10 @@ struct IntegerTypeDefinition: Codable {
     case `default`
     case const
   }
+
+  var isPrimitive: Bool {
+    `enum` == nil
+  }
 }
 
 struct BlobTypeDefinition: Codable {
@@ -3014,6 +3045,10 @@ struct StringTypeDefinition: Codable {
     case knownValues
     case `enum`
     case const
+  }
+
+  var isPrimitive: Bool {
+    `enum` == nil
   }
 }
 
