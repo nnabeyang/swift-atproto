@@ -97,9 +97,7 @@ extension XRPCClientProtocol {
   public static var errorDomain: String { "XRPCErrorDomain" }
   public static var moduleName: String { _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? "" }
 
-  public static func setModuleName() {
-    LexiconTypesMap.shared.moduleName = moduleName
-  }
+  public static func setModuleName() {}
 }
 
 extension ATPClientProtocol {
@@ -228,7 +226,8 @@ public final class UnExpectedError: XRPCError {
   }
 }
 
-public struct UnknownRecord: Identifiable, Codable, Sendable {
+public struct UnknownRecord: Identifiable, ATProtoRecord {
+  public static let nsId = "unknown"
   public let type: String
   public var _unknownValues: [String: AnyCodable]
 

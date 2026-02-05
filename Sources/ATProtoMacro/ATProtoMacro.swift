@@ -10,3 +10,6 @@ import SwiftAtproto
 @attached(member, names: named(init))
 @attached(extension, conformances: XRPCClientProtocol)
 public macro XRPCClient() = #externalMacro(module: "Macros", type: "XRPCClientMacro")
+
+@attached(peer, names: suffixed(_objc_marker))
+public macro ATProtoRecord() = #externalMacro(module: "Macros", type: "ATProtoRecordMacro")

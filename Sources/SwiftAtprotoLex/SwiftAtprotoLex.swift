@@ -176,6 +176,9 @@ enum Lex {
           path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "SwiftAtproto")])
         )
         ImportDeclSyntax(
+          path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "ATProtoMacro")])
+        )
+        ImportDeclSyntax(
           path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "Foundation")]),
           trailingTrivia: .newlines(2)
         )

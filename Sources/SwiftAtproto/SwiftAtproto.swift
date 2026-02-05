@@ -1,50 +1,36 @@
 import CID
 import Foundation
 
-final class LexiconTypesMap: @unchecked Sendable {
+struct LexiconTypesMap: Sendable {
   static let shared = LexiconTypesMap()
-  private var map = [String: any ATProtoRecord.Type]()
-  private var _moduleName: String = ""
-  private let lock = NSLock()
+  private let map: [String: any ATProtoRecord.Type]
 
-  var moduleName: String {
-    get {
-      lock.lock()
-      defer {
-        lock.unlock()
+  private init() {
+    let objcClasses = objc_enumerateClasses(conformingTo: ATProtoRecordMarker.self)
+    var map = [String: any ATProtoRecord.Type]()
+    for objClass in objcClasses {
+      let name = String(NSStringFromClass(objClass).dropLast(12))
+      guard let recordType = _typeByName(name) as? any ATProtoRecord.Type else {
+        continue
       }
-      return _moduleName
+      map[recordType.nsId] = recordType
     }
-    set {
-      lock.lock()
-      defer {
-        lock.unlock()
-      }
-      _moduleName = newValue
-    }
+    self.map = map
   }
 
   subscript(_ id: String) -> (any ATProtoRecord.Type)? {
-    get {
-      lock.lock()
-      defer {
-        lock.unlock()
-      }
-      return map[id]
-    }
-    set {
-      lock.lock()
-      defer {
-        lock.unlock()
-      }
-      map[id] = newValue
-    }
+    return map[id]
   }
 }
 
 public struct EmptyResponse: Codable {}
 
-public typealias ATProtoRecord = Codable & Sendable
+public protocol ATProtoRecord: Codable, Sendable {
+  static var nsId: String { get }
+}
+
+@objc
+public protocol ATProtoRecordMarker {}
 
 public struct LexiconTypeDecoder: Codable, Sendable {
   let typeName: String?
@@ -81,20 +67,7 @@ public struct LexiconTypeDecoder: Codable, Sendable {
   }
 
   private static func getTypeByName(typeName nsId: String) -> (any ATProtoRecord.Type)? {
-    if let type = LexiconTypesMap.shared[nsId] {
-      return type
-    }
-    var components = nsId.split(separator: ".")
-    while !components.isEmpty {
-      components.removeLast()
-      let prefix = components.joined(separator: ".")
-      let typeName = "\(LexiconTypesMap.shared.moduleName).\(Self.structNameFor(prefix: prefix))_\(Self.nameFromId(id: nsId, prefix: prefix))"
-      if let type = _typeByName(typeName) as? (any ATProtoRecord.Type) {
-        LexiconTypesMap.shared[nsId] = type
-        return type
-      }
-    }
-    return nil
+    LexiconTypesMap.shared[nsId]
   }
 
   private static func nameFromId(id: String, prefix: String) -> String {

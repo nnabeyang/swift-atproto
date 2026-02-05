@@ -145,10 +145,56 @@
     }
   }
 
+  public struct ATProtoRecordMacro: PeerMacro {
+    public static func expansion(
+      of node: AttributeSyntax,
+      providingPeersOf declaration: some DeclSyntaxProtocol,
+      in context: some MacroExpansionContext
+    ) throws -> [SwiftSyntax.DeclSyntax] {
+      guard let typeDecl = declaration.as(ClassDeclSyntax.self) else {
+        context.diagnose(
+          Diagnostic(
+            node: node,
+            message: MacroExpansionErrorMessage("This macro can only be applied to classes.")
+          )
+        )
+        return []
+      }
+      return [
+        DeclSyntax(
+          ClassDeclSyntax(
+            attributes: AttributeListSyntax([]),
+            modifiers: DeclModifierListSyntax([
+              DeclModifierSyntax(name: .keyword(.internal, trailingTrivia: .space)),
+              DeclModifierSyntax(name: .keyword(.final, trailingTrivia: .space)),
+            ]),
+            classKeyword: .keyword(.class, trailingTrivia: .space),
+            name: .identifier("\(typeDecl.name.text)_objc_marker"),
+            inheritanceClause: InheritanceClauseSyntax(
+              colon: .colonToken(trailingTrivia: .space),
+              inheritedTypes: InheritedTypeListSyntax([
+                InheritedTypeSyntax(
+                  type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("NSObject"))),
+                  trailingComma: .commaToken(trailingTrivia: .space)
+                ),
+                InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("ATProtoRecordMarker", trailingTrivia: .space)))),
+              ])
+            ),
+            memberBlock: MemberBlockSyntax(
+              leftBrace: .leftBraceToken(),
+              members: MemberBlockItemListSyntax([]),
+              rightBrace: .rightBraceToken()
+            )
+          ))
+      ]
+    }
+  }
+
   @main
   struct ATProtoMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
-      XRPCClientMacro.self
+      XRPCClientMacro.self,
+      ATProtoRecordMacro.self,
     ]
   }
 #endif

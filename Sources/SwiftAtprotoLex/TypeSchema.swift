@@ -873,7 +873,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .object(let def):
       genCodeObject(def: def, leadingTrivia: leadingTrivia, name: name, type: typeName, defMap: defMap)
     case .record(let def):
-      genCodeObject(def: def.record, leadingTrivia: leadingTrivia, name: name, type: typeName, defMap: defMap)
+      genCodeRecord(def: def.record, leadingTrivia: leadingTrivia, name: name, type: typeName, defMap: defMap)
     case .union(let def):
       genCodeUnion(def: def, leadingTrivia: leadingTrivia, name: name, type: typeName, defMap: defMap)
     case .array(let def):
@@ -1789,6 +1789,680 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
           )
         }
       }
+      for (key, property) in def.sortedProperties {
+        let isRequired = required[key] ?? false
+        let type = typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: !isRecord)
+        property.variable(name: key, type: type, isMutable: !isRecord)
+      }
+      VariableDeclSyntax(
+        modifiers: [
+          DeclModifierSyntax(name: .keyword(.public))
+        ],
+        bindingSpecifier: .keyword(isRecord ? .let : .var),
+        bindings: [
+          PatternBindingSyntax(
+            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
+            typeAnnotation: TypeAnnotationSyntax(
+              colon: .colonToken(),
+              type: DictionaryTypeSyntax(
+                leftSquare: .leftSquareToken(),
+                key: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String"))),
+                colon: .colonToken(),
+                value: TypeSyntax(IdentifierTypeSyntax(name: .identifier("AnyCodable"))),
+                rightSquare: .rightSquareToken()
+              )
+            )
+          )
+        ]
+      )
+
+      InitializerDeclSyntax(
+        leadingTrivia: .newlines(2),
+        modifiers: [
+          DeclModifierSyntax(name: .keyword(.public))
+        ],
+        initKeyword: .keyword(.`init`),
+        signature: FunctionSignatureSyntax(
+          parameterClause: FunctionParameterClauseSyntax(
+            leftParen: .leftParenToken(),
+            parameters: FunctionParameterListSyntax(
+              initializerParameters(name: name, def: def, required: required, defMap: defMap, dropPrefix: !isRecord)),
+            rightParen: .rightParenToken()
+          )
+        )
+      ) {
+        for (key, _) in def.sortedProperties {
+          SequenceExprSyntax(
+            elements: ExprListSyntax([
+              ExprSyntax(
+                MemberAccessExprSyntax(
+                  base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                )),
+              ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+              ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(key.escapedSwiftKeyword))),
+            ]))
+        }
+        SequenceExprSyntax(
+          elements: ExprListSyntax([
+            ExprSyntax(
+              MemberAccessExprSyntax(
+                base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
+                period: .periodToken(),
+                declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
+              )),
+            ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+            ExprSyntax(
+              DictionaryExprSyntax(
+                leftSquare: .leftSquareToken(),
+                content: DictionaryExprSyntax.Content(.colonToken()),
+                rightSquare: .rightSquareToken()
+              )),
+          ]))
+      }
+      if !cases.isEmpty {
+        EnumDeclSyntax(
+          leadingTrivia: .newlines(2),
+          name: "CodingKeys",
+          inheritanceClause: InheritanceClauseSyntax {
+            InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "String"))
+            InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "CodingKey"))
+          }
+        ) {
+          for expr in cases {
+            expr
+          }
+        }
+      }
+
+      MemberBlockItemSyntax(
+        leadingTrivia: .newlines(2),
+        decl: DeclSyntax(
+          InitializerDeclSyntax(
+            modifiers: DeclModifierListSyntax(
+              isRecord
+                ? [
+                  DeclModifierSyntax(name: .keyword(.required)),
+                  DeclModifierSyntax(name: .keyword(.public)),
+                ]
+                : [
+                  DeclModifierSyntax(name: .keyword(.public))
+                ]),
+            initKeyword: .keyword(.`init`),
+            signature: FunctionSignatureSyntax(
+              parameterClause: FunctionParameterClauseSyntax(
+                leftParen: .leftParenToken(),
+                parameters: FunctionParameterListSyntax([
+                  FunctionParameterSyntax(
+                    firstName: .identifier("from", trailingTrivia: .space),
+                    secondName: .identifier("decoder"),
+                    colon: .colonToken(trailingTrivia: .space),
+                    type: TypeSyntax(
+                      SomeOrAnyTypeSyntax(
+                        someOrAnySpecifier: .keyword(.any),
+                        constraint: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Decoder")))
+                      ))
+                  )
+                ]),
+                rightParen: .rightParenToken(trailingTrivia: .space)
+              ),
+              effectSpecifiers: FunctionEffectSpecifiersSyntax(
+                throwsClause:
+                  ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws, trailingTrivia: .space)))
+            ),
+            body: CodeBlockSyntax(statementsBuilder: {
+              if !cases.isEmpty {
+                CodeBlockItemSyntax(
+                  item: CodeBlockItemSyntax.Item(
+                    VariableDeclSyntax(
+                      bindingSpecifier: .keyword(.let),
+                      bindings: PatternBindingListSyntax([
+                        PatternBindingSyntax(
+                          pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("keyedContainer"))),
+                          initializer: InitializerClauseSyntax(
+                            equal: .equalToken(),
+                            value: ExprSyntax(
+                              TryExprSyntax(
+                                tryKeyword: .keyword(.try),
+                                expression: ExprSyntax(
+                                  FunctionCallExprSyntax(
+                                    calledExpression: ExprSyntax(
+                                      MemberAccessExprSyntax(
+                                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("decoder"))),
+                                        period: .periodToken(),
+                                        declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
+                                      )),
+                                    leftParen: .leftParenToken(),
+                                    arguments: LabeledExprListSyntax([
+                                      LabeledExprSyntax(
+                                        label: .identifier("keyedBy"),
+                                        colon: .colonToken(),
+                                        expression: ExprSyntax(
+                                          MemberAccessExprSyntax(
+                                            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("CodingKeys"))),
+                                            period: .periodToken(),
+                                            declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                                          ))
+                                      )
+                                    ]),
+                                    rightParen: .rightParenToken(),
+                                    additionalTrailingClosures: MultipleTrailingClosureElementListSyntax([])
+                                  ))
+                              ))
+                          )
+                        )
+                      ])
+                    )))
+              }
+              for (key, property) in def.sortedProperties {
+                let isRequired = required[key] ?? false
+                let tname: String = {
+                  if case .string(let def) = property, def.enum != nil || def.knownValues != nil {
+                    let tname = "\(name)_\(key.titleCased())"
+                    return isRecord ? "\(Lex.structNameFor(prefix: self.prefix)).\(tname)" : tname
+                  } else {
+                    let ts = TypeSchema(id: self.id, prefix: prefix, defName: key, type: property)
+                    return Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: !isRecord)
+                  }
+                }()
+                CodeBlockItemSyntax(
+                  item: CodeBlockItemSyntax.Item(
+                    SequenceExprSyntax(
+                      elements: ExprListSyntax([
+                        ExprSyntax(
+                          MemberAccessExprSyntax(
+                            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
+                            period: .periodToken(),
+                            declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                          )),
+                        ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+                        ExprSyntax(
+                          TryExprSyntax(
+                            tryKeyword: .keyword(.try, trailingTrivia: .space),
+                            expression: ExprSyntax(
+                              FunctionCallExprSyntax(
+                                calledExpression: ExprSyntax(
+                                  MemberAccessExprSyntax(
+                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("keyedContainer"))),
+                                    period: .periodToken(),
+                                    declName: DeclReferenceExprSyntax(baseName: .identifier(isRequired ? "decode" : "decodeIfPresent"))
+                                  )),
+                                leftParen: .leftParenToken(),
+                                arguments: LabeledExprListSyntax([
+                                  LabeledExprSyntax(
+                                    expression: ExprSyntax(
+                                      MemberAccessExprSyntax(
+                                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(tname))),
+                                        period: .periodToken(),
+                                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                                      )),
+                                    trailingComma: .commaToken()
+                                  ),
+                                  LabeledExprSyntax(
+                                    label: .identifier("forKey"),
+                                    colon: .colonToken(),
+                                    expression: ExprSyntax(
+                                      MemberAccessExprSyntax(
+                                        period: .periodToken(),
+                                        declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                                      ))
+                                  ),
+                                ]),
+                                rightParen: .rightParenToken()
+                              ))
+                          )),
+                      ]))))
+              }
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  VariableDeclSyntax(
+                    bindingSpecifier: .keyword(.let),
+                    bindings: PatternBindingListSyntax([
+                      PatternBindingSyntax(
+                        pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("unknownContainer"))),
+                        initializer: InitializerClauseSyntax(
+                          equal: .equalToken(),
+                          value: ExprSyntax(
+                            TryExprSyntax(
+                              tryKeyword: .keyword(.try),
+                              expression: ExprSyntax(
+                                FunctionCallExprSyntax(
+                                  calledExpression: ExprSyntax(
+                                    MemberAccessExprSyntax(
+                                      base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("decoder"))),
+                                      period: .periodToken(),
+                                      declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
+                                    )),
+                                  leftParen: .leftParenToken(),
+                                  arguments: LabeledExprListSyntax([
+                                    LabeledExprSyntax(
+                                      label: .identifier("keyedBy"),
+                                      colon: .colonToken(),
+                                      expression: ExprSyntax(
+                                        MemberAccessExprSyntax(
+                                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
+                                          period: .periodToken(),
+                                          declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                                        ))
+                                    )
+                                  ]),
+                                  rightParen: .rightParenToken()
+                                ))
+                            ))
+                        )
+                      )
+                    ])
+                  )))
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  VariableDeclSyntax(
+                    bindingSpecifier: .keyword(.var),
+                    bindings: PatternBindingListSyntax([
+                      PatternBindingSyntax(
+                        pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
+                        initializer: InitializerClauseSyntax(
+                          equal: .equalToken(),
+                          value: ExprSyntax(
+                            FunctionCallExprSyntax(
+                              calledExpression: ExprSyntax(
+                                DictionaryExprSyntax(
+                                  leftSquare: .leftSquareToken(),
+                                  content: DictionaryExprSyntax.Content(
+                                    DictionaryElementListSyntax([
+                                      DictionaryElementSyntax(
+                                        key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
+                                        colon: .colonToken(),
+                                        value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                                      )
+                                    ])),
+                                  rightSquare: .rightSquareToken()
+                                )),
+                              leftParen: .leftParenToken(),
+                              arguments: LabeledExprListSyntax([]),
+                              rightParen: .rightParenToken()
+                            ))
+                        )
+                      )
+                    ])
+                  )))
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  ForStmtSyntax(
+                    forKeyword: .keyword(.for),
+                    pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("key"))),
+                    inKeyword: .keyword(.in),
+                    sequence: ExprSyntax(
+                      MemberAccessExprSyntax(
+                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("unknownContainer"))),
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .identifier("allKeys"))
+                      )),
+                    body: CodeBlockSyntax(
+                      leftBrace: .leftBraceToken(),
+                      statements: CodeBlockItemListSyntax(loopBlocks),
+                      rightBrace: .rightBraceToken()
+                    )
+                  )))
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  SequenceExprSyntax(
+                    elements: ExprListSyntax([
+                      ExprSyntax(
+                        MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
+                        )),
+                      ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+                      ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))),
+                    ]))))
+            })
+          ))
+      )
+
+      MemberBlockItemSyntax(
+        leadingTrivia: .newlines(2),
+        decl: DeclSyntax(
+          FunctionDeclSyntax(
+            modifiers: DeclModifierListSyntax([
+              DeclModifierSyntax(name: .keyword(.public))
+            ]),
+            funcKeyword: .keyword(.func),
+            name: .identifier("encode"),
+            signature: FunctionSignatureSyntax(
+              parameterClause: FunctionParameterClauseSyntax(
+                leftParen: .leftParenToken(),
+                parameters: FunctionParameterListSyntax([
+                  FunctionParameterSyntax(
+                    firstName: .identifier("to"),
+                    secondName: .identifier("encoder"),
+                    colon: .colonToken(),
+                    type: TypeSyntax(
+                      SomeOrAnyTypeSyntax(
+                        someOrAnySpecifier: .keyword(.any, trailingTrivia: .space),
+                        constraint: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Encoder")))
+                      ))
+                  )
+                ]),
+                rightParen: .rightParenToken()
+              ),
+              effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
+            ),
+            body: CodeBlockSyntax(statementsBuilder: {
+              if !def.properties.isEmpty {
+                CodeBlockItemSyntax(
+                  item: CodeBlockItemSyntax.Item(
+                    VariableDeclSyntax(
+                      attributes: AttributeListSyntax([]),
+                      modifiers: DeclModifierListSyntax([]),
+                      bindingSpecifier: .keyword(.var),
+                      bindings: PatternBindingListSyntax([
+                        PatternBindingSyntax(
+                          pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("container", trailingTrivia: .space))),
+                          initializer: InitializerClauseSyntax(
+                            equal: .equalToken(trailingTrivia: .space),
+                            value: ExprSyntax(
+                              FunctionCallExprSyntax(
+                                calledExpression: ExprSyntax(
+                                  MemberAccessExprSyntax(
+                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("encoder"))),
+                                    period: .periodToken(),
+                                    declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
+                                  )),
+                                leftParen: .leftParenToken(),
+                                arguments: LabeledExprListSyntax([
+                                  LabeledExprSyntax(
+                                    label: .identifier("keyedBy"),
+                                    colon: .colonToken(trailingTrivia: .space),
+                                    expression: ExprSyntax(
+                                      MemberAccessExprSyntax(
+                                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("CodingKeys"))),
+                                        period: .periodToken(),
+                                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                                      ))
+                                  )
+                                ]),
+                                rightParen: .rightParenToken(),
+                                additionalTrailingClosures: MultipleTrailingClosureElementListSyntax([])
+                              ))
+                          )
+                        )
+                      ])
+                    )))
+              }
+              for (key, _) in def.sortedProperties {
+                let isRequired = required[key] ?? false
+                CodeBlockItemSyntax(
+                  item: CodeBlockItemSyntax.Item(
+                    TryExprSyntax(
+                      tryKeyword: .keyword(.try),
+                      expression: ExprSyntax(
+                        FunctionCallExprSyntax(
+                          calledExpression: ExprSyntax(
+                            MemberAccessExprSyntax(
+                              base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("container"))),
+                              period: .periodToken(),
+                              declName: DeclReferenceExprSyntax(baseName: .identifier(isRequired ? "encode" : "encodeIfPresent"))
+                            )),
+                          leftParen: .leftParenToken(),
+                          arguments: LabeledExprListSyntax([
+                            LabeledExprSyntax(
+                              expression: ExprSyntax(
+                                MemberAccessExprSyntax(
+                                  base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
+                                  period: .periodToken(),
+                                  declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                                )),
+                              trailingComma: .commaToken()
+                            ),
+                            LabeledExprSyntax(
+                              label: .identifier("forKey"),
+                              colon: .colonToken(),
+                              expression: ExprSyntax(
+                                MemberAccessExprSyntax(
+                                  period: .periodToken(),
+                                  declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                                ))
+                            ),
+                          ]),
+                          rightParen: .rightParenToken()
+                        ))
+                    )))
+              }
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  TryExprSyntax(
+                    tryKeyword: .keyword(.try),
+                    expression: ExprSyntax(
+                      FunctionCallExprSyntax(
+                        calledExpression: ExprSyntax(
+                          MemberAccessExprSyntax(
+                            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))),
+                            period: .periodToken(),
+                            declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
+                          )),
+                        leftParen: .leftParenToken(),
+                        arguments: LabeledExprListSyntax([
+                          LabeledExprSyntax(
+                            label: .identifier("to"),
+                            colon: .colonToken(),
+                            expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("encoder")))
+                          )
+                        ]),
+                        rightParen: .rightParenToken()
+                      ))
+                  )))
+            })
+          ))
+      )
+    }
+  }
+
+  private func genCodeRecord(def: ObjectTypeDefinition, leadingTrivia: Trivia? = nil, name: String, type typeName: String, defMap: ExtDefMap) -> DeclSyntaxProtocol {
+    let isRecord = isRecord
+    var required = [String: Bool]()
+    for req in def.required ?? [] {
+      required[req] = true
+    }
+
+    for key in def.nullable ?? [] {
+      required[key] = false
+    }
+    let modifiers: DeclModifierListSyntax = [
+      DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline, trailingTrivia: .space)),
+      DeclModifierSyntax(name: .keyword(.final, trailingTrivia: .space)),
+    ]
+    var cases = [EnumCaseDeclSyntax]()
+    if isRecord {
+      cases.append(
+        .init(
+          elements: EnumCaseElementListSyntax([
+            EnumCaseElementSyntax(
+              name: "type",
+              rawValue: InitializerClauseSyntax(
+                value: StringLiteralExprSyntax(content: "$type")
+              ))
+          ])))
+    }
+    for key in def.properties.keys.sorted() {
+      cases.append(.init(elements: EnumCaseElementListSyntax([EnumCaseElementSyntax(name: .init(stringLiteral: key.escapedSwiftKeyword))])))
+    }
+    var loopBlocks = [CodeBlockItemSyntax]()
+    if !cases.isEmpty {
+      loopBlocks.append(
+        .init(
+          item: CodeBlockItemSyntax.Item(
+            GuardStmtSyntax(
+              guardKeyword: .keyword(.guard),
+              conditions: ConditionElementListSyntax([
+                ConditionElementSyntax(
+                  condition: ConditionElementSyntax.Condition(
+                    SequenceExprSyntax(
+                      elements: ExprListSyntax([
+                        ExprSyntax(
+                          FunctionCallExprSyntax(
+                            calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("CodingKeys"))),
+                            leftParen: .leftParenToken(),
+                            arguments: LabeledExprListSyntax([
+                              LabeledExprSyntax(
+                                label: .identifier("rawValue"),
+                                colon: .colonToken(),
+                                expression: ExprSyntax(
+                                  MemberAccessExprSyntax(
+                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("key"))),
+                                    period: .periodToken(),
+                                    declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
+                                  ))
+                              )
+                            ]),
+                            rightParen: .rightParenToken()
+                          )),
+                        ExprSyntax(BinaryOperatorExprSyntax(operator: .binaryOperator("=="))),
+                        ExprSyntax(NilLiteralExprSyntax(nilKeyword: .keyword(.nil))),
+                      ]))))
+              ]),
+              elseKeyword: .keyword(.else),
+              body: CodeBlockSyntax(
+                leftBrace: .leftBraceToken(),
+                statements: CodeBlockItemListSyntax([
+                  CodeBlockItemSyntax(item: CodeBlockItemSyntax.Item(ContinueStmtSyntax(continueKeyword: .keyword(.continue))))
+                ]),
+                rightBrace: .rightBraceToken()
+              )
+            ))))
+    }
+    loopBlocks.append(
+      .init(
+        item: CodeBlockItemSyntax.Item(
+          SequenceExprSyntax(
+            elements: ExprListSyntax([
+              ExprSyntax(
+                SubscriptCallExprSyntax(
+                  calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))),
+                  leftSquare: .leftSquareToken(),
+                  arguments: LabeledExprListSyntax([
+                    LabeledExprSyntax(
+                      expression: ExprSyntax(
+                        MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("key"))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
+                        )))
+                  ]),
+                  rightSquare: .rightSquareToken()
+                )),
+              ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+              ExprSyntax(
+                TryExprSyntax(
+                  tryKeyword: .keyword(.try),
+                  expression: ExprSyntax(
+                    FunctionCallExprSyntax(
+                      calledExpression: ExprSyntax(
+                        MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("unknownContainer"))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("decode"))
+                        )),
+                      leftParen: .leftParenToken(),
+                      arguments: LabeledExprListSyntax([
+                        LabeledExprSyntax(
+                          expression: ExprSyntax(
+                            MemberAccessExprSyntax(
+                              base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable"))),
+                              period: .periodToken(),
+                              declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                            )),
+                          trailingComma: .commaToken()
+                        ),
+                        LabeledExprSyntax(
+                          label: .identifier("forKey"),
+                          colon: .colonToken(),
+                          expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("key")))
+                        ),
+                      ]),
+                      rightParen: .rightParenToken()
+                    ))
+                )),
+            ])))))
+    return ClassDeclSyntax(
+      leadingTrivia: leadingTrivia,
+      attributes: AttributeListSyntax([
+        AttributeListSyntax.Element(
+          AttributeSyntax(
+            atSign: .atSignToken(),
+            attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("ATProtoRecord")))
+          ))
+      ]),
+      modifiers: modifiers,
+      classKeyword: .keyword(.class),
+      name: .init(stringLiteral: "\(Lex.structNameFor(prefix: prefix))_\(name)"),
+      inheritanceClause: InheritanceClauseSyntax(
+        colon: .colonToken(),
+        inheritedTypes: InheritedTypeListSyntax([
+          InheritedTypeSyntax(
+            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("ATProtoRecord"))),
+            trailingComma: .commaToken()
+          ),
+          InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
+        ])
+      )
+    ) {
+      VariableDeclSyntax(
+        attributes: AttributeListSyntax([]),
+        modifiers: DeclModifierListSyntax([
+          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)], trailingTrivia: .space)),
+          DeclModifierSyntax(name: .keyword(.static, trailingTrivia: .space)),
+        ]),
+        bindingSpecifier: .keyword(.let, trailingTrivia: .space),
+        bindings: PatternBindingListSyntax([
+          PatternBindingSyntax(
+            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("nsId", trailingTrivia: .space))),
+            initializer: InitializerClauseSyntax(
+              equal: .equalToken(trailingTrivia: .space),
+              value: ExprSyntax(
+                StringLiteralExprSyntax(
+                  openingQuote: .stringQuoteToken(),
+                  segments: StringLiteralSegmentListSyntax([
+                    StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(typeName)))
+                  ]),
+                  closingQuote: .stringQuoteToken()
+                ))
+            )
+          )
+        ])
+      )
+      VariableDeclSyntax(
+        attributes: AttributeListSyntax([]),
+        modifiers: DeclModifierListSyntax([
+          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)], trailingTrivia: .space))
+        ]),
+        bindingSpecifier: .keyword(.var, trailingTrivia: .space),
+        bindings: PatternBindingListSyntax([
+          PatternBindingSyntax(
+            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("type"))),
+            typeAnnotation: TypeAnnotationSyntax(
+              colon: .colonToken(trailingTrivia: .space),
+              type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String", trailingTrivia: .space)))
+            ),
+            accessorBlock: AccessorBlockSyntax(
+              leftBrace: .leftBraceToken(trailingTrivia: .space),
+              accessors: AccessorBlockSyntax.Accessors(
+                CodeBlockItemListSyntax([
+                  CodeBlockItemSyntax(
+                    item: CodeBlockItemSyntax.Item(
+                      MemberAccessExprSyntax(
+                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.Self))),
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .identifier("nsId", trailingTrivia: .space))
+                      )))
+                ])),
+              rightBrace: .rightBraceToken()
+            )
+          )
+        ])
+      )
+
       for (key, property) in def.sortedProperties {
         let isRequired = required[key] ?? false
         let type = typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: !isRecord)
