@@ -66,6 +66,9 @@ func writeSchemaCode(
   to baseURL: URL
 ) async throws {
   try await withThrowingTaskGroup(of: Void.self) { group in
+    let src = Lex.genUnknownRecord(for: schemasMap)
+    let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
+    try src.write(to: recordURL, atomically: true, encoding: .utf8)
     for (prefix, schemas) in schemasMap {
       try createOutputDirectory(for: prefix, baseURL: baseURL)
       group.addTask {
@@ -124,20 +127,15 @@ enum Lex {
       leadingTrivia: Self.fileHeader,
       statementsBuilder: {
         ImportDeclSyntax(
-          path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "SwiftAtproto")]),
+          path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
           trailingTrivia: .newlines(2)
         )
         EnumDeclSyntax(
           modifiers: [
             DeclModifierSyntax(name: .keyword(.public))
           ],
-          name: .identifier(Lex.structNameFor(prefix: prefix)),
-          memberBlock: MemberBlockSyntax(
-            leftBrace: .leftBraceToken(),
-            members: MemberBlockItemListSyntax([]),
-            rightBrace: .rightBraceToken()
-          )
-        )
+          name: .identifier(Lex.structNameFor(prefix: prefix))
+        ) {}
       },
       trailingTrivia: .newline)
     return src.formatted().description
@@ -173,10 +171,13 @@ enum Lex {
       leadingTrivia: Self.fileHeader,
       statementsBuilder: {
         ImportDeclSyntax(
-          path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "SwiftAtproto")])
+          path: [ImportPathComponentSyntax(name: "SwiftAtproto")]
         )
         ImportDeclSyntax(
-          path: ImportPathComponentListSyntax([ImportPathComponentSyntax(name: "Foundation")]),
+          path: [ImportPathComponentSyntax(name: "ATProtoMacro")]
+        )
+        ImportDeclSyntax(
+          path: [ImportPathComponentSyntax(name: "Foundation")],
           trailingTrivia: .newlines(2)
         )
         if enumExtensionIsNeeded {
@@ -213,6 +214,367 @@ enum Lex {
     default:
       return nil
     }
+  }
+
+  static func genUnknownRecord(for schemasMap: [String: [Schema]]) -> String {
+    var recordTypes = [(key: String, value: TypeSchema)]()
+    for schemas in schemasMap {
+      for schema in schemas.value {
+        let prefix = schema.prefix
+        recordTypes.append(contentsOf: schema.allTypes(prefix: prefix).filter(\.value.isRecord))
+      }
+    }
+    let src = SourceFileSyntax(
+      leadingTrivia: Self.fileHeader,
+      statementsBuilder: {
+        ImportDeclSyntax(
+          path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
+          trailingTrivia: .newlines(2)
+        )
+        EnumDeclSyntax(
+          modifiers: [
+            DeclModifierSyntax(name: .keyword(.public))
+          ],
+          name: .identifier("UnknownATPValue"),
+          inheritanceClause: InheritanceClauseSyntax(
+            colon: .colonToken(),
+            inheritedTypes: [
+              InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("UnknownATPValueProtocol")))
+            ]
+          )
+        ) {
+          EnumCaseDeclSyntax(leadingTrivia: [.newlines(1), .spaces(2)]) {
+            EnumCaseElementSyntax(
+              name: .identifier("record"),
+              parameterClause: EnumCaseParameterClauseSyntax(
+                parameters: [
+                  EnumCaseParameterSyntax(
+                    type: SomeOrAnyTypeSyntax(
+                      someOrAnySpecifier: .keyword(.any),
+                      constraint: TypeSyntax(IdentifierTypeSyntax(name: .identifier("ATProtoRecord")))
+                    )
+                  )
+                ]
+              )
+            )
+          }
+          EnumCaseDeclSyntax(leadingTrivia: [.newlines(1), .spaces(2)]) {
+            EnumCaseElementSyntax(
+              name: .identifier("any"),
+              parameterClause: EnumCaseParameterClauseSyntax(
+                parameters: [
+                  EnumCaseParameterSyntax(
+                    type: SomeOrAnyTypeSyntax(
+                      someOrAnySpecifier: .keyword(.any),
+                      constraint: CompositionTypeSyntax(
+                        elements: [
+                          CompositionTypeElementSyntax(
+                            type: IdentifierTypeSyntax(name: .identifier("Codable")),
+                            ampersand: .binaryOperator("&")
+                          ),
+                          CompositionTypeElementSyntax(type: IdentifierTypeSyntax(name: .identifier("Sendable"))),
+                        ]))
+                  )
+                ]
+              )
+            )
+          }
+          VariableDeclSyntax(
+            leadingTrivia: [.newlines(2), .spaces(2)],
+            modifiers: [
+              DeclModifierSyntax(name: .keyword(.public)),
+              DeclModifierSyntax(name: .keyword(.static)),
+            ],
+            bindingSpecifier: .keyword(.let),
+            bindings: [
+              PatternBindingSyntax(
+                pattern: IdentifierPatternSyntax(identifier: .identifier("allTypes")),
+                typeAnnotation: TypeAnnotationSyntax(
+                  colon: .colonToken(),
+                  type: DictionaryTypeSyntax(
+                    leftSquare: .leftSquareToken(),
+                    key: IdentifierTypeSyntax(name: .identifier("String")),
+                    colon: .colonToken(),
+                    value: SomeOrAnyTypeSyntax(
+                      someOrAnySpecifier: .keyword(.any),
+                      constraint: MetatypeTypeSyntax(
+                        baseType: IdentifierTypeSyntax(name: .identifier("ATProtoRecord")),
+                        period: .periodToken(),
+                        metatypeSpecifier: .keyword(.Type)
+                      )
+                    ),
+                    rightSquare: .rightSquareToken()
+                  )
+                ),
+                initializer: InitializerClauseSyntax(
+                  equal: .equalToken(),
+                  value: DictionaryExprSyntax(rightSquare: .rightSquareToken(leadingTrivia: [.newlines(1), .spaces(2)])) {
+                    for (name, recordType) in recordTypes.sorted(by: { $0.value.id < $1.value.id }) {
+                      DictionaryElementSyntax(
+                        key: StringLiteralExprSyntax(openingQuote: .stringQuoteToken(leadingTrivia: [.newlines(1), .spaces(4)]), content: recordType.id),
+                        colon: .colonToken(),
+                        value: MemberAccessExprSyntax(
+                          base: DeclReferenceExprSyntax(baseName: .identifier("\(Lex.structNameFor(prefix: recordType.prefix))_\(name)")),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                        ),
+                        trailingComma: .commaToken()
+                      )
+                    }
+                  }
+                )
+              )
+            ]
+          )
+          VariableDeclSyntax(
+            modifiers: [
+              DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2), .spaces(2)]))
+            ],
+            bindingSpecifier: .keyword(.var),
+            bindings: [
+              PatternBindingSyntax(
+                pattern: IdentifierPatternSyntax(identifier: .identifier("type")),
+                typeAnnotation: TypeAnnotationSyntax(
+                  colon: .colonToken(),
+                  type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
+                ),
+                accessorBlock: AccessorBlockSyntax(
+                  leftBrace: .leftBraceToken(),
+                  accessors: AccessorBlockSyntax.Accessors(
+                    CodeBlockItemListSyntax {
+                      ExpressionStmtSyntax(
+                        expression: SwitchExprSyntax(
+                          leadingTrivia: [.newlines(1), .spaces(4)],
+                          subject: DeclReferenceExprSyntax(baseName: .keyword(.self)),
+                          leftBrace: .leftBraceToken(),
+                          cases: [
+                            SwitchCaseListSyntax.Element(
+                              SwitchCaseSyntax(
+                                label: SwitchCaseSyntax.Label(
+                                  SwitchCaseLabelSyntax(
+                                    leadingTrivia: [.newlines(1), .spaces(4)],
+                                    caseItems: [
+                                      SwitchCaseItemSyntax(
+                                        pattern: ExpressionPatternSyntax(
+                                          expression: FunctionCallExprSyntax(
+                                            callee: MemberAccessExprSyntax(
+                                              period: .periodToken(),
+                                              declName: DeclReferenceExprSyntax(baseName: .identifier("record"))
+                                            )
+                                          ) {
+                                            LabeledExprSyntax(
+                                              expression: PatternExprSyntax(
+                                                pattern: ValueBindingPatternSyntax(
+                                                  bindingSpecifier: .keyword(.let),
+                                                  pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
+                                                )))
+                                          }
+                                        ))
+                                    ],
+                                    colon: .colonToken()
+                                  )),
+                                statements: CodeBlockItemListSyntax {
+                                  ReturnStmtSyntax(
+                                    leadingTrivia: [.newlines(1), .spaces(6)],
+                                    expression: MemberAccessExprSyntax(
+                                      base: FunctionCallExprSyntax(
+                                        callee: MemberAccessExprSyntax(
+                                          base: DeclReferenceExprSyntax(baseName: .identifier("Swift")),
+                                          period: .periodToken(),
+                                          declName: DeclReferenceExprSyntax(baseName: .identifier("type"))
+                                        )
+                                      ) {
+                                        LabeledExprSyntax(
+                                          label: .identifier("of"),
+                                          colon: .colonToken(),
+                                          expression: DeclReferenceExprSyntax(baseName: .identifier("record"))
+                                        )
+                                      },
+                                      period: .periodToken(),
+                                      declName: DeclReferenceExprSyntax(baseName: .identifier("nsId"))
+                                    )
+                                  )
+                                }
+                              )),
+                            SwitchCaseListSyntax.Element(
+                              SwitchCaseSyntax(
+                                label: SwitchCaseSyntax.Label(
+                                  SwitchCaseLabelSyntax(
+                                    leadingTrivia: [.newlines(1), .spaces(4)],
+                                    caseItems: [
+                                      SwitchCaseItemSyntax(
+                                        pattern: ExpressionPatternSyntax(
+                                          expression: MemberAccessExprSyntax(
+                                            period: .periodToken(),
+                                            declName: DeclReferenceExprSyntax(baseName: .identifier("any"))
+                                          )))
+                                    ],
+                                    colon: .colonToken()
+                                  )),
+                                statements: CodeBlockItemListSyntax {
+                                  ReturnStmtSyntax(
+                                    leadingTrivia: [.newlines(1), .spaces(6)],
+                                    expression: NilLiteralExprSyntax()
+                                  )
+                                }
+                              )),
+                          ],
+                          rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                        ))
+                    }),
+                  rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(2)])
+                )
+              )
+            ]
+          )
+          VariableDeclSyntax(
+            modifiers: [
+              DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2), .spaces(2)]))
+            ],
+            bindingSpecifier: .keyword(.var),
+            bindings: [
+              PatternBindingSyntax(
+                pattern: IdentifierPatternSyntax(identifier: .identifier("val")),
+                typeAnnotation: TypeAnnotationSyntax(
+                  colon: .colonToken(),
+                  type: TypeSyntax(
+                    CompositionTypeSyntax(
+                      elements: [
+                        CompositionTypeElementSyntax(
+                          type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+                          ampersand: .binaryOperator("&")
+                        ),
+                        CompositionTypeElementSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
+                      ]))
+                ),
+                accessorBlock: AccessorBlockSyntax(
+                  leftBrace: .leftBraceToken(),
+                  accessors: AccessorBlockSyntax.Accessors(
+                    CodeBlockItemListSyntax {
+                      ExpressionStmtSyntax(
+                        expression: SwitchExprSyntax(
+                          leadingTrivia: [.newlines(1), .spaces(4)],
+                          subject: DeclReferenceExprSyntax(baseName: .keyword(.self)),
+                          leftBrace: .leftBraceToken(),
+                          cases: [
+                            SwitchCaseListSyntax.Element(
+                              SwitchCaseSyntax(
+                                label: SwitchCaseSyntax.Label(
+                                  SwitchCaseLabelSyntax(
+                                    leadingTrivia: [.newlines(1), .spaces(4)],
+                                    caseItems: [
+                                      SwitchCaseItemSyntax(
+                                        pattern: ExpressionPatternSyntax(
+                                          expression: FunctionCallExprSyntax(
+                                            callee: MemberAccessExprSyntax(
+                                              period: .periodToken(),
+                                              declName: DeclReferenceExprSyntax(baseName: .identifier("record"))
+                                            )
+                                          ) {
+                                            LabeledExprSyntax(
+                                              expression: PatternExprSyntax(
+                                                pattern: ValueBindingPatternSyntax(
+                                                  bindingSpecifier: .keyword(.let),
+                                                  pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
+                                                )))
+                                          }
+                                        ))
+                                    ],
+                                    colon: .colonToken()
+                                  )),
+                                statements: [
+                                  CodeBlockItemSyntax(item: CodeBlockItemSyntax.Item(DeclReferenceExprSyntax(baseName: .identifier("record", leadingTrivia: [.newlines(1), .spaces(6)]))))
+                                ]
+                              )),
+                            SwitchCaseListSyntax.Element(
+                              SwitchCaseSyntax(
+                                label: SwitchCaseSyntax.Label(
+                                  SwitchCaseLabelSyntax(
+                                    leadingTrivia: [.newlines(1), .spaces(4)],
+                                    caseItems: [
+                                      SwitchCaseItemSyntax(
+                                        pattern: ExpressionPatternSyntax(
+                                          expression: FunctionCallExprSyntax(
+                                            callee: MemberAccessExprSyntax(
+                                              period: .periodToken(),
+                                              declName: DeclReferenceExprSyntax(baseName: .identifier("any"))
+                                            )
+                                          ) {
+                                            LabeledExprSyntax(
+                                              expression: PatternExprSyntax(
+                                                pattern: ValueBindingPatternSyntax(
+                                                  bindingSpecifier: .keyword(.let),
+                                                  pattern: IdentifierPatternSyntax(identifier: .identifier("object"))
+                                                )))
+                                          }
+                                        ))
+                                    ],
+                                    colon: .colonToken()
+                                  )),
+                                statements: [
+                                  CodeBlockItemSyntax(
+                                    item: CodeBlockItemSyntax.Item(
+                                      DeclReferenceExprSyntax(baseName: .identifier("object", leadingTrivia: [.newlines(1), .spaces(6)]))
+                                    ))
+                                ]
+                              )),
+                          ],
+                          rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                        ))
+                    }),
+                  rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(2)])
+                )
+              )
+            ]
+          )
+        }
+        TypeAliasDeclSyntax(
+          leadingTrivia: .newlines(2),
+          attributes: [
+            AttributeListSyntax.Element(
+              AttributeSyntax(
+                atSign: .atSignToken(),
+                attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
+                leftParen: .leftParenToken(),
+                arguments: AttributeSyntax.Arguments(
+                  AvailabilityArgumentListSyntax([
+                    AvailabilityArgumentSyntax(
+                      argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*")),
+                      trailingComma: .commaToken()
+                    ),
+                    AvailabilityArgumentSyntax(
+                      argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated)),
+                      trailingComma: .commaToken()
+                    ),
+                    AvailabilityArgumentSyntax(
+                      argument: AvailabilityArgumentSyntax.Argument(
+                        AvailabilityLabeledArgumentSyntax(
+                          label: .keyword(.message),
+                          colon: .colonToken(),
+                          value: AvailabilityLabeledArgumentSyntax.Value(
+                            SimpleStringLiteralExprSyntax(
+                              openingQuote: .stringQuoteToken(),
+                              segments: SimpleStringLiteralSegmentListSyntax([
+                                StringSegmentSyntax(content: .stringSegment("Use `UnknownATPValue` instead."))
+                              ]),
+                              closingQuote: .stringQuoteToken()
+                            ))
+                        ))),
+                  ])),
+                rightParen: .rightParenToken()
+              )
+            )
+          ],
+          modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+          name: .identifier("LexiconTypeDecoder"),
+          initializer: TypeInitializerClauseSyntax(
+            equal: .equalToken(),
+            value: IdentifierTypeSyntax(name: .identifier("UnknownATPValue"))
+          )
+        )
+      },
+      trailingTrivia: .newline)
+    return src.formatted().description
   }
 
   static func buildExtDefMap(schemasMap: [String: [Schema]]) -> ExtDefMap {

@@ -122,12 +122,12 @@ extension AnyCodable: Decodable {
       self.init(data)
       return
     }
-    if let link = try? container.decode(LexLink.self) {
-      self.init(link)
+    if let doc = try? container.decode(DIDDocument.self) {
+      self.init(doc)
       return
     }
-    if let unknown = try? container.decode(LexiconTypeDecoder.self) {
-      self.init(unknown)
+    if let link = try? container.decode(LexLink.self) {
+      self.init(link)
       return
     }
     if let dictionary = try? container.decode([String: AnyCodable].self) {
