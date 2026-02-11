@@ -44,7 +44,6 @@
               self.host = host
               self.auth = auth
               decoder = JSONDecoder()
-              Self.setModuleName()
             }
           }
 

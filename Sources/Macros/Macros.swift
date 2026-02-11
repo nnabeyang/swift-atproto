@@ -52,66 +52,38 @@
         codeblocks.append(
           CodeBlockItemSyntax(
             item: CodeBlockItemSyntax.Item(
-              SequenceExprSyntax(
-                elements: ExprListSyntax([
-                  ExprSyntax(
-                    MemberAccessExprSyntax(
-                      base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
-                      period: .periodToken(),
-                      declName: DeclReferenceExprSyntax(baseName: name.identifier)
-                    )),
-                  ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-                  ExprSyntax(DeclReferenceExprSyntax(baseName: name.identifier)),
-                ])))))
+              SequenceExprSyntax {
+                MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: name.identifier)
+                )
+                AssignmentExprSyntax(equal: .equalToken())
+                DeclReferenceExprSyntax(baseName: name.identifier)
+              })))
       }
       codeblocks.append(
         CodeBlockItemSyntax(
           item: CodeBlockItemSyntax.Item(
-            SequenceExprSyntax(
-              elements: ExprListSyntax([
-                ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("decoder"))),
-                ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-                ExprSyntax(
-                  FunctionCallExprSyntax(
-                    calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("JSONDecoder"))),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax([]),
-                    rightParen: .rightParenToken()
-                  )),
-              ])))))
-      codeblocks.append(
-        CodeBlockItemSyntax(
-          item: CodeBlockItemSyntax.Item(
-            FunctionCallExprSyntax(
-              calledExpression: ExprSyntax(
-                MemberAccessExprSyntax(
-                  base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.Self))),
-                  period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: .identifier("setModuleName"))
-                )),
-              leftParen: .leftParenToken(),
-              arguments: LabeledExprListSyntax([]),
-              rightParen: .rightParenToken()
-            ))))
+            SequenceExprSyntax {
+              DeclReferenceExprSyntax(baseName: .identifier("decoder"))
+              AssignmentExprSyntax(equal: .equalToken())
+              FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("JSONDecoder")))
+            }
+          )))
       return [
         DeclSyntax(
           InitializerDeclSyntax(
-            attributes: AttributeListSyntax([]),
             modifiers: DeclModifierListSyntax([
               DeclModifierSyntax(name: .keyword(.private))
             ]),
-            initKeyword: .keyword(.`init`),
             signature: FunctionSignatureSyntax(
-              parameterClause: FunctionParameterClauseSyntax(
-                leftParen: .leftParenToken(),
-                parameters: FunctionParameterListSyntax(parameters),
-                rightParen: .rightParenToken()
-              )),
-            body: CodeBlockSyntax(
-              leftBrace: .leftBraceToken(),
-              statements: CodeBlockItemListSyntax(codeblocks),
-              rightBrace: .rightBraceToken()
-            )
+              parameterClause: FunctionParameterClauseSyntax {
+                parameters
+              }),
+            body: CodeBlockSyntax {
+              codeblocks
+            }
           ))
       ]
     }
@@ -132,7 +104,7 @@
           inheritanceClause: InheritanceClauseSyntax(
             colon: .colonToken(),
             inheritedTypes: InheritedTypeListSyntax([
-              InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("XRPCClientProtocol"))))
+              InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCClientProtocol")))
             ])
           ),
           memberBlock: MemberBlockSyntax(

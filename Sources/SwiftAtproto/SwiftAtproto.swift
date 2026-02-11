@@ -1,110 +1,61 @@
 import CID
 import Foundation
 
-final class LexiconTypesMap: @unchecked Sendable {
-  static let shared = LexiconTypesMap()
-  private var map = [String: any ATProtoRecord.Type]()
-  private var _moduleName: String = ""
-  private let lock = NSLock()
-
-  var moduleName: String {
-    get {
-      lock.lock()
-      defer {
-        lock.unlock()
-      }
-      return _moduleName
-    }
-    set {
-      lock.lock()
-      defer {
-        lock.unlock()
-      }
-      _moduleName = newValue
-    }
-  }
-
-  subscript(_ id: String) -> (any ATProtoRecord.Type)? {
-    get {
-      lock.lock()
-      defer {
-        lock.unlock()
-      }
-      return map[id]
-    }
-    set {
-      lock.lock()
-      defer {
-        lock.unlock()
-      }
-      map[id] = newValue
-    }
-  }
-}
-
 public struct EmptyResponse: Codable {}
 
-public typealias ATProtoRecord = Codable & Sendable
+public protocol ATProtoRecord: Codable, Sendable {
+  static var nsId: String { get }
+}
 
-public struct LexiconTypeDecoder: Codable, Sendable {
-  let typeName: String?
-  public let val: any Codable & Sendable
-  private enum CodingKeys: String, CodingKey {
-    case type = "$type"
-  }
+enum TypeCodingKeys: String, CodingKey {
+  case type = "$type"
+}
 
-  public init(typeName: String, val: any ATProtoRecord) {
-    self.typeName = typeName
-    self.val = val
-  }
+public protocol UnknownATPValueProtocol: Codable, Sendable {
+  static func record(_: any ATProtoRecord) -> Self
+  static func any(_: any Codable & Sendable) -> Self
+  var type: String? { get }
+  var val: Codable & Sendable { get }
+  static var allTypes: [String: any ATProtoRecord.Type] { get }
+  @available(*, deprecated, message: "Use `static func record(_:)` instead — this initializer is deprecated and will be removed in a future release.")
+  init(typeName: String, val: any Codable & Sendable)
+}
 
-  public init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
+extension UnknownATPValueProtocol {
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: TypeCodingKeys.self)
     if let typeName = try container.decodeIfPresent(String.self, forKey: .type) {
-      guard let type = Self.getTypeByName(typeName: typeName) else {
-        val = try UnknownRecord(from: decoder)
-        self.typeName = typeName
+      guard let type = Self.allTypes[typeName] else {
+        self = try .record(UnknownRecord(from: decoder))
         return
       }
-      val = try type.init(from: decoder)
-      self.typeName = typeName
+      self = try .record(type.init(from: decoder))
     } else {
-      val = try DIDDocument(from: decoder)
-      typeName = nil
-    }
-  }
-
-  public func encode(to encoder: Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encodeIfPresent(typeName, forKey: .type)
-    try val.encode(to: encoder)
-  }
-
-  private static func getTypeByName(typeName nsId: String) -> (any ATProtoRecord.Type)? {
-    if let type = LexiconTypesMap.shared[nsId] {
-      return type
-    }
-    var components = nsId.split(separator: ".")
-    while !components.isEmpty {
-      components.removeLast()
-      let prefix = components.joined(separator: ".")
-      let typeName = "\(LexiconTypesMap.shared.moduleName).\(Self.structNameFor(prefix: prefix))_\(Self.nameFromId(id: nsId, prefix: prefix))"
-      if let type = _typeByName(typeName) as? (any ATProtoRecord.Type) {
-        LexiconTypesMap.shared[nsId] = type
-        return type
+      let object = try AnyCodable(from: decoder)
+      if let object = object.base as? DIDDocument {
+        self = .any(object)
+      } else {
+        self = .any(object)
       }
     }
-    return nil
   }
 
-  private static func nameFromId(id: String, prefix: String) -> String {
-    id.trim(prefix: prefix).split(separator: ".").map {
-      String($0).titleCased
-    }.joined()
+  @available(*, deprecated, message: "Use `static func record(_:)` instead — this initializer is deprecated and will be removed in a future release.")
+  public init(typeName: String, val: any Codable & Sendable) {
+    switch val {
+    case let val as (any ATProtoRecord):
+      self = .record(val)
+    default:
+      self = .any(AnyCodable(val))
+    }
   }
 
-  private static func structNameFor(prefix: String) -> String {
-    "\(prefix.split(separator: ".").joined())types"
+  public func encode(to encoder: any Encoder) throws {
+    if let type = type {
+      var container = encoder.container(keyedBy: TypeCodingKeys.self)
+      try container.encode(type, forKey: .type)
+    }
+    try val.encode(to: encoder)
   }
 }
 
@@ -218,7 +169,7 @@ public enum ParamElement: Encodable {
   case bool(Bool?)
   case integer(Int?)
   case array([any Encodable]?)
-  case unknown(LexiconTypeDecoder?)
+  case unknown((any UnknownATPValueProtocol)?)
 
   public func encode(to encoder: Encoder) throws {
     switch self {
@@ -236,7 +187,7 @@ public enum ParamElement: Encodable {
         }
       }
     case .unknown(let value):
-      try value.encode(to: encoder)
+      try value?.encode(to: encoder)
     }
   }
 }
