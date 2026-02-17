@@ -792,6 +792,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
               trailingComma: .commaToken()
             ),
+            InheritedTypeSyntax(
+              type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
+              trailingComma: .commaToken()
+            ),
             InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
           ])
         )
@@ -979,6 +983,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
           ),
           InheritedTypeSyntax(
             type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+            trailingComma: .commaToken()
+          ),
+          InheritedTypeSyntax(
+            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
             trailingComma: .commaToken()
           ),
           InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
@@ -1242,6 +1250,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         [
           InheritedTypeSyntax(
             type: IdentifierTypeSyntax(name: .identifier("Codable")),
+            trailingComma: .commaToken()
+          ),
+          InheritedTypeSyntax(
+            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
             trailingComma: .commaToken()
           ),
           InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("Sendable"))),
@@ -1749,6 +1761,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         inheritedTypes: InheritedTypeListSyntax([
           InheritedTypeSyntax(
             type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+            trailingComma: .commaToken()
+          ),
+          InheritedTypeSyntax(
+            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
             trailingComma: .commaToken()
           ),
           InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),

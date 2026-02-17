@@ -269,6 +269,10 @@ enum Lex {
                             type: IdentifierTypeSyntax(name: .identifier("Codable")),
                             ampersand: .binaryOperator("&")
                           ),
+                          CompositionTypeElementSyntax(
+                            type: IdentifierTypeSyntax(name: .identifier("Hashable")),
+                            ampersand: .binaryOperator("&")
+                          ),
                           CompositionTypeElementSyntax(type: IdentifierTypeSyntax(name: .identifier("Sendable"))),
                         ]))
                   )
@@ -439,6 +443,10 @@ enum Lex {
                       elements: [
                         CompositionTypeElementSyntax(
                           type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+                          ampersand: .binaryOperator("&")
+                        ),
+                        CompositionTypeElementSyntax(
+                          type: IdentifierTypeSyntax(name: .identifier("Hashable")),
                           ampersand: .binaryOperator("&")
                         ),
                         CompositionTypeElementSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
