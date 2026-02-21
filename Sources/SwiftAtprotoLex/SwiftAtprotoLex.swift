@@ -442,7 +442,10 @@ enum Lex {
                     CompositionTypeSyntax(
                       elements: [
                         CompositionTypeElementSyntax(
-                          type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
+                          type: SomeOrAnyTypeSyntax(
+                            someOrAnySpecifier: .keyword(.any),
+                            constraint: IdentifierTypeSyntax(name: .identifier("Codable"))
+                          ),
                           ampersand: .binaryOperator("&")
                         ),
                         CompositionTypeElementSyntax(
