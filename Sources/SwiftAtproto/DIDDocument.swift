@@ -1,4 +1,4 @@
-public struct DIDDocument: Codable, Sendable {
+public struct DIDDocument: Codable, Sendable, Hashable {
   public let context: [String]
   public let did: String
   public let alsoKnownAs: [String]?
@@ -14,14 +14,14 @@ public struct DIDDocument: Codable, Sendable {
   }
 }
 
-public struct DocVerificationMethod: Codable, Sendable {
+public struct DocVerificationMethod: Codable, Sendable, Hashable {
   let id: String
   let type: String
   let controller: String
   let publicKeyMultibase: String
 }
 
-public struct DocService: Codable, Sendable {
+public struct DocService: Codable, Sendable, Hashable {
   public let id: String
   public let type: String
   public let serviceEndpoint: String

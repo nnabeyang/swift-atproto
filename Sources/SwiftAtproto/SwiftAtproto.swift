@@ -3,7 +3,7 @@ import Foundation
 
 public struct EmptyResponse: Codable {}
 
-public protocol ATProtoRecord: Codable, Sendable {
+public protocol ATProtoRecord: Codable, Sendable, Hashable {
   static var nsId: String { get }
 }
 
@@ -11,11 +11,11 @@ enum TypeCodingKeys: String, CodingKey {
   case type = "$type"
 }
 
-public protocol UnknownATPValueProtocol: Codable, Sendable {
+public protocol UnknownATPValueProtocol: Codable, Sendable, Hashable {
   static func record(_: any ATProtoRecord) -> Self
-  static func any(_: any Codable & Sendable) -> Self
+  static func any(_: any Codable & Sendable & Hashable) -> Self
   var type: String? { get }
-  var val: Codable & Sendable { get }
+  var val: any Codable & Hashable & Sendable { get }
   static var allTypes: [String: any ATProtoRecord.Type] { get }
   @available(*, deprecated, message: "Use `static func record(_:)` instead — this initializer is deprecated and will be removed in a future release.")
   init(typeName: String, val: any Codable & Sendable)
@@ -37,6 +37,20 @@ extension UnknownATPValueProtocol {
       } else {
         self = .any(object)
       }
+    }
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(val)
+  }
+
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    if Swift.type(of: lhs.val) != Swift.type(of: rhs.val) { return false }
+    switch (lhs.val, rhs.val) {
+    case (let left as AnyHashable, let right as AnyHashable):
+      return left == right
+    default:
+      return false
     }
   }
 
@@ -89,6 +103,11 @@ extension String {
 
 public typealias LexLink = CID
 extension CID: @unchecked @retroactive Sendable {}
+extension CID: @retroactive Hashable {
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(self.rawData)
+  }
+}
 
 extension LexLink: @retroactive Codable {
   static func dataEncodingStrategy(data: Data, encoder: any Encoder) throws {
@@ -124,7 +143,7 @@ extension LexLink: @retroactive Codable {
   }
 }
 
-public struct LexBlob: Codable, Sendable {
+public struct LexBlob: Codable, Sendable, Hashable {
   public let type = "blob"
   public let ref: LexLink
   public let mimeType: String
