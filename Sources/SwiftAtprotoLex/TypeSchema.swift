@@ -588,12 +588,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       "string"
     case .integer:
       "integer"
-    case .unknown:
-      "_other"
     case .array:
       "array"
     default:
-      fatalError()
+      fatalError("unexpected type for parameter name: \(typeSchema.type)")
     }
   }
 
@@ -633,28 +631,15 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       VariableDeclSyntax(
         bindingSpecifier: .keyword(.let)
       ) {
-        if let params = def.rpcParams(id: id, prefix: prefix) {
-          PatternBindingSyntax(
-            pattern: IdentifierPatternSyntax(identifier: .identifier("params")),
-            typeAnnotation: params is DictionaryExprSyntax
-              ? TypeAnnotationSyntax(
-                type: TypeSyntax(stringLiteral: "Parameters")
-              ) : nil,
-            initializer: InitializerClauseSyntax(
-              value: params
-            )
+        PatternBindingSyntax(
+          pattern: IdentifierPatternSyntax(identifier: .identifier("params")),
+          typeAnnotation: TypeAnnotationSyntax(
+            type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("Parameters")))
+          ),
+          initializer: InitializerClauseSyntax(
+            value: def.rpcParams(id: id, prefix: prefix)
           )
-        } else {
-          PatternBindingSyntax(
-            pattern: IdentifierPatternSyntax(identifier: .identifier("params")),
-            typeAnnotation: TypeAnnotationSyntax(
-              type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("Bool")))
-            ),
-            initializer: InitializerClauseSyntax(
-              value: NilLiteralExprSyntax()
-            )
-          )
-        }
+        )
       }
       DoStmtSyntax(
         body: CodeBlockSyntax {
@@ -2369,6 +2354,32 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
   }
 }
 
+extension FieldTypeDefinition: CustomStringConvertible {
+  var description: String {
+    switch self {
+    case .token: "token"
+    case .null: "null"
+    case .boolean: "boolean"
+    case .integer: "integer"
+    case .blob: "blob"
+    case .bytes: "bytes"
+    case .string: "string"
+    case .union: "union"
+    case .array: "array"
+    case .object: "object"
+    case .ref: "ref"
+    case .permission: "permission"
+    case .unknown: "unknown"
+    case .cidLink: "cidLink"
+    case .procedure: "procedure"
+    case .query: "query"
+    case .subscription: "subscription"
+    case .record: "record"
+    case .permissionSet: "permissionSet"
+    }
+  }
+}
+
 struct TokenTypeDefinition: Codable {
   var type: FieldType { .token }
   let description: String?
@@ -2698,7 +2709,7 @@ protocol HTTPAPITypeDefinition: Encodable, DecodableWithConfiguration {
   var inputRPCValue: ExprSyntax { get }
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax]
   func rpcOutput(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> ReturnClauseSyntax
-  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol?
+  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol
 }
 
 private enum HTTPAPITypedCodingKeys: String, CodingKey {
@@ -2819,7 +2830,7 @@ extension HTTPAPITypeDefinition {
     return ReturnClauseSyntax(type: TypeSyntax("Bool"))
   }
 
-  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol? {
+  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol {
     if let parameters, !parameters.properties.isEmpty {
       var required = [String: Bool]()
       for req in parameters.required ?? [] {
@@ -2843,7 +2854,7 @@ extension HTTPAPITypeDefinition {
         }
       }
     } else {
-      return nil
+      return NilLiteralExprSyntax()
     }
   }
 }

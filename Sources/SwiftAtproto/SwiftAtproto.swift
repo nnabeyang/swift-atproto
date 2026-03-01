@@ -183,56 +183,17 @@ public struct LexBlob: Codable, Sendable, Hashable {
   }
 }
 
-public enum ParamElement: Encodable {
+public enum ParamElement {
   case string(String?)
   case bool(Bool?)
   case integer(Int?)
-  case array([any Encodable]?)
-  case unknown((any UnknownATPValueProtocol)?)
-
-  public func encode(to encoder: Encoder) throws {
-    switch self {
-    case .string(let value):
-      try value.encode(to: encoder)
-    case .bool(let value):
-      try value.encode(to: encoder)
-    case .integer(let value):
-      try value.encode(to: encoder)
-    case .array(let values):
-      if let values {
-        var container = encoder.unkeyedContainer()
-        for value in values {
-          try container.encode(value)
-        }
-      }
-    case .unknown(let value):
-      try value?.encode(to: encoder)
-    }
-  }
+  case array([any CustomStringConvertible]?)
 }
 
-public final class Parameters: Encodable, ExpressibleByDictionaryLiteral {
-  private let dictionary: [String: ParamElement]
+public final class Parameters: ExpressibleByDictionaryLiteral {
+  public let dictionary: [String: ParamElement]
   public init(dictionary: [String: ParamElement]) {
     self.dictionary = dictionary
-  }
-
-  public func encode(to encoder: Encoder) throws {
-    let d = dictionary.filter {
-      switch $1 {
-      case .string(let v):
-        v != nil
-      case .bool(let v):
-        v != nil
-      case .integer(let v):
-        v != nil
-      case .array(let v):
-        v != nil
-      case .unknown(let v):
-        v != nil
-      }
-    }
-    try d.encode(to: encoder)
   }
 
   public typealias Key = String
@@ -240,6 +201,12 @@ public final class Parameters: Encodable, ExpressibleByDictionaryLiteral {
   public required convenience init(dictionaryLiteral elements: (String, ParamElement)...) {
     let dictionary = [String: ParamElement](elements, uniquingKeysWith: { l, _ in l })
     self.init(dictionary: dictionary)
+  }
+}
+
+extension Parameters: Sequence {
+  public func makeIterator() -> Dictionary<String, ParamElement>.Iterator {
+    dictionary.makeIterator()
   }
 }
 

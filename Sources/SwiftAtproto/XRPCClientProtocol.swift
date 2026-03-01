@@ -20,7 +20,7 @@ public protocol ATPClientProtocol: Sendable {
   func getAuthorization(endpoint: String) -> String?
 
   mutating func fetch<T: Decodable>(
-    endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?,
+    endpoint: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?,
     input: (some Encodable)?, retry: Bool
   ) async throws -> T
   mutating func refreshSession() async -> Bool
@@ -111,10 +111,10 @@ extension ATPClientProtocol {
   }
 
   public mutating func fetch<T: Decodable>(
-    endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
+    endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?, input: (some Encodable)?, retry: Bool
   ) async throws -> T {
     var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
-    if httpMethod == .get, let params = params?.dictionary {
+    if httpMethod == .get, let params = params {
       url.append(percentEncodedQueryItems: Self.makeParameters(params: params))
     }
 
@@ -174,13 +174,24 @@ extension ATPClientProtocol {
     return try decoder.decode(T.self, from: data)
   }
 
-  public static func makeParameters(params: [String: Any]) -> [URLQueryItem] {
+  public static func makeParameters(params: Parameters) -> [URLQueryItem] {
     var items = [URLQueryItem]()
-    for param in params {
-      if let seq = param.value as? [String] {
-        items.append(contentsOf: seq.map { URLQueryItem(name: encode(param.key, component: .parameter), value: encode($0, component: .parameter)) })
-      } else {
-        items.append(URLQueryItem(name: encode(param.key, component: .parameter), value: encode("\(param.value)", component: .parameter)))
+    for (key, value) in params {
+      switch value {
+      case .bool(let value):
+        guard let value else { continue }
+        items.append(URLQueryItem(name: encode(key, component: .parameter), value: encode("\(value)", component: .parameter)))
+      case .integer(let value):
+        guard let value else { continue }
+        items.append(URLQueryItem(name: encode(key, component: .parameter), value: encode("\(value)", component: .parameter)))
+      case .string(let value):
+        guard let value else { continue }
+        items.append(URLQueryItem(name: encode(key, component: .parameter), value: encode("\(value)", component: .parameter)))
+      case .array(let values):
+        guard let values else { continue }
+        for value in values {
+          items.append(URLQueryItem(name: encode(key, component: .parameter), value: encode(value.description, component: .parameter)))
+        }
       }
     }
     return items
