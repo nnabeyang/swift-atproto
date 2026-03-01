@@ -188,7 +188,6 @@ public enum ParamElement: Encodable {
   case bool(Bool?)
   case integer(Int?)
   case array([any Encodable]?)
-  case unknown((any UnknownATPValueProtocol)?)
 
   public func encode(to encoder: Encoder) throws {
     switch self {
@@ -205,8 +204,6 @@ public enum ParamElement: Encodable {
           try container.encode(value)
         }
       }
-    case .unknown(let value):
-      try value?.encode(to: encoder)
     }
   }
 }
@@ -227,8 +224,6 @@ public final class Parameters: Encodable, ExpressibleByDictionaryLiteral {
       case .integer(let v):
         v != nil
       case .array(let v):
-        v != nil
-      case .unknown(let v):
         v != nil
       }
     }

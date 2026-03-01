@@ -588,8 +588,6 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       "string"
     case .integer:
       "integer"
-    case .unknown:
-      "_other"
     case .array:
       "array"
     default:
