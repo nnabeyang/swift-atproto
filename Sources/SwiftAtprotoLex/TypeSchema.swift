@@ -633,28 +633,15 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       VariableDeclSyntax(
         bindingSpecifier: .keyword(.let)
       ) {
-        if let params = def.rpcParams(id: id, prefix: prefix) {
-          PatternBindingSyntax(
-            pattern: IdentifierPatternSyntax(identifier: .identifier("params")),
-            typeAnnotation: params is DictionaryExprSyntax
-              ? TypeAnnotationSyntax(
-                type: TypeSyntax(stringLiteral: "Parameters")
-              ) : nil,
-            initializer: InitializerClauseSyntax(
-              value: params
-            )
+        PatternBindingSyntax(
+          pattern: IdentifierPatternSyntax(identifier: .identifier("params")),
+          typeAnnotation: TypeAnnotationSyntax(
+            type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("Parameters")))
+          ),
+          initializer: InitializerClauseSyntax(
+            value: def.rpcParams(id: id, prefix: prefix)
           )
-        } else {
-          PatternBindingSyntax(
-            pattern: IdentifierPatternSyntax(identifier: .identifier("params")),
-            typeAnnotation: TypeAnnotationSyntax(
-              type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("Bool")))
-            ),
-            initializer: InitializerClauseSyntax(
-              value: NilLiteralExprSyntax()
-            )
-          )
-        }
+        )
       }
       DoStmtSyntax(
         body: CodeBlockSyntax {
@@ -2698,7 +2685,7 @@ protocol HTTPAPITypeDefinition: Encodable, DecodableWithConfiguration {
   var inputRPCValue: ExprSyntax { get }
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax]
   func rpcOutput(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> ReturnClauseSyntax
-  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol?
+  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol
 }
 
 private enum HTTPAPITypedCodingKeys: String, CodingKey {
@@ -2819,7 +2806,7 @@ extension HTTPAPITypeDefinition {
     return ReturnClauseSyntax(type: TypeSyntax("Bool"))
   }
 
-  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol? {
+  func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol {
     if let parameters, !parameters.properties.isEmpty {
       var required = [String: Bool]()
       for req in parameters.required ?? [] {
@@ -2843,7 +2830,7 @@ extension HTTPAPITypeDefinition {
         }
       }
     } else {
-      return nil
+      return NilLiteralExprSyntax()
     }
   }
 }

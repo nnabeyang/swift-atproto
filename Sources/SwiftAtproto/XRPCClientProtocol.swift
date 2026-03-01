@@ -20,7 +20,7 @@ public protocol ATPClientProtocol: Sendable {
   func getAuthorization(endpoint: String) -> String?
 
   mutating func fetch<T: Decodable>(
-    endpoint: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?,
+    endpoint: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?,
     input: (some Encodable)?, retry: Bool
   ) async throws -> T
   mutating func refreshSession() async -> Bool
@@ -111,7 +111,7 @@ extension ATPClientProtocol {
   }
 
   public mutating func fetch<T: Decodable>(
-    endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: (some Encodable)?, input: (some Encodable)?, retry: Bool
+    endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?, input: (some Encodable)?, retry: Bool
   ) async throws -> T {
     var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
     if httpMethod == .get, let params = params?.dictionary {
