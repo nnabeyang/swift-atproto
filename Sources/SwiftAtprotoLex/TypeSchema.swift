@@ -591,7 +591,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .array:
       "array"
     default:
-      fatalError()
+      fatalError("unexpected type for parameter name: \(typeSchema.type)")
     }
   }
 
@@ -2350,6 +2350,32 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
       t.errors
     default:
       nil
+    }
+  }
+}
+
+extension FieldTypeDefinition: CustomStringConvertible {
+  var description: String {
+    switch self {
+    case .token: "token"
+    case .null: "null"
+    case .boolean: "boolean"
+    case .integer: "integer"
+    case .blob: "blob"
+    case .bytes: "bytes"
+    case .string: "string"
+    case .union: "union"
+    case .array: "array"
+    case .object: "object"
+    case .ref: "ref"
+    case .permission: "permission"
+    case .unknown: "unknown"
+    case .cidLink: "cidLink"
+    case .procedure: "procedure"
+    case .query: "query"
+    case .subscription: "subscription"
+    case .record: "record"
+    case .permissionSet: "permissionSet"
     }
   }
 }
