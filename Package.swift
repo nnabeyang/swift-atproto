@@ -77,6 +77,7 @@ let package = Package(
         "Macros",
         .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
         .product(name: "SwiftSyntax", package: "swift-syntax"),
+        .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
       ]
     ),
     .plugin(

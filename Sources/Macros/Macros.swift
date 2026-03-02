@@ -23,7 +23,6 @@
     ) throws -> [DeclSyntax] {
       var parameters = [FunctionParameterSyntax]()
       var variables = [VariableDeclSyntax]()
-      var codeblocks = [CodeBlockItemSyntax]()
       for member in declaration.memberBlock.members {
         guard let v = member.decl.as(VariableDeclSyntax.self),
           let binding = v.bindings.first,
@@ -35,8 +34,8 @@
         guard name.identifier.trimmedDescription != "decoder" else { continue }
         variables.append(v)
       }
-      let last = variables.count - 1
-      for (i, decl) in variables.enumerated() {
+
+      for decl in variables {
         guard
           let binding = decl.bindings.first,
           let type = binding.typeAnnotation?.type,
@@ -46,31 +45,9 @@
           FunctionParameterSyntax(
             firstName: name.identifier,
             colon: .colonToken(),
-            type: type,
-            trailingComma: i == last ? nil : .commaToken()
+            type: type
           ))
-        codeblocks.append(
-          CodeBlockItemSyntax(
-            item: CodeBlockItemSyntax.Item(
-              SequenceExprSyntax {
-                MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
-                  period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: name.identifier)
-                )
-                AssignmentExprSyntax(equal: .equalToken())
-                DeclReferenceExprSyntax(baseName: name.identifier)
-              })))
       }
-      codeblocks.append(
-        CodeBlockItemSyntax(
-          item: CodeBlockItemSyntax.Item(
-            SequenceExprSyntax {
-              DeclReferenceExprSyntax(baseName: .identifier("decoder"))
-              AssignmentExprSyntax(equal: .equalToken())
-              FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("JSONDecoder")))
-            }
-          )))
       return [
         DeclSyntax(
           InitializerDeclSyntax(
@@ -80,11 +57,26 @@
             signature: FunctionSignatureSyntax(
               parameterClause: FunctionParameterClauseSyntax {
                 parameters
-              }),
-            body: CodeBlockSyntax {
-              codeblocks
+              })
+          ) {
+            for parameter in parameters {
+              SequenceExprSyntax {
+                MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: parameter.firstName)
+                )
+                AssignmentExprSyntax(equal: .equalToken())
+                DeclReferenceExprSyntax(baseName: parameter.firstName)
+              }
             }
-          ))
+            SequenceExprSyntax {
+              DeclReferenceExprSyntax(baseName: .identifier("decoder"))
+              AssignmentExprSyntax(equal: .equalToken())
+              FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("JSONDecoder")))
+            }
+          }
+        )
       ]
     }
   }
@@ -101,18 +93,10 @@
         ExtensionDeclSyntax(
           extensionKeyword: .keyword(.extension),
           extendedType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(type.trimmedDescription))),
-          inheritanceClause: InheritanceClauseSyntax(
-            colon: .colonToken(),
-            inheritedTypes: InheritedTypeListSyntax([
-              InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCClientProtocol")))
-            ])
-          ),
-          memberBlock: MemberBlockSyntax(
-            leftBrace: .leftBraceToken(),
-            members: MemberBlockItemListSyntax([]),
-            rightBrace: .rightBraceToken()
-          )
-        )
+          inheritanceClause: InheritanceClauseSyntax {
+            InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCClientProtocol")))
+          }
+        ) {}
       ]
     }
   }
