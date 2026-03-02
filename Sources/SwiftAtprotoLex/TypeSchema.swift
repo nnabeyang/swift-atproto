@@ -2194,21 +2194,11 @@ extension FieldTypeDefinition: CustomStringConvertible {
 struct TokenTypeDefinition: Codable {
   var type: FieldType { .token }
   let description: String?
-
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case description
-  }
 }
 
 struct NullTypeDefinition: Codable {
   var type: FieldType { .boolean }
   let description: String?
-
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case description
-  }
 }
 
 struct BooleanTypeDefinition: Codable {
@@ -2216,13 +2206,6 @@ struct BooleanTypeDefinition: Codable {
   let description: String?
   let `default`: Bool?
   let const: Bool?
-
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case description
-    case `default`
-    case const
-  }
 }
 
 struct IntegerTypeDefinition: Codable {
@@ -2234,16 +2217,6 @@ struct IntegerTypeDefinition: Codable {
   let `default`: Int?
   let const: Int?
 
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case description
-    case minimum
-    case maximum
-    case `enum`
-    case `default`
-    case const
-  }
-
   var isPrimitive: Bool {
     `enum` == nil
   }
@@ -2253,24 +2226,12 @@ struct BlobTypeDefinition: Codable {
   var type: FieldType { .blob }
   let accept: [String]?
   let maxSize: Int?
-
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case accept
-    case maxSize
-  }
 }
 
 struct BytesTypeDefinition: Codable {
   var type: FieldType { .bytes }
   let minLength: Int?
   let maxLength: Int?
-
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case minLength
-    case maxLength
-  }
 }
 
 struct StringTypeDefinition: Codable {
@@ -2284,19 +2245,6 @@ struct StringTypeDefinition: Codable {
   let knownValues: [String]?
   let `enum`: [String]?
   let const: String?
-
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case description
-    case format
-    case maxLength
-    case minLength
-    case maxGraphemes
-    case minGraphemes
-    case knownValues
-    case `enum`
-    case const
-  }
 
   var isPrimitive: Bool {
     `enum` == nil
@@ -2312,16 +2260,8 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration {
   let required: [String]?
   let nullable: [String]?
 
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case description
-    case properties
-    case required
-    case nullable
-  }
-
   init(from decoder: any Decoder, configuration: TypeSchema.DecodingConfiguration) throws {
-    let container = try decoder.container(keyedBy: TypedCodingKeys.self)
+    let container = try decoder.container(keyedBy: CodingKeys.self)
     description = try container.decodeIfPresent(String.self, forKey: .description)
     let nestedContainer = try container.nestedContainer(keyedBy: AnyCodingKeys.self, forKey: .properties)
     var properties = [String: FieldTypeDefinition]()
@@ -2345,12 +2285,6 @@ struct ReferenceTypeDefinition: Codable {
   var type: FieldType { .ref }
   let description: String?
   let ref: String
-
-  private enum TypedCodingKeys: String, CodingKey {
-    case type
-    case description
-    case ref
-  }
 }
 
 struct PermissionTypeDefinition: Codable {
