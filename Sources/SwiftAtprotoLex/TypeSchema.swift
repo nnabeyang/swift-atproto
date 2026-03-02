@@ -211,9 +211,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
       name: .init(stringLiteral: "\(typeName)_Error"),
-      inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "XRPCError"))
-      }
+      inheritanceClause: InheritanceClauseSyntax(typeNames: ["XRPCError"])
     ) {
       for error in errors.sorted() {
         EnumCaseDeclSyntax {
@@ -239,7 +237,6 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                 trailingComma: .commaToken()
               ),
               EnumCaseParameterSyntax(
-                modifiers: DeclModifierListSyntax([]),
                 firstName: .identifier("message"),
                 colon: .colonToken(),
                 type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
@@ -296,7 +293,6 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
           SwitchCaseSyntax(
             label: SwitchCaseSyntax.Label(
               SwitchDefaultLabelSyntax(
-                defaultKeyword: .keyword(.default),
                 colon: .colonToken()
               )),
             statements: CodeBlockItemListSyntax([
@@ -352,7 +348,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
             ),
             accessorBlock: AccessorBlockSyntax(
-              accessors: AccessorBlockSyntax.Accessors(
+              accessors: .getter(
                 CodeBlockItemListSyntax {
                   SwitchExprSyntax(subject: DeclReferenceExprSyntax(baseName: .keyword(.self))) {
                     for error in errors {
@@ -462,30 +458,28 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                         }
                         SwitchCaseSyntax(
                           label: SwitchCaseSyntax.Label(
-                            SwitchCaseLabelSyntax(
-                              caseItems: [
-                                SwitchCaseItemSyntax(
-                                  pattern: ValueBindingPatternSyntax(
-                                    bindingSpecifier: .keyword(.let),
-                                    pattern: ExpressionPatternSyntax(
-                                      expression: ExprSyntax(
-                                        FunctionCallExprSyntax(
-                                          callee: MemberAccessExprSyntax(
-                                            period: .periodToken(),
-                                            declName: DeclReferenceExprSyntax(baseName: .identifier("unexpected"))
-                                          )
-                                        ) {
-                                          LabeledExprSyntax(
-                                            expression: DiscardAssignmentExprSyntax(wildcard: .wildcardToken()),
-                                            trailingComma: .commaToken())
-                                          LabeledExprSyntax(
-                                            expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("message")))
-                                          )
-                                        }))
-                                  ))
-                              ],
-                              colon: .colonToken()
-                            )),
+                            SwitchCaseLabelSyntax {
+                              SwitchCaseItemSyntax(
+                                pattern: ValueBindingPatternSyntax(
+                                  bindingSpecifier: .keyword(.let),
+                                  pattern: ExpressionPatternSyntax(
+                                    expression: ExprSyntax(
+                                      FunctionCallExprSyntax(
+                                        callee: MemberAccessExprSyntax(
+                                          period: .periodToken(),
+                                          declName: DeclReferenceExprSyntax(baseName: .identifier("unexpected"))
+                                        )
+                                      ) {
+                                        LabeledExprSyntax(
+                                          expression: DiscardAssignmentExprSyntax(wildcard: .wildcardToken()),
+                                          trailingComma: .commaToken())
+                                        LabeledExprSyntax(
+                                          expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("message")))
+                                        )
+                                      }))
+                                ))
+                            }
+                          ),
                           statements: CodeBlockItemListSyntax {
                             ReturnStmtSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("message")))
                           }
@@ -642,25 +636,6 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         )
       }
       DoStmtSyntax(
-        body: CodeBlockSyntax {
-          ReturnStmtSyntax(
-            expression: TryExprSyntax(
-              expression:
-                AwaitExprSyntax(
-                  expression: FunctionCallExprSyntax(
-                    callee: DeclReferenceExprSyntax(baseName: .identifier("fetch"))
-                  ) {
-                    LabeledExprSyntax(label: "endpoint", colon: .colonToken(), expression: StringLiteralExprSyntax(content: self.id), trailingComma: .commaToken())
-                    LabeledExprSyntax(label: "contentType", colon: .colonToken(), expression: StringLiteralExprSyntax(content: def.contentType), trailingComma: .commaToken())
-                    LabeledExprSyntax(label: "httpMethod", colon: .colonToken(), expression: ExprSyntax(stringLiteral: httpMethod), trailingComma: .commaToken())
-                    LabeledExprSyntax(label: "params", colon: .colonToken(), expression: ExprSyntax("params"), trailingComma: .commaToken())
-                    LabeledExprSyntax(label: "input", colon: .colonToken(), expression: def.inputRPCValue, trailingComma: .commaToken())
-                    LabeledExprSyntax(label: "retry", colon: .colonToken(), expression: ExprSyntax("true"))
-                  }
-                )
-            )
-          )
-        },
         catchClauses: [
           CatchClauseSyntax(
             CatchItemListSyntax {
@@ -691,31 +666,26 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
             )
           }
         ]
-      )
-    }
-  }
-
-  private func initializerParameters(name: String, def: ObjectTypeDefinition, required: [String: Bool], defMap: ExtDefMap, dropPrefix: Bool = true) -> [FunctionParameterSyntax] {
-    var parameters = [FunctionParameterSyntax]()
-    let properties = def.sortedProperties
-    let count = properties.count
-    var i = 0
-    for (key, property) in properties {
-      i += 1
-      let isRequired = required[key] ?? false
-      let comma: TokenSyntax? = i == count ? nil : .commaToken()
-      let defaultValue: InitializerClauseSyntax? =
-        isRequired
-        ? nil
-        : InitializerClauseSyntax(
-          equal: .equalToken(),
-          value: NilLiteralExprSyntax()
+      ) {
+        ReturnStmtSyntax(
+          expression: TryExprSyntax(
+            expression:
+              AwaitExprSyntax(
+                expression: FunctionCallExprSyntax(
+                  callee: DeclReferenceExprSyntax(baseName: .identifier("fetch"))
+                ) {
+                  LabeledExprSyntax(label: "endpoint", colon: .colonToken(), expression: StringLiteralExprSyntax(content: self.id))
+                  LabeledExprSyntax(label: "contentType", colon: .colonToken(), expression: StringLiteralExprSyntax(content: def.contentType))
+                  LabeledExprSyntax(label: "httpMethod", colon: .colonToken(), expression: ExprSyntax(stringLiteral: httpMethod))
+                  LabeledExprSyntax(label: "params", colon: .colonToken(), expression: ExprSyntax("params"))
+                  LabeledExprSyntax(label: "input", colon: .colonToken(), expression: def.inputRPCValue)
+                  LabeledExprSyntax(label: "retry", colon: .colonToken(), expression: ExprSyntax("true"))
+                }
+              )
+          )
         )
-      let type = typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: dropPrefix)
-      parameters.append(.init(firstName: .identifier(key), type: type, defaultValue: defaultValue, trailingComma: comma))
+      }
     }
-
-    return parameters
   }
 
   func typeIdentifier(name: String, property: FieldTypeDefinition, defMap: ExtDefMap, key: String, isRequired: Bool, dropPrefix: Bool = true) -> TypeSyntax {
@@ -766,24 +736,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
           DeclModifierSyntax(name: .keyword(.indirect)),
         ],
         name: .identifier(name),
-        inheritanceClause: InheritanceClauseSyntax(
-          colon: .colonToken(),
-          inheritedTypes: InheritedTypeListSyntax([
-            InheritedTypeSyntax(
-              type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String"))),
-              trailingComma: .commaToken()
-            ),
-            InheritedTypeSyntax(
-              type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
-              trailingComma: .commaToken()
-            ),
-            InheritedTypeSyntax(
-              type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
-              trailingComma: .commaToken()
-            ),
-            InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
-          ])
-        )
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["String", "Codable", "Hashable"])
       ) {
         for value in cases {
           EnumCaseDeclSyntax {
@@ -858,73 +811,70 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                 initializer: InitializerClauseSyntax(
                   equal: .equalToken(),
                   value: FunctionCallExprSyntax(
-                    calledExpression: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.Self))),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax([
-                      LabeledExprSyntax(
-                        label: .identifier("rawValue"),
-                        colon: .colonToken(),
-                        expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
-                      )
-                    ]),
-                    rightParen: .rightParenToken()
-                  )
+                    callee: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.Self)))
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("rawValue"),
+                      colon: .colonToken(),
+                      expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
+                    )
+                  }
                 )
               )
-            },
-            body: CodeBlockSyntax {
-              ThrowStmtSyntax(
-                expression: FunctionCallExprSyntax(
-                  callee: MemberAccessExprSyntax(
-                    base: DeclReferenceExprSyntax(baseName: .identifier("DecodingError")),
-                    period: .periodToken(),
-                    declName: DeclReferenceExprSyntax(baseName: .identifier("dataCorrupted"))
-                  )
-                ) {
-                  LabeledExprSyntax(
-                    expression:
-                      FunctionCallExprSyntax(
-                        callee: MemberAccessExprSyntax(
+            }
+          ) {
+            ThrowStmtSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .identifier("DecodingError")),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: .identifier("dataCorrupted"))
+                )
+              ) {
+                LabeledExprSyntax(
+                  expression:
+                    FunctionCallExprSyntax(
+                      callee: MemberAccessExprSyntax(
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+                      )
+                    ) {
+                      LabeledExprSyntax(
+                        label: .identifier("codingPath"),
+                        colon: .colonToken(),
+                        expression: MemberAccessExprSyntax(
+                          base: DeclReferenceExprSyntax(baseName: .identifier("container")),
                           period: .periodToken(),
-                          declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("codingPath"))
+                        ),
+                        trailingComma: .commaToken()
+                      )
+                      LabeledExprSyntax(
+                        label: .identifier("debugDescription"),
+                        colon: .colonToken(),
+                        expression: StringLiteralExprSyntax(
+                          openingQuote: .stringQuoteToken(),
+                          segments: StringLiteralSegmentListSyntax([
+                            StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment("invalid rawValue: "))),
+                            StringLiteralSegmentListSyntax.Element(
+                              ExpressionSegmentSyntax(
+                                backslash: .backslashToken(),
+                                leftParen: .leftParenToken(),
+                                expressions: LabeledExprListSyntax([
+                                  LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
+                                ]),
+                                rightParen: .rightParenToken()
+                              )),
+                            StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(""))),
+                          ]),
+                          closingQuote: .stringQuoteToken()
                         )
-                      ) {
-                        LabeledExprSyntax(
-                          label: .identifier("codingPath"),
-                          colon: .colonToken(),
-                          expression: MemberAccessExprSyntax(
-                            base: DeclReferenceExprSyntax(baseName: .identifier("container")),
-                            period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .identifier("codingPath"))
-                          ),
-                          trailingComma: .commaToken()
-                        )
-                        LabeledExprSyntax(
-                          label: .identifier("debugDescription"),
-                          colon: .colonToken(),
-                          expression: StringLiteralExprSyntax(
-                            openingQuote: .stringQuoteToken(),
-                            segments: StringLiteralSegmentListSyntax([
-                              StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment("invalid rawValue: "))),
-                              StringLiteralSegmentListSyntax.Element(
-                                ExpressionSegmentSyntax(
-                                  backslash: .backslashToken(),
-                                  leftParen: .leftParenToken(),
-                                  expressions: LabeledExprListSyntax([
-                                    LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
-                                  ]),
-                                  rightParen: .rightParenToken()
-                                )),
-                              StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(""))),
-                            ]),
-                            closingQuote: .stringQuoteToken()
-                          )
-                        )
-                      }
-                  )
-                }
-              )
-            })
+                      )
+                    }
+                )
+              }
+            )
+          }
           SequenceExprSyntax {
             DeclReferenceExprSyntax(baseName: .keyword(.self))
             AssignmentExprSyntax(equal: .equalToken())
@@ -959,24 +909,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
       name: .identifier(name),
-      inheritanceClause: InheritanceClauseSyntax(
-        colon: .colonToken(),
-        inheritedTypes: [
-          InheritedTypeSyntax(
-            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("RawRepresentable"))),
-            trailingComma: .commaToken()
-          ),
-          InheritedTypeSyntax(
-            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
-            trailingComma: .commaToken()
-          ),
-          InheritedTypeSyntax(
-            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
-            trailingComma: .commaToken()
-          ),
-          InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
-        ]
-      )
+      inheritanceClause: InheritanceClauseSyntax(typeNames: ["RawRepresentable", "Codable", "Hashable", "Sendable"])
     ) {
       for value in knownValues {
         EnumCaseDeclSyntax {
@@ -1009,60 +942,52 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
             subject: DeclReferenceExprSyntax(baseName: .identifier("rawValue"))
           ) {
             for value in knownValues {
-              SwitchCaseListSyntax.Element(
-                SwitchCaseSyntax(
-                  label: SwitchCaseSyntax.Label(
-                    SwitchCaseLabelSyntax(
-                      caseItems: SwitchCaseItemListSyntax([
-                        SwitchCaseItemSyntax(
-                          pattern: ExpressionPatternSyntax(
-                            expression: StringLiteralExprSyntax(
-                              openingQuote: .stringQuoteToken(),
-                              segments: StringLiteralSegmentListSyntax([
-                                StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(value)))
-                              ]),
-                              closingQuote: .stringQuoteToken()
-                            )))
-                      ]),
-                      colon: .colonToken()
-                    ))
-                ) {
-                  SequenceExprSyntax {
-                    DeclReferenceExprSyntax(baseName: .keyword(.self))
-                    AssignmentExprSyntax(equal: .equalToken())
-                    MemberAccessExprSyntax(
-                      period: .periodToken(),
-                      declName: DeclReferenceExprSyntax(baseName: .identifier(value.camelCased().escapedSwiftKeyword))
-                    )
-                  }
-                }
-              )
-            }
-            SwitchCaseListSyntax.Element(
               SwitchCaseSyntax(
                 label: SwitchCaseSyntax.Label(
-                  SwitchDefaultLabelSyntax(
-                    defaultKeyword: .keyword(.default),
+                  SwitchCaseLabelSyntax(
+                    caseItems: SwitchCaseItemListSyntax([
+                      SwitchCaseItemSyntax(
+                        pattern: ExpressionPatternSyntax(
+                          expression: StringLiteralExprSyntax(
+                            openingQuote: .stringQuoteToken(),
+                            segments: StringLiteralSegmentListSyntax([
+                              StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(value)))
+                            ]),
+                            closingQuote: .stringQuoteToken()
+                          )))
+                    ]),
                     colon: .colonToken()
-                  )),
-                statements: CodeBlockItemListSyntax([
-                  CodeBlockItemSyntax(
-                    item: CodeBlockItemSyntax.Item(
-                      SequenceExprSyntax {
-                        DeclReferenceExprSyntax(baseName: .keyword(.self))
-                        AssignmentExprSyntax(equal: .equalToken())
-                        FunctionCallExprSyntax(
-                          callee: MemberAccessExprSyntax(
-                            period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .identifier("_other"))
-                          )
-                        ) {
-                          LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
-                        }
-                      }
-                    ))
-                ])
-              ))
+                  ))
+              ) {
+                SequenceExprSyntax {
+                  DeclReferenceExprSyntax(baseName: .keyword(.self))
+                  AssignmentExprSyntax(equal: .equalToken())
+                  MemberAccessExprSyntax(
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier(value.camelCased().escapedSwiftKeyword))
+                  )
+                }
+              }
+            }
+            SwitchCaseSyntax(
+              label: SwitchCaseSyntax.Label(
+                SwitchDefaultLabelSyntax(
+                  colon: .colonToken()
+                ))
+            ) {
+              SequenceExprSyntax {
+                DeclReferenceExprSyntax(baseName: .keyword(.self))
+                AssignmentExprSyntax(equal: .equalToken())
+                FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier("_other"))
+                  )
+                ) {
+                  LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("rawValue")))
+                }
+              }
+            }
           })
       }
       VariableDeclSyntax(
@@ -1085,7 +1010,6 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                     item: CodeBlockItemSyntax.Item(
                       ExpressionStmtSyntax(
                         expression: SwitchExprSyntax(
-                          switchKeyword: .keyword(.switch),
                           subject: DeclReferenceExprSyntax(baseName: .keyword(.self))
                         ) {
                           for value in knownValues {
@@ -1127,16 +1051,14 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                                         pattern: PatternSyntax(
                                           ExpressionPatternSyntax(
                                             expression: FunctionCallExprSyntax(
-                                              calledExpression: MemberAccessExprSyntax(
+                                              callee: MemberAccessExprSyntax(
                                                 period: .periodToken(),
                                                 declName: DeclReferenceExprSyntax(baseName: .identifier("_other"))
-                                              ),
-                                              leftParen: .leftParenToken(),
-                                              arguments: LabeledExprListSyntax([
-                                                LabeledExprSyntax(expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("value"))))
-                                              ]),
-                                              rightParen: .rightParenToken()
-                                            )))
+                                              )
+                                            ) {
+                                              LabeledExprSyntax(expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("value"))))
+                                            }
+                                          ))
                                       )))
                                 ],
                                 colon: .colonToken()
@@ -1162,19 +1084,15 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               initializer: InitializerClauseSyntax(
                 equal: .equalToken(),
                 value: TryExprSyntax(
-                  tryKeyword: .keyword(.try),
                   expression: FunctionCallExprSyntax(
-                    calledExpression: DeclReferenceExprSyntax(baseName: .identifier("String")),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax([
-                      LabeledExprSyntax(
-                        label: .identifier("from"),
-                        colon: .colonToken(),
-                        expression: DeclReferenceExprSyntax(baseName: .identifier("decoder"))
-                      )
-                    ]),
-                    rightParen: .rightParenToken()
-                  )
+                    callee: DeclReferenceExprSyntax(baseName: .identifier("String"))
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("from"),
+                      colon: .colonToken(),
+                      expression: DeclReferenceExprSyntax(baseName: .identifier("decoder"))
+                    )
+                  }
                 )
               )
             )
@@ -1196,24 +1114,20 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       }
       encodableFunctionDeclSyntax(leadingTrivia: .newlines(2)) {
         TryExprSyntax(
-          tryKeyword: .keyword(.try),
           expression: FunctionCallExprSyntax(
-            calledExpression: ExprSyntax(
+            callee: ExprSyntax(
               MemberAccessExprSyntax(
                 base: DeclReferenceExprSyntax(baseName: .identifier("rawValue")),
                 period: .periodToken(),
                 declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
-              )),
-            leftParen: .leftParenToken(),
-            arguments: LabeledExprListSyntax([
-              LabeledExprSyntax(
-                label: .identifier("to"),
-                colon: .colonToken(),
-                expression: DeclReferenceExprSyntax(baseName: .identifier("encoder"))
-              )
-            ]),
-            rightParen: .rightParenToken()
-          )
+              ))
+          ) {
+            LabeledExprSyntax(
+              label: .identifier("to"),
+              colon: .colonToken(),
+              expression: DeclReferenceExprSyntax(baseName: .identifier("encoder"))
+            )
+          }
         )
       }
     }
@@ -1226,36 +1140,14 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     }
     let sortedKeys = def.properties.keys.sorted()
     let enumCaseIsEmpty = sortedKeys.isEmpty && !isRecord
-    let inherits: InheritedTypeListSyntax =
-      if isRecord {
-        [
-          .init(type: IdentifierTypeSyntax(name: .identifier("ATProtoRecord")))
-        ]
-      } else {
-        [
-          InheritedTypeSyntax(
-            type: IdentifierTypeSyntax(name: .identifier("Codable")),
-            trailingComma: .commaToken()
-          ),
-          InheritedTypeSyntax(
-            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
-            trailingComma: .commaToken()
-          ),
-          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("Sendable"))),
-        ]
-      }
     for key in def.nullable ?? [] {
       required[key] = false
     }
     return StructDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-      structKeyword: .keyword(.struct),
       name: .init(stringLiteral: isRecord ? "\(Lex.structNameFor(prefix: prefix))_\(name)" : name),
-      inheritanceClause: InheritanceClauseSyntax(
-        colon: .colonToken(),
-        inheritedTypes: inherits
-      )
+      inheritanceClause: InheritanceClauseSyntax(typeNames: isRecord ? ["ATProtoRecord"] : ["Codable", "Hashable", "Sendable"])
     ) {
       if isRecord {
         VariableDeclSyntax(
@@ -1345,7 +1237,18 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         ],
         signature: FunctionSignatureSyntax(
           parameterClause: FunctionParameterClauseSyntax {
-            initializerParameters(name: name, def: def, required: required, defMap: defMap, dropPrefix: !isRecord)
+            for (key, property) in def.sortedProperties {
+              let isRequired = required[key] ?? false
+              let defaultValue: InitializerClauseSyntax? =
+                isRequired
+                ? nil
+                : InitializerClauseSyntax(
+                  equal: .equalToken(),
+                  value: NilLiteralExprSyntax()
+                )
+              let type = typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: !isRecord)
+              FunctionParameterSyntax(firstName: .identifier(key), type: type, defaultValue: defaultValue)
+            }
           }
         )
       ) {
@@ -1378,10 +1281,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         EnumDeclSyntax(
           leadingTrivia: .newlines(2),
           name: "CodingKeys",
-          inheritanceClause: InheritanceClauseSyntax {
-            InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "String"))
-            InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "CodingKey"))
-          }
+          inheritanceClause: InheritanceClauseSyntax(typeNames: ["String", "CodingKey"])
         ) {
           if isRecord {
             EnumCaseDeclSyntax {
@@ -1410,26 +1310,23 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                   equal: .equalToken(),
                   value: TryExprSyntax(
                     expression: FunctionCallExprSyntax(
-                      calledExpression: MemberAccessExprSyntax(
+                      callee: MemberAccessExprSyntax(
                         base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("decoder"))),
                         period: .periodToken(),
                         declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
-                      ),
-                      leftParen: .leftParenToken(),
-                      arguments: [
-                        LabeledExprSyntax(
-                          label: .identifier("keyedBy"),
-                          colon: .colonToken(),
-                          expression: ExprSyntax(
-                            MemberAccessExprSyntax(
-                              base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
-                              period: .periodToken(),
-                              declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                            ))
-                        )
-                      ],
-                      rightParen: .rightParenToken()
-                    )
+                      )
+                    ) {
+                      LabeledExprSyntax(
+                        label: .identifier("keyedBy"),
+                        colon: .colonToken(),
+                        expression: ExprSyntax(
+                          MemberAccessExprSyntax(
+                            base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
+                            period: .periodToken(),
+                            declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                          ))
+                      )
+                    }
                   )
                 )
               )
@@ -1490,28 +1387,24 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               initializer: InitializerClauseSyntax(
                 equal: .equalToken(),
                 value: TryExprSyntax(
-                  tryKeyword: .keyword(.try),
                   expression: FunctionCallExprSyntax(
-                    calledExpression: MemberAccessExprSyntax(
+                    callee: MemberAccessExprSyntax(
                       base: DeclReferenceExprSyntax(baseName: .identifier("decoder")),
                       period: .periodToken(),
                       declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
-                    ),
-                    leftParen: .leftParenToken(),
-                    arguments: [
-                      LabeledExprSyntax(
-                        label: .identifier("keyedBy"),
-                        colon: .colonToken(),
-                        expression: ExprSyntax(
-                          MemberAccessExprSyntax(
-                            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
-                            period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                          ))
-                      )
-                    ],
-                    rightParen: .rightParenToken()
-                  )
+                    )
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("keyedBy"),
+                      colon: .colonToken(),
+                      expression: ExprSyntax(
+                        MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                        ))
+                    )
+                  }
                 )
               )
             )
@@ -1524,23 +1417,18 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
               initializer: InitializerClauseSyntax(
                 equal: .equalToken(),
-                value: ExprSyntax(
-                  FunctionCallExprSyntax(
-                    calledExpression: DictionaryExprSyntax(
-                      leftSquare: .leftSquareToken(),
-                      content: DictionaryExprSyntax.Content(
-                        DictionaryElementListSyntax([
-                          DictionaryElementSyntax(
-                            key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
-                            colon: .colonToken(),
-                            value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
-                          )
-                        ])),
-                      rightSquare: .rightSquareToken()
-                    ),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax([]),
-                    rightParen: .rightParenToken()
+                value: FunctionCallExprSyntax(
+                  callee: DictionaryExprSyntax(
+                    leftSquare: .leftSquareToken(),
+                    content: DictionaryExprSyntax.Content(
+                      DictionaryElementListSyntax([
+                        DictionaryElementSyntax(
+                          key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
+                          colon: .colonToken(),
+                          value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                        )
+                      ])),
+                    rightSquare: .rightSquareToken()
                   ))
               )
             )
@@ -1559,75 +1447,55 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               conditions: ConditionElementListSyntax {
                 SequenceExprSyntax {
                   FunctionCallExprSyntax(
-                    calledExpression: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax([
-                      LabeledExprSyntax(
-                        label: .identifier("rawValue"),
-                        colon: .colonToken(),
-                        expression: MemberAccessExprSyntax(
-                          base: DeclReferenceExprSyntax(baseName: .identifier("key")),
-                          period: .periodToken(),
-                          declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
-                        )
+                    callee: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys"))
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("rawValue"),
+                      colon: .colonToken(),
+                      expression: MemberAccessExprSyntax(
+                        base: DeclReferenceExprSyntax(baseName: .identifier("key")),
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
                       )
-                    ]),
-                    rightParen: .rightParenToken()
-                  )
+                    )
+                  }
                   BinaryOperatorExprSyntax(operator: .binaryOperator("=="))
                   NilLiteralExprSyntax()
                 }
-              },
-              elseKeyword: .keyword(.else),
-              body: CodeBlockSyntax(
-                leftBrace: .leftBraceToken(),
-                statements: CodeBlockItemListSyntax([
-                  CodeBlockItemSyntax(item: CodeBlockItemSyntax.Item(ContinueStmtSyntax(continueKeyword: .keyword(.continue))))
-                ]),
-                rightBrace: .rightBraceToken()
-              )
-            )
+              }
+            ) {
+              ContinueStmtSyntax(continueKeyword: .keyword(.continue))
+            }
           }
           SequenceExprSyntax {
             SubscriptCallExprSyntax(
-              calledExpression: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues")),
-              leftSquare: .leftSquareToken(),
-              arguments: LabeledExprListSyntax([
-                LabeledExprSyntax(
-                  expression: MemberAccessExprSyntax(
-                    base: DeclReferenceExprSyntax(baseName: .identifier("key")),
-                    period: .periodToken(),
-                    declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
-                  ))
-              ]),
-              rightSquare: .rightSquareToken()
-            )
+              calledExpression: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
+            ) {
+              LabeledExprSyntax(
+                expression: MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .identifier("key")),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
+                ))
+            }
             AssignmentExprSyntax(equal: .equalToken())
             TryExprSyntax(
               expression: FunctionCallExprSyntax(
-                calledExpression: MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .identifier("unknownContainer")),
-                  period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: .identifier("decode"))
-                ),
-                leftParen: .leftParenToken(),
-                arguments: LabeledExprListSyntax([
-                  LabeledExprSyntax(
-                    expression: MemberAccessExprSyntax(
-                      base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
-                      period: .periodToken(),
-                      declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                    ),
-                    trailingComma: .commaToken()
-                  ),
-                  LabeledExprSyntax(
-                    label: .identifier("forKey"),
-                    colon: .colonToken(),
-                    expression: DeclReferenceExprSyntax(baseName: .identifier("key"))
-                  ),
-                ]),
-                rightParen: .rightParenToken()
-              )
+                callee: MemberAccessExprSyntax(parts: [.identifier("unknownContainer"), .identifier("decode")])
+              ) {
+                LabeledExprSyntax(
+                  expression: MemberAccessExprSyntax(
+                    base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                  )
+                )
+                LabeledExprSyntax(
+                  label: .identifier("forKey"),
+                  colon: .colonToken(),
+                  expression: DeclReferenceExprSyntax(baseName: .identifier("key"))
+                )
+              }
             )
           }
         }
@@ -1741,20 +1609,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
       name: .init(stringLiteral: name),
-      inheritanceClause: InheritanceClauseSyntax(
-        colon: .colonToken(),
-        inheritedTypes: InheritedTypeListSyntax([
-          InheritedTypeSyntax(
-            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Codable"))),
-            trailingComma: .commaToken()
-          ),
-          InheritedTypeSyntax(
-            type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Hashable"))),
-            trailingComma: .commaToken()
-          ),
-          InheritedTypeSyntax(type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Sendable")))),
-        ])
-      )
+      inheritanceClause: InheritanceClauseSyntax(typeNames: ["Codable", "Hashable", "Sendable"])
     ) {
       for ts in tss {
         let id = ts.defName == "main" ? ts.id : #"\#(ts.id)#\#(ts.defName)"#
@@ -1792,10 +1647,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       EnumDeclSyntax(
         leadingTrivia: .newlines(2),
         name: "CodingKeys",
-        inheritanceClause: InheritanceClauseSyntax {
-          InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "String"))
-          InheritedTypeSyntax(type: TypeSyntax(stringLiteral: "CodingKey"))
-        }
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["String", "CodingKey"])
       ) {
         EnumCaseDeclSyntax {
           EnumCaseElementSyntax(
@@ -1814,21 +1666,18 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
             initializer: InitializerClauseSyntax(
               value: TryExprSyntax(
                 expression: FunctionCallExprSyntax(
-                  calledExpression: MemberAccessExprSyntax(
+                  callee: MemberAccessExprSyntax(
                     base: DeclReferenceExprSyntax(baseName: .identifier("decoder")),
                     name: .identifier("container")
-                  ),
-                  leftParen: .leftParenToken(),
-                  arguments: .init([
-                    LabeledExprSyntax(
-                      label: "keyedBy", colon: .colonToken(),
-                      expression: MemberAccessExprSyntax(
-                        base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
-                        name: .keyword(.self)
-                      ))
-                  ]),
-                  rightParen: .rightParenToken()
-                )
+                  )
+                ) {
+                  LabeledExprSyntax(
+                    label: "keyedBy", colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(
+                      base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
+                      name: .keyword(.self)
+                    ))
+                }
               )
             )
           )
@@ -1842,21 +1691,18 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
             initializer: InitializerClauseSyntax(
               value: TryExprSyntax(
                 expression: FunctionCallExprSyntax(
-                  calledExpression: MemberAccessExprSyntax(
+                  callee: MemberAccessExprSyntax(
                     base: DeclReferenceExprSyntax(baseName: .identifier("container")),
                     name: .identifier("decode")
-                  ),
-                  leftParen: .leftParenToken(),
-                  arguments: .init([
-                    LabeledExprSyntax(
-                      expression: MemberAccessExprSyntax(
-                        base: DeclReferenceExprSyntax(baseName: .identifier("String")),
-                        name: .keyword(.self)
-                      ), trailingComma: .commaToken()),
-                    LabeledExprSyntax(label: "forKey", colon: .colonToken(), expression: MemberAccessExprSyntax(name: "type")),
-                  ]),
-                  rightParen: .rightParenToken()
-                )
+                  )
+                ) {
+                  LabeledExprSyntax(
+                    expression: MemberAccessExprSyntax(
+                      base: DeclReferenceExprSyntax(baseName: .identifier("String")),
+                      name: .keyword(.self)
+                    ))
+                  LabeledExprSyntax(label: "forKey", colon: .colonToken(), expression: MemberAccessExprSyntax(name: "type"))
+                }
               )
             )
           )
@@ -1877,25 +1723,19 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                 AssignmentExprSyntax()
                 TryExprSyntax(
                   expression: FunctionCallExprSyntax(
-                    calledExpression: MemberAccessExprSyntax(
+                    callee: MemberAccessExprSyntax(
                       name: .identifier(Lex.caseNameFromId(id: id, prefix: prefix))
-                    ),
-                    leftParen: .leftParenToken(),
-                    arguments: .init([
-                      LabeledExprSyntax(
-                        expression: FunctionCallExprSyntax(
-                          calledExpression: MemberAccessExprSyntax(
-                            name: .keyword(.`init`)
-                          ),
-                          leftParen: .leftParenToken(),
-                          arguments: .init([
-                            LabeledExprSyntax(label: "from", colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .identifier("decoder")))
-                          ]),
-                          rightParen: .rightParenToken()
-                        ))
-                    ]),
-                    rightParen: .rightParenToken()
-                  )
+                    )
+                  ) {
+                    LabeledExprSyntax(
+                      expression: FunctionCallExprSyntax(
+                        callee: MemberAccessExprSyntax(
+                          name: .keyword(.`init`)
+                        )
+                      ) {
+                        LabeledExprSyntax(label: "from", colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .identifier("decoder")))
+                      })
+                  }
                 )
               }
             }
@@ -1906,21 +1746,15 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               AssignmentExprSyntax()
               TryExprSyntax(
                 expression: FunctionCallExprSyntax(
-                  calledExpression: ExprSyntax("._other"),
-                  leftParen: .leftParenToken(),
-                  arguments: .init([
-                    LabeledExprSyntax(
-                      expression: FunctionCallExprSyntax(
-                        calledExpression: ExprSyntax(".init"),
-                        leftParen: .leftParenToken(),
-                        arguments: .init([
-                          LabeledExprSyntax(label: "from", colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .identifier("decoder")))
-                        ]),
-                        rightParen: .rightParenToken()
-                      ))
-                  ]),
-                  rightParen: .rightParenToken()
-                )
+                  callee: ExprSyntax("._other")
+                ) {
+                  LabeledExprSyntax(
+                    expression: FunctionCallExprSyntax(
+                      callee: ExprSyntax(".init")
+                    ) {
+                      LabeledExprSyntax(label: "from", colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .identifier("decoder")))
+                    })
+                }
               )
             }
           }
@@ -1934,21 +1768,18 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
             pattern: IdentifierPatternSyntax(identifier: .identifier("container")),
             initializer: InitializerClauseSyntax(
               value: FunctionCallExprSyntax(
-                calledExpression: MemberAccessExprSyntax(
+                callee: MemberAccessExprSyntax(
                   base: DeclReferenceExprSyntax(baseName: .identifier("encoder")),
                   name: .identifier("container")
-                ),
-                leftParen: .leftParenToken(),
-                arguments: .init([
-                  LabeledExprSyntax(
-                    label: "keyedBy", colon: .colonToken(),
-                    expression: MemberAccessExprSyntax(
-                      base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
-                      name: .keyword(.self)
-                    ))
-                ]),
-                rightParen: .rightParenToken()
-              )
+                )
+              ) {
+                LabeledExprSyntax(
+                  label: "keyedBy", colon: .colonToken(),
+                  expression: MemberAccessExprSyntax(
+                    base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
+                    name: .keyword(.self)
+                  ))
+              }
             )
           )
         }
@@ -1964,79 +1795,63 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                       bindingSpecifier: .keyword(.let),
                       pattern: ExpressionPatternSyntax(
                         expression: FunctionCallExprSyntax(
-                          calledExpression: MemberAccessExprSyntax(name: .identifier(Lex.caseNameFromId(id: id, prefix: prefix))),
-                          leftParen: .leftParenToken(),
-                          arguments: LabeledExprListSyntax([
-                            .init(
-                              expression: PatternExprSyntax(
-                                pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
-                              )
+                          callee: MemberAccessExprSyntax(name: .identifier(Lex.caseNameFromId(id: id, prefix: prefix)))
+                        ) {
+                          .init(
+                            expression: PatternExprSyntax(
+                              pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
                             )
-                          ]),
-                          rightParen: .rightParenToken()
-                        )
+                          )
+                        }
                       )
                     ))
                 ])
               )
             ) {
               TryExprSyntax(
-                tryKeyword: .keyword(.try),
-                expression: ExprSyntax(
-                  FunctionCallExprSyntax(
-                    calledExpression: ExprSyntax(
-                      MemberAccessExprSyntax(
-                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("container"))),
-                        period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
-                      )),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax([
-                      LabeledExprSyntax(
-                        expression: ExprSyntax(
-                          StringLiteralExprSyntax(
-                            openingQuote: .stringQuoteToken(),
-                            segments: StringLiteralSegmentListSyntax([
-                              StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(id)))
-                            ]),
-                            closingQuote: .stringQuoteToken()
-                          )),
-                        trailingComma: .commaToken()
-                      ),
-                      LabeledExprSyntax(
-                        label: .identifier("forKey"),
-                        colon: .colonToken(),
-                        expression: ExprSyntax(
-                          MemberAccessExprSyntax(
-                            period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .identifier("type"))
-                          ))
-                      ),
-                    ]),
-                    rightParen: .rightParenToken()
-                  ))
+                expression: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(
+                    base: DeclReferenceExprSyntax(baseName: .identifier("container")),
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
+                  )
+                ) {
+                  LabeledExprSyntax(
+                    expression: StringLiteralExprSyntax(
+                      openingQuote: .stringQuoteToken(),
+                      segments: StringLiteralSegmentListSyntax([
+                        StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(id)))
+                      ]),
+                      closingQuote: .stringQuoteToken()
+                    )
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("forKey"),
+                    colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .identifier("type"))
+                    )
+                  )
+                }
               )
-
               TryExprSyntax(
-                tryKeyword: .keyword(.try),
                 expression: ExprSyntax(
                   FunctionCallExprSyntax(
-                    calledExpression: ExprSyntax(
+                    callee: ExprSyntax(
                       MemberAccessExprSyntax(
                         base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("value"))),
                         period: .periodToken(),
                         declName: DeclReferenceExprSyntax(baseName: .identifier("encode"))
-                      )),
-                    leftParen: .leftParenToken(),
-                    arguments: LabeledExprListSyntax([
-                      LabeledExprSyntax(
-                        label: .identifier("to"),
-                        colon: .colonToken(),
-                        expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("encoder")))
-                      )
-                    ]),
-                    rightParen: .rightParenToken()
-                  ))
+                      ))
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("to"),
+                      colon: .colonToken(),
+                      expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("encoder")))
+                    )
+                  }
+                )
               )
             }
           }
@@ -2048,24 +1863,20 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                     bindingSpecifier: .keyword(.let),
                     pattern: ExpressionPatternSyntax(
                       expression: FunctionCallExprSyntax(
-                        calledExpression: MemberAccessExprSyntax(name: .identifier("_other")),
-                        leftParen: .leftParenToken(),
-                        arguments: LabeledExprListSyntax([
-                          .init(
-                            expression: PatternExprSyntax(
-                              pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
-                            )
+                        callee: MemberAccessExprSyntax(name: .identifier("_other"))
+                      ) {
+                        .init(
+                          expression: PatternExprSyntax(
+                            pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
                           )
-                        ]),
-                        rightParen: .rightParenToken()
-                      )
+                        )
+                      }
                     )
                   ))
               ])
             )
           ) {
             TryExprSyntax(
-              tryKeyword: .keyword(.try),
               expression: ExprSyntax(
                 FunctionCallExprSyntax(
                   callee: MemberAccessExprSyntax(
