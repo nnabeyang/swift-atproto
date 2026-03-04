@@ -28,7 +28,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
   var isPrimitive: Bool {
     `enum` == nil
   }
-  
+
   func generateDeclaration(leadingTrivia: Trivia? = nil, ts _: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap) -> any DeclSyntaxProtocol {
     if let knownValues = knownValues {
       genCodeStringWithKnownValues(leadingTrivia: leadingTrivia, name: name, knownValues: knownValues)
@@ -38,7 +38,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
       fatalError()
     }
   }
-  
+
   private func genCodeStringWithEnum(leadingTrivia _: Trivia? = nil, name: String, cases: [String]) -> DeclSyntaxProtocol {
     return DeclSyntax(
       EnumDeclSyntax(

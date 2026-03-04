@@ -4,7 +4,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition {
   var type: FieldType { .query }
   let parameters: Parameters?
   let output: OutputType?
-  let input: InputType?
+  var input: InputType? { nil }
   let description: String?
   let errors: [ErrorResponse]?
 
@@ -21,7 +21,6 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     parameters = try container.decodeIfPresent(Parameters.self, forKey: .parameters, configuration: configuration)
     output = try container.decodeIfPresent(OutputType.self, forKey: .output, configuration: configuration)
-    input = try container.decodeIfPresent(InputType.self, forKey: .input, configuration: configuration)
     description = try container.decodeIfPresent(String.self, forKey: .description)
     errors = try container.decodeIfPresent([ErrorResponse].self, forKey: .errors)
   }
