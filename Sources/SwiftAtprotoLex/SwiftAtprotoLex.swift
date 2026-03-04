@@ -149,22 +149,9 @@ enum Lex {
     })
     let recordTypes = allTypes.filter(\.value.isRecord)
     let otherTypes = allTypes.filter { !$0.value.isRecord }
-    let methods: [DeclSyntaxProtocol]? =
-      if let main = schema.defs["main"],
-        main.isMethod
-      {
-        Self.writeMethods(
-          leadingTrivia: otherTypes.isEmpty ? nil : .newlines(2),
-          typeName: Self.nameFromId(id: schema.id, prefix: prefix),
-          typeSchema: main,
-          defMap: defMap,
-          prefix: structNameFor(prefix: prefix)
-        )
-      } else {
-        nil
-      }
-    let enumExtensionIsNeeded = !otherTypes.isEmpty || methods != nil
-    if otherTypes.isEmpty && methods == nil && recordTypes.isEmpty {
+    let methods = allTypes.filter { !$0.value.isRecord && $0.value.isMethod }
+    let enumExtensionIsNeeded = !otherTypes.isEmpty || !methods.isEmpty
+    if otherTypes.isEmpty && methods.isEmpty && recordTypes.isEmpty {
       return nil
     }
     let src = SourceFileSyntax(
@@ -182,15 +169,19 @@ enum Lex {
             for (i, (name, ot)) in otherTypes.enumerated() {
               ot.lex(leadingTrivia: i == 0 ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
             }
-
-            if let methods, methods.count == 2 {
-              methods[0]
-            }
           }
         }
-        if let methods, let method = methods.last {
+        if !methods.isEmpty {
           ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
-            method
+            for method in methods {
+              writeMethod(
+                leadingTrivia: otherTypes.isEmpty ? nil : .newlines(2),
+                typeName: Self.nameFromId(id: method.value.id, prefix: method.value.prefix),
+                typeSchema: method.value,
+                defMap: defMap,
+                prefix: structNameFor(prefix: prefix)
+              )
+            }
           }
         }
         for (i, (name, ot)) in recordTypes.enumerated() {
@@ -201,15 +192,12 @@ enum Lex {
     return src.formatted().description
   }
 
-  static func writeMethods(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> [DeclSyntaxProtocol]? {
+  static func writeMethod(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
     switch ts.type {
     case .procedure(let def as any HTTPAPITypeDefinition), .query(let def as any HTTPAPITypeDefinition):
-      return [
-        ts.writeErrorDecl(leadingTrivia: leadingTrivia, def: def, typeName: typeName, defMap: defMap),
-        ts.writeRPC(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix),
-      ].compactMap(\.self)
+      ts.writeRPC(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix)
     default:
-      return nil
+      fatalError()
     }
   }
 

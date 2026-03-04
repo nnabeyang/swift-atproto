@@ -63,6 +63,7 @@ final class Schema: Encodable, DecodableWithConfiguration, Sendable {
       case .ref:
         break
       case .procedure(let def):
+        out[name] = ts
         if let input = def.input, let schema = input.schema {
           walk?("\(name)_Input", schema)
         }
@@ -70,6 +71,7 @@ final class Schema: Encodable, DecodableWithConfiguration, Sendable {
           walk?("\(name)_Output", schema)
         }
       case .query(let def):
+        out[name] = ts
         if let output = def.output, let schema = output.schema {
           walk?("\(name)_Output", schema)
         }
@@ -525,8 +527,8 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
 
   var isMethod: Bool {
     switch type {
-    case .string, .object, .record, .subscription: false
-    default: true
+    case .procedure, .query: true
+    default: false
     }
   }
 
@@ -720,6 +722,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .union(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
     case .array(let def):
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+    case .procedure(let def):
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+    case .query(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
     default:
       fatalError()
