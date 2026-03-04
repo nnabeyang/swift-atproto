@@ -62,10 +62,14 @@ final class Schema: Encodable, DecodableWithConfiguration, Sendable {
         walk?(key, ts)
       case .ref:
         break
-      case .procedure(let def as any HTTPAPITypeDefinition), .query(let def as any HTTPAPITypeDefinition):
+      case .procedure(let def):
         if let input = def.input, let schema = input.schema {
           walk?("\(name)_Input", schema)
         }
+        if let output = def.output, let schema = output.schema {
+          walk?("\(name)_Output", schema)
+        }
+      case .query(let def):
         if let output = def.output, let schema = output.schema {
           walk?("\(name)_Output", schema)
         }
