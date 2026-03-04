@@ -169,6 +169,50 @@ enum Lex {
             for (i, (name, ot)) in otherTypes.enumerated() {
               ot.lex(leadingTrivia: i == 0 ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
             }
+            for method in methods {
+              TypeAliasDeclSyntax(
+                leadingTrivia: .newlines(2),
+                attributes: [
+                  AttributeListSyntax.Element(
+                    AttributeSyntax(
+                      atSign: .atSignToken(),
+                      attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
+                      leftParen: .leftParenToken(),
+                      arguments: AttributeSyntax.Arguments(
+                        AvailabilityArgumentListSyntax {
+                          AvailabilityArgumentSyntax(
+                            argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
+                          )
+                          AvailabilityArgumentSyntax(
+                            argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
+                          )
+                          AvailabilityArgumentSyntax(
+                            argument: AvailabilityArgumentSyntax.Argument(
+                              AvailabilityLabeledArgumentSyntax(
+                                label: .keyword(.message),
+                                colon: .colonToken(),
+                                value: AvailabilityLabeledArgumentSyntax.Value(
+                                  SimpleStringLiteralExprSyntax(
+                                    openingQuote: .stringQuoteToken(),
+                                    segments: SimpleStringLiteralSegmentListSyntax([
+                                      StringSegmentSyntax(content: .stringSegment("Use `\(method.key).Error` instead."))
+                                    ]),
+                                    closingQuote: .stringQuoteToken()
+                                  ))
+                              )))
+                        }),
+                      rightParen: .rightParenToken()
+                    )
+                  )
+                ],
+                modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+                name: .identifier("\(method.key)_Error"),
+                initializer: TypeInitializerClauseSyntax(
+                  equal: .equalToken(),
+                  value: MemberTypeSyntax(parts: [.identifier(method.key), .identifier("Error")])
+                )
+              )
+            }
           }
         }
         if !methods.isEmpty {
