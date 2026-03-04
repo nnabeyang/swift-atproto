@@ -368,11 +368,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
           ) {
             ThrowStmtSyntax(
               expression: FunctionCallExprSyntax(
-                callee: MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .identifier(prefix)),
-                  period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: .identifier("\(typeName)_Error"))
-                )
+                callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(typeName), .identifier("Error")])
               ) {
                 LabeledExprSyntax(label: .identifier("error"), colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .identifier("error")))
               }

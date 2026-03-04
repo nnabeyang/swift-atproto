@@ -164,6 +164,17 @@ extension HTTPAPITypeDefinition {
   }
 
   func generateDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name typeName: String, type: String, defMap _: ExtDefMap) -> any DeclSyntaxProtocol {
+    return EnumDeclSyntax(
+      modifiers: [
+        DeclModifierSyntax(name: .keyword(.public))
+      ],
+      name: .identifier(ts.typeName)
+    ) {
+      makeErrorDeclaration(leadingTrivia: .spaces(4), ts: ts, name: typeName, type: type)
+    }
+  }
+
+  func makeErrorDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name typeName: String, type: String) -> any DeclSyntaxProtocol {
     let errors = self.errors ?? []
     return EnumDeclSyntax(
       leadingTrivia: leadingTrivia,
@@ -171,7 +182,7 @@ extension HTTPAPITypeDefinition {
         DeclModifierSyntax(name: .keyword(.public)),
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
-      name: .init(stringLiteral: "\(typeName)_Error"),
+      name: .init(stringLiteral: "Error"),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ["XRPCError"])
     ) {
       for error in errors.sorted() {
