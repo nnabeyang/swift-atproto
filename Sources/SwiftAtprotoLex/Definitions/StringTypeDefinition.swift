@@ -1,5 +1,9 @@
 import SwiftSyntax
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
   var type: FieldType { .string }
   let description: String?
@@ -29,7 +33,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
     `enum` == nil
   }
 
-  func generateDeclaration(leadingTrivia: Trivia? = nil, ts _: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap) -> any DeclSyntaxProtocol {
+  func generateDeclaration(leadingTrivia: Trivia? = nil, ts _: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap, generate: GenerateOption) -> any DeclSyntaxProtocol {
     if let knownValues = knownValues {
       genCodeStringWithKnownValues(leadingTrivia: leadingTrivia, name: name, knownValues: knownValues)
     } else if let cases = `enum` {

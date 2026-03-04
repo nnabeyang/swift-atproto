@@ -1,6 +1,10 @@
 import Foundation
 import SwiftSyntax
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 final class ArrayTypeDefinition: Encodable, DecodableWithConfiguration, Sendable, SwiftCodeGeneratable {
   var type: FieldType { .array }
 
@@ -34,7 +38,10 @@ final class ArrayTypeDefinition: Encodable, DecodableWithConfiguration, Sendable
     try container.encodeIfPresent(minLength, forKey: .minLength)
   }
 
-  func generateDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap) -> any DeclSyntaxProtocol {
+  func generateDeclaration(
+    leadingTrivia: Trivia?, ts: TypeSchema, name: String, type typeName: String,
+    defMap: ExtDefMap, generate: GenerateOption
+  ) -> any DeclSyntaxProtocol {
     let key = "elem"
     let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: key, type: items)
     let tname = TypeSchema.typeNameForField(name: name, k: key, v: ts, defMap: defMap)

@@ -1,6 +1,10 @@
 import Foundation
 import SwiftSyntax
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 protocol HTTPAPITypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGeneratable {
   associatedtype DecodingConfiguration = TypeSchema.DecodingConfiguration
   var type: FieldType { get }
@@ -163,7 +167,7 @@ extension HTTPAPITypeDefinition {
     }
   }
 
-  func generateDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name typeName: String, type: String, defMap _: ExtDefMap) -> any DeclSyntaxProtocol {
+  func generateDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name typeName: String, type: String, defMap _: ExtDefMap, generate: GenerateOption) -> any DeclSyntaxProtocol {
     return EnumDeclSyntax(
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))

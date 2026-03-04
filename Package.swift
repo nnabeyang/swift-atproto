@@ -45,6 +45,7 @@ let package = Package(
       dependencies: [
         .product(name: "SwiftSyntax", package: "swift-syntax"),
         .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+        .target(name: "SourceControl", condition: .when(platforms: [.macOS, .linux])),
       ]
     ),
     .target(

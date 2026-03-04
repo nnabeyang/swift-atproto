@@ -2,14 +2,18 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-public func main(outdir: String, path: String) async throws {
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
+public func main(outdir: String, path: String, generate: GenerateOption) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
   let schemasMap = try await decodeSchemasByPrefix(from: fileURLs, baseURL: url)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
   let outdirBaseURL = URL(filePath: outdir)
-  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL)
+  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -63,7 +67,8 @@ func createOutputDirectory(for prefix: String, baseURL: URL) throws {
 func writeSchemaCode(
   for schemasMap: [String: [Schema]],
   with defMap: ExtDefMap,
-  to baseURL: URL
+  to baseURL: URL,
+  generate: GenerateOption
 ) async throws {
   try await withThrowingTaskGroup(of: Void.self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
@@ -83,7 +88,7 @@ func writeSchemaCode(
         try await withThrowingTaskGroup(of: Void.self) { innerGroup in
           for schema in schemas {
             innerGroup.addTask {
-              if let src = Lex.genCode(for: schema, defMap: defMap) {
+              if let src = Lex.genCode(for: schema, defMap: defMap, generate: generate) {
                 let schemaURL = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
                 try src.write(to: schemaURL, atomically: true, encoding: .utf8)
               }
@@ -141,7 +146,7 @@ enum Lex {
     return src.formatted().description
   }
 
-  static func genCode(for schema: Schema, defMap: ExtDefMap) -> String? {
+  static func genCode(for schema: Schema, defMap: ExtDefMap, generate: GenerateOption) -> String? {
     let prefix = schema.prefix
     let structName = Lex.structNameFor(prefix: prefix)
     let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
@@ -167,7 +172,13 @@ enum Lex {
         if enumExtensionIsNeeded {
           ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: structName)) {
             for (i, (name, ot)) in otherTypes.enumerated() {
-              ot.lex(leadingTrivia: i == 0 ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
+              ot.lex(
+                leadingTrivia: i == 0 ? nil : .newlines(2),
+                name: name,
+                type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
+                defMap: defMap,
+                generate: generate
+              )
             }
             for method in methods {
               TypeAliasDeclSyntax(
@@ -229,7 +240,13 @@ enum Lex {
           }
         }
         for (i, (name, ot)) in recordTypes.enumerated() {
-          ot.lex(leadingTrivia: (!enumExtensionIsNeeded && i == 0) ? nil : .newlines(2), name: name, type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)", defMap: defMap)
+          ot.lex(
+            leadingTrivia: (!enumExtensionIsNeeded && i == 0) ? nil : .newlines(2),
+            name: name,
+            type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
+            defMap: defMap,
+            generate: generate
+          )
         }
       },
       trailingTrivia: .newline)

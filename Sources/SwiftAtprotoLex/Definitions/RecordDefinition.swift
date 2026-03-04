@@ -1,6 +1,10 @@
 import Foundation
 import SwiftSyntax
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 struct RecordDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGeneratable {
   typealias DecodingConfiguration = TypeSchema.DecodingConfiguration
 
@@ -30,7 +34,10 @@ struct RecordDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGenerat
     try container.encode(record, forKey: .record)
   }
 
-  func generateDeclaration(leadingTrivia: Trivia? = nil, ts: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap) -> any DeclSyntaxProtocol {
-    record.generateDeclaration(leadingTrivia: leadingTrivia, ts: ts, name: name, type: typeName, defMap: defMap)
+  func generateDeclaration(
+    leadingTrivia: Trivia? = nil, ts: TypeSchema, name: String, type typeName: String,
+    defMap: ExtDefMap, generate: GenerateOption
+  ) -> any DeclSyntaxProtocol {
+    record.generateDeclaration(leadingTrivia: leadingTrivia, ts: ts, name: name, type: typeName, defMap: defMap, generate: generate)
   }
 }

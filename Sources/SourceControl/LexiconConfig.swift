@@ -1,8 +1,65 @@
 import Foundation
 
+public struct GenerateOption: OptionSet, Codable, Sendable {
+  public let rawValue: UInt8
+
+  public init(rawValue: UInt8) {
+    self.rawValue = rawValue
+  }
+
+  public init(from decoder: any Decoder) throws {
+    var options: GenerateOption = []
+    let names: [String]
+    do {
+      names = try [String](from: decoder)
+    } catch DecodingError.typeMismatch {
+      names = try [String(from: decoder)]
+    }
+    for name in names {
+      switch name {
+      case "client":
+        options.insert(.client)
+      case "server":
+        options.insert(.server)
+      default:
+        throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Unknown generate option: \(name)"))
+      }
+    }
+    self = options
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    switch self {
+    case .client:
+      try "client".encode(to: encoder)
+    case .server:
+      try "server".encode(to: encoder)
+    default:
+      throw EncodingError.invalidValue("\(self)", EncodingError.Context(codingPath: [], debugDescription: "Unhandled generate option"))
+    }
+  }
+
+  public static let client = Self(rawValue: 1 << 0)
+  public static let server = Self(rawValue: 1 << 1)
+}
+
 public struct LexiconConfig: Codable, Sendable {
   public let dependencies: [LexiconDependency]
   public let module: String?
+  public let generate: GenerateOption
+
+  enum CodingKeys: String, CodingKey {
+    case dependencies
+    case module
+    case generate
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    dependencies = try container.decode([LexiconDependency].self, forKey: .dependencies)
+    module = try container.decodeIfPresent(String.self, forKey: .module)
+    generate = try container.decodeIfPresent(GenerateOption.self, forKey: .generate) ?? .client
+  }
 }
 
 public struct LexiconDependency: Codable, Sendable {

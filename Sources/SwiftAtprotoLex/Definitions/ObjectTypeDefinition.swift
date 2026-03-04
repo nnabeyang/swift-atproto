@@ -1,6 +1,10 @@
 import Foundation
 import SwiftSyntax
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGeneratable {
   typealias DecodingConfiguration = TypeSchema.DecodingConfiguration
 
@@ -38,7 +42,10 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
   }
 
-  func generateDeclaration(leadingTrivia: Trivia? = nil, ts: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap) -> any DeclSyntaxProtocol {
+  func generateDeclaration(
+    leadingTrivia: Trivia? = nil, ts: TypeSchema, name: String, type typeName: String,
+    defMap: ExtDefMap, generate: GenerateOption
+  ) -> any DeclSyntaxProtocol {
     var required = [String: Bool]()
     for req in self.required ?? [] {
       required[req] = true
