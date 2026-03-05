@@ -74,6 +74,11 @@ func writeSchemaCode(
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
+    if generate.contains(.server) {
+      let serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
+      let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
+      try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
+    }
     for (prefix, schemas) in schemasMap {
       try createOutputDirectory(for: prefix, baseURL: baseURL)
       group.addTask {
@@ -112,7 +117,7 @@ extension URL {
 }
 
 enum Lex {
-  private static var fileHeader: Trivia {
+  static var fileHeader: Trivia {
     Trivia(pieces: [
       .lineComment("//"),
       .newlines(1),
@@ -166,11 +171,28 @@ enum Lex {
           path: [ImportPathComponentSyntax(name: "SwiftAtproto")]
         )
         ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "Foundation")],
-          trailingTrivia: .newlines(2)
+          path: [ImportPathComponentSyntax(name: "Foundation")]
         )
+        if generate.contains(.server) {
+          ImportDeclSyntax(
+            attributes: AttributeListSyntax {
+              AttributeSyntax(
+                atSign: .atSignToken(),
+                attributeName: IdentifierTypeSyntax(name: .identifier("_spi")),
+                leftParen: .leftParenToken(),
+                arguments: AttributeSyntax.Arguments([
+                  LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("Generated"))))
+                ]),
+                rightParen: .rightParenToken()
+              )
+            },
+            path: [
+              ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
+            ]
+          )
+        }
         if enumExtensionIsNeeded {
-          ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: structName)) {
+          ExtensionDeclSyntax(leadingTrivia: .newlines(2), extendedType: TypeSyntax(stringLiteral: structName)) {
             for (i, (name, ot)) in otherTypes.enumerated() {
               ot.lex(
                 leadingTrivia: i == 0 ? nil : .newlines(2),
@@ -226,7 +248,7 @@ enum Lex {
             }
           }
         }
-        if !methods.isEmpty {
+        if generate.contains(.client) && !methods.isEmpty {
           ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
             for method in methods {
               writeMethod(
@@ -239,9 +261,9 @@ enum Lex {
             }
           }
         }
-        for (i, (name, ot)) in recordTypes.enumerated() {
+        for (name, ot) in recordTypes {
           ot.lex(
-            leadingTrivia: (!enumExtensionIsNeeded && i == 0) ? nil : .newlines(2),
+            leadingTrivia: .newlines(2),
             name: name,
             type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
             defMap: defMap,
