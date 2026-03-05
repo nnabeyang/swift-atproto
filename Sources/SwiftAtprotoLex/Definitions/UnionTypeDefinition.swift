@@ -1,12 +1,19 @@
 import SwiftSyntax
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
   var type: FieldType { .union }
   let description: String?
   let refs: [String]
   let closed: Bool?
 
-  func generateDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap) -> any DeclSyntaxProtocol {
+  func generateDeclaration(
+    leadingTrivia: Trivia?, ts: TypeSchema, name: String, type typeName: String,
+    defMap: ExtDefMap, generate: GenerateOption
+  ) -> any DeclSyntaxProtocol {
     var tss = [TypeSchema]()
     for ref in refs {
       let refName: String =

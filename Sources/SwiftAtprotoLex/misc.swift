@@ -60,3 +60,16 @@ private let keywords: [String] = [
 func isNeedEscapingKeyword(_ string: String) -> Bool {
   keywords.contains(string)
 }
+
+#if !os(macOS) && !os(Linux)
+  public struct GenerateOption: OptionSet, Codable, Sendable {
+    public let rawValue: UInt8
+
+    public init(rawValue: UInt8) {
+      self.rawValue = rawValue
+    }
+
+    public static let client = Self(rawValue: 1 << 0)
+    public static let server = Self(rawValue: 1 << 1)
+  }
+#endif

@@ -2,6 +2,10 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 struct TypeInfo {
   let name: String
   let type: TypeSchema
@@ -316,7 +320,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
   func writeRPC(leadingTrivia: Trivia? = nil, def: any HTTPAPITypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
     let fname = typeName
     let arguments = def.rpcArguments(ts: self, fname: fname, defMap: defMap, prefix: prefix)
-    let output = def.rpcOutput(ts: self, fname: fname, defMap: defMap, prefix: prefix)
+    let output = def.rpcOutput(fname: fname, defMap: defMap, prefix: prefix)
     return FunctionDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [
@@ -414,22 +418,22 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     }
   }
 
-  func lex(leadingTrivia: Trivia? = nil, name: String, type typeName: String, defMap: ExtDefMap) -> DeclSyntaxProtocol {
+  func lex(leadingTrivia: Trivia? = nil, name: String, type typeName: String, defMap: ExtDefMap, generate: GenerateOption) -> DeclSyntaxProtocol {
     switch type {
     case .string(let def):
-      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .object(let def):
-      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .record(let def):
-      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .union(let def):
-      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .array(let def):
-      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .procedure(let def):
-      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .query(let def):
-      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap)
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     default:
       fatalError()
     }
@@ -559,6 +563,38 @@ struct OutputType: Encodable, DecodableWithConfiguration {
     encoding = try container.decode(EncodingType.self, forKey: .encoding)
     schema = try container.decodeIfPresent(TypeSchema.self, forKey: .schema, configuration: configuration)
     description = try container.decodeIfPresent(String.self, forKey: .description)
+  }
+
+  func typeName(fname: String, prefix: String, defMap: ExtDefMap, binaryTypeName: String = "Data", isOutput: Bool) -> TokenSyntax {
+    switch encoding {
+    case .json, .jsonl:
+      let token: String = {
+        guard let schema = schema else {
+          return "EmptyResponse"
+        }
+        let outname: String
+        if case .ref(let def) = schema.type {
+          (_, outname) = schema.namesFromRef(ref: def.ref, defMap: defMap)
+        } else {
+          outname = isOutput ? "\(fname)_Output" : "\(fname)_Input"
+        }
+        return "\(prefix).\(outname)"
+      }()
+      return .identifier(token)
+    case .text:
+      return .identifier("String")
+    case .cbor, .car, .any, .mp4:
+      return .identifier(binaryTypeName)
+    }
+  }
+
+  var isBinary: Bool {
+    switch encoding {
+    case .cbor, .car, .any, .mp4:
+      true
+    default:
+      false
+    }
   }
 }
 
