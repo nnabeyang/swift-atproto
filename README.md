@@ -41,9 +41,11 @@ swift package plugin --allow-writing-to-package-directory \
 --allow-network-connections all:443 swift-atproto --outdir <OUTPUT_DIR> --atproto-configuration ./.atproto.json
 ```
 
-Sample configuration file is as follows:
+Sample configuration file is as follows. You can specify whether to generate client code, server code, or both using the `generate` field (defaults to `["client"]`).
+
 ```json
 {
+  "generate": ["client", "server"],
   "dependencies": [
     {
       "location": "https://github.com/bluesky-social/atproto.git",
