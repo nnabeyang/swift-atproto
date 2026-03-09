@@ -103,6 +103,17 @@ public final class GitRepository {
     }
   }
 
+  public func fetch() throws {
+    try lock.withLock {
+      _ = try callGit([
+        "remote",
+        "-v",
+        "update",
+        "-p",
+      ])
+    }
+  }
+
   func isBare() throws -> Bool {
     try lock.withLock {
       let output = try callGit([

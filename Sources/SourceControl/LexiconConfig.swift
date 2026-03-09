@@ -45,7 +45,7 @@ public struct GenerateOption: OptionSet, Codable, Sendable {
 
 public struct LexiconConfig: Codable, Sendable {
   public let dependencies: [LexiconDependency]
-  public let module: String?
+  public let module: String
   public let generate: GenerateOption
 
   enum CodingKeys: String, CodingKey {
@@ -57,9 +57,11 @@ public struct LexiconConfig: Codable, Sendable {
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     dependencies = try container.decode([LexiconDependency].self, forKey: .dependencies)
-    module = try container.decodeIfPresent(String.self, forKey: .module)
+    module = try container.decodeIfPresent(String.self, forKey: .module) ?? Self.defaultModule
     generate = try container.decodeIfPresent(GenerateOption.self, forKey: .generate) ?? .client
   }
+
+  private static let defaultModule = "Sources/Lexicon"
 }
 
 public struct LexiconDependency: Codable, Sendable {
