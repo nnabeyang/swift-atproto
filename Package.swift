@@ -13,6 +13,9 @@ let package = Package(
       targets: ["SwiftAtproto"]
     ),
     .library(
+      name: "ATProtoCrypto",
+      targets: ["ATProtoCrypto"]),
+    .library(
       name: "ATProtoMacro",
       targets: ["ATProtoMacro"]),
     .executable(
@@ -26,11 +29,13 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
+    .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.0.2"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.3.1"),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
     .package(url: "https://github.com/apple/swift-crypto", exact: "3.10.2"),
+    .package(url: "https://github.com/GigaBitcoin/secp256k1.swift.git", exact: "0.18.0"),
   ],
   targets: [
     .target(
@@ -39,6 +44,14 @@ let package = Package(
         .product(name: "CID", package: "swift-cid"),
         .product(name: "AsyncHTTPClient", package: "async-http-client", condition: .when(platforms: [.linux])),
         .product(name: "NIOHTTP1", package: "swift-nio", condition: .when(platforms: [.linux])),
+      ]
+    ),
+    .target(
+      name: "ATProtoCrypto",
+      dependencies: [
+        .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "secp256k1", package: "secp256k1.swift"),
+        .product(name: "Multibase", package: "swift-multibase"),
       ]
     ),
     .target(
@@ -87,6 +100,10 @@ let package = Package(
         .product(name: "SwiftSyntax", package: "swift-syntax"),
         .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
       ]
+    ),
+    .testTarget(
+      name: "ATProtoCryptoTests",
+      dependencies: ["ATProtoCrypto"]
     ),
     .plugin(
       name: "Generate Source Code",
