@@ -1,3 +1,4 @@
+import Crypto
 import Foundation
 
 public var version: String { "0.33.0" }
@@ -28,9 +29,19 @@ public func lexiconsDirectoryURL(packageRootURL: URL) -> URL {
   packageRootURL.appending(components: ".lexicons", "lexicons")
 }
 
-public func main(rootURL: URL, config: LexiconConfig, module: String) throws {
+public func lockFileURL(packageRootURL: URL) -> URL {
+  packageRootURL.appending(component: ".atproto-lock.json")
+}
+
+public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig {
+  let data = try Data(contentsOf: configurationURL)
+  let originHash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  let config = try JSONDecoder().decode(LexiconConfig.self, from: data)
+  let module = outdir ?? config.module
+  let rootURL = configurationURL.deletingLastPathComponent()
   let checkoutDirectory = checkoutDirectoryURL(packageRootURL: rootURL)
   let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
+  let lockFileURL = lockFileURL(packageRootURL: rootURL)
 
   if !FileManager.default.fileExists(atPath: lexiconsDirectory.path()) {
     try FileManager.default.createDirectory(at: lexiconsDirectory, withIntermediateDirectories: true)
@@ -42,21 +53,32 @@ public func main(rootURL: URL, config: LexiconConfig, module: String) throws {
       name = String(name.dropLast(4))
     }
     let destURL = checkoutDirectory.appending(component: name)
+    let clone: GitRepository
     if !GitRepositoryProvider.workingCopyExists(at: destURL.path()) {
-      let clone = try GitRepositoryProvider.createWorkingCopy(
+      clone = try GitRepositoryProvider.createWorkingCopy(
         sourcePath: dependency.location.absoluteString,
         at: destURL.path())
-      let revision: String
-      switch dependency.state {
-      case .tag(let tag):
-        try clone.checkout(tag: tag)
-        revision = try clone.resolveRevision(tag: tag)
-      case .revision(let identifier):
-        revision = try clone.resolveRevision(identifier: identifier)
-        try clone.checkout(revision: revision)
+    } else {
+      if let resolvedStore = try? LexiconsStore.load(from: lockFileURL),
+        originHash == resolvedStore.originHash
+      {
+        return config
       }
-      resolvedDendencies.append(.init(config: dependency, revision: revision))
+      clone = GitRepositoryProvider.openWorkingCopy(at: destURL.path())
+      // try clone.fetch()
     }
+
+    let revision: String
+    switch dependency.state {
+    case .tag(let tag):
+      try clone.checkout(tag: tag)
+      revision = try clone.resolveRevision(tag: tag)
+    case .revision(let identifier):
+      revision = try clone.resolveRevision(identifier: identifier)
+      try clone.checkout(revision: revision)
+    }
+    resolvedDendencies.append(.init(config: dependency, revision: revision))
+
     for lexicon in dependency.lexicons {
       let srcBaseURL = destURL.appending(component: lexicon.path)
       for name in try FileManager.default.contentsOfDirectory(atPath: srcBaseURL.path()) {
@@ -72,8 +94,8 @@ public func main(rootURL: URL, config: LexiconConfig, module: String) throws {
       }
     }
   }
-  if resolvedDendencies.count == config.dependencies.count {
-    let store = LexiconsStore(generator: version, module: module, dependencies: resolvedDendencies)
-    try store.write(to: rootURL.appending(component: ".atproto-lock.json"))
-  }
+  guard resolvedDendencies.count == config.dependencies.count else { return config }
+  let store = LexiconsStore(originHash: originHash, generator: version, module: module, dependencies: resolvedDendencies)
+  try store.write(to: lockFileURL)
+  return config
 }

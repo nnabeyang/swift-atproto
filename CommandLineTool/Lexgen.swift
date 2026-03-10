@@ -24,14 +24,11 @@ struct Lexgen: AsyncParsableCommand {
 
   mutating func run() async throws {
     #if os(macOS)
-      let configurationtURL = URL(filePath: configuration)
-      let data = try Data(contentsOf: configurationtURL)
-      let config = try JSONDecoder().decode(LexiconConfig.self, from: data)
-      let module = outdir ?? config.module ?? Self.defaultModulePath
-      let rootURL = configurationtURL.deletingLastPathComponent()
-      try SourceControl.main(rootURL: rootURL, config: config, module: module)
+      let configurationURL = URL(filePath: configuration)
+      let rootURL = configurationURL.deletingLastPathComponent()
+      let config = try SourceControl.main(configurationURL: configurationURL, outdir: outdir)
       try await SwiftAtprotoLex.main(
-        outdir: module,
+        outdir: config.module,
         path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path(),
         generate: config.generate
       )

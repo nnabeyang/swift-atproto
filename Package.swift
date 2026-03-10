@@ -30,6 +30,7 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.3.1"),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
+    .package(url: "https://github.com/apple/swift-crypto", exact: "3.10.2"),
   ],
   targets: [
     .target(
@@ -49,7 +50,10 @@ let package = Package(
       ]
     ),
     .target(
-      name: "SourceControl"
+      name: "SourceControl",
+      dependencies: [
+        .product(name: "Crypto", package: "swift-crypto")
+      ]
     ),
     .executableTarget(
       name: "swift-atproto",
