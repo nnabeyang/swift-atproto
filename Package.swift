@@ -23,8 +23,16 @@ let package = Package(
       targets: ["swift-atproto"]
     ),
     .plugin(
+      name: "ATProtoLexiconFetcher",
+      targets: ["ATProtoLexiconFetcher"]
+    ),
+    .plugin(
       name: "SwiftAtprotoPlugin",
       targets: ["Generate Source Code"]
+    ),
+    .plugin(
+      name: "ATProtoGenerator",
+      targets: ["ATProtoGenerator"]
     ),
   ],
   dependencies: [
@@ -106,9 +114,20 @@ let package = Package(
       dependencies: ["ATProtoCrypto"]
     ),
     .plugin(
+      name: "ATProtoLexiconFetcher",
+      capability: .command(
+        intent: .custom(verb: "swift-atproto-fetch", description: "Fetch AT Protocol lexicons files from remote resources."),
+        permissions: [
+          .writeToPackageDirectory(reason: "To save the downloaded lexicons to your project."),
+          .allowNetworkConnections(scope: .all(ports: [443]), reason: "fetch lexicons"),
+        ]
+      ),
+      dependencies: [.target(name: "swift-atproto")],
+    ),
+    .plugin(
       name: "Generate Source Code",
       capability: .command(
-        intent: .custom(verb: "swift-atproto", description: "Formats Swift source files using SwiftFormat"),
+        intent: .custom(verb: "swift-atproto", description: "Generate source code from AT Protocol definitions."),
         permissions: [
           .writeToPackageDirectory(reason: "This command reformats source files"),
           .allowNetworkConnections(scope: .all(ports: [443]), reason: "fetch lexicons"),
@@ -116,5 +135,6 @@ let package = Package(
       ),
       dependencies: [.target(name: "swift-atproto")],
       path: "Plugins/SwiftAtprotoPlugin"),
+    .plugin(name: "ATProtoGenerator", capability: .buildTool(), dependencies: ["swift-atproto"]),
   ]
 )

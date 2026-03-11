@@ -70,41 +70,57 @@ func writeSchemaCode(
   to baseURL: URL,
   generate: GenerateOption
 ) async throws {
-  try await withThrowingTaskGroup(of: Void.self) { group in
+  var srcs = try await withThrowingTaskGroup(of: (String?, Int).self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
+    let serverSrc: String
     if generate.contains(.server) {
-      let serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
-      let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
-      try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
+      serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
+    } else {
+      serverSrc = ""
     }
-    for (prefix, schemas) in schemasMap {
-      try createOutputDirectory(for: prefix, baseURL: baseURL)
+    let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
+    try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
+    for (i, (prefix, schemas)) in schemasMap.enumerated() {
       group.addTask {
-        let filePrefix = prefix.split(separator: ".").joined()
-        let outdirURL = baseURL.appending(path: filePrefix)
-
-        let enumName = Lex.structNameFor(prefix: prefix)
-        let baseFileURL = outdirURL.appending(path: "\(enumName).swift")
         let baseSrc = Lex.baseFile(prefix: prefix)
-        try baseSrc.write(to: baseFileURL, atomically: true, encoding: .utf8)
-
-        try await withThrowingTaskGroup(of: Void.self) { innerGroup in
-          for schema in schemas {
+        let srcs = try await withThrowingTaskGroup(of: (String?, Int).self) { innerGroup in
+          for (j, schema) in schemas.enumerated() {
             innerGroup.addTask {
-              if let src = Lex.genCode(for: schema, defMap: defMap, generate: generate) {
-                let schemaURL = outdirURL.appending(path: "\(filePrefix)_\(schema.name).swift")
-                try src.write(to: schemaURL, atomically: true, encoding: .utf8)
-              }
+              let src: String? = Lex.genCode(for: schema, defMap: defMap, generate: generate)
+              return (src, j)
             }
           }
-          try await innerGroup.waitForAll()
+          var srcs: [String?] = Array(repeating: nil, count: schemas.count)
+          for try await (src, j) in innerGroup {
+            srcs[j] = src
+          }
+          return srcs
         }
+        return (baseSrc + srcs.compactMap({ $0 }).joined(separator: "\n"), i)
       }
     }
-    try await group.waitForAll()
+    var srcs: [String?] = Array(repeating: nil, count: schemasMap.count)
+    for try await (src, i) in group {
+      srcs[i] = src
+    }
+    return srcs
   }
+  srcs.insert(
+    SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
+      ImportDeclSyntax(
+        path: [ImportPathComponentSyntax(name: "Foundation")]
+      )
+      ImportDeclSyntax(
+        path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
+        trailingTrivia: .newlines(2)
+      )
+    }.formatted().description, at: 0)
+
+  let clientSrc = srcs.compactMap({ $0 }).joined(separator: "\n")
+  let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
+  try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
 
 extension URL {
@@ -134,12 +150,7 @@ enum Lex {
 
   static func baseFile(prefix: String) -> String {
     let src = SourceFileSyntax(
-      leadingTrivia: Self.fileHeader,
       statementsBuilder: {
-        ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
-          trailingTrivia: .newlines(2)
-        )
         EnumDeclSyntax(
           modifiers: [
             DeclModifierSyntax(name: .keyword(.public))
@@ -165,14 +176,7 @@ enum Lex {
       return nil
     }
     let src = SourceFileSyntax(
-      leadingTrivia: Self.fileHeader,
       statementsBuilder: {
-        ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "SwiftAtproto")]
-        )
-        ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "Foundation")]
-        )
         if generate.contains(.server) {
           ImportDeclSyntax(
             attributes: AttributeListSyntax {
