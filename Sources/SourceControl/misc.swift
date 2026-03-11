@@ -36,8 +36,8 @@ public func lockFileURL(packageRootURL: URL) -> URL {
 public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig {
   let data = try Data(contentsOf: configurationURL)
   let originHash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-  let config = try JSONDecoder().decode(LexiconConfig.self, from: data)
-  let module = outdir ?? config.module
+  let config = try JSONDecoder().decode(LexiconConfig.self, from: data, configuration: outdir)
+
   let rootURL = configurationURL.deletingLastPathComponent()
   let checkoutDirectory = checkoutDirectoryURL(packageRootURL: rootURL)
   let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
@@ -95,7 +95,7 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
     }
   }
   guard resolvedDendencies.count == config.dependencies.count else { return config }
-  let store = LexiconsStore(originHash: originHash, generator: version, module: module, dependencies: resolvedDendencies)
+  let store = LexiconsStore(originHash: originHash, generator: version, module: config.module, dependencies: resolvedDendencies)
   try store.write(to: lockFileURL)
   return config
 }
