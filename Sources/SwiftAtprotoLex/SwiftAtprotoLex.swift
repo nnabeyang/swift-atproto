@@ -74,11 +74,14 @@ func writeSchemaCode(
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
+    let serverSrc: String
     if generate.contains(.server) {
-      let serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
-      let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
-      try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
+      serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
+    } else {
+      serverSrc = ""
     }
+    let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
+    try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
     for (i, (prefix, schemas)) in schemasMap.enumerated() {
       group.addTask {
         let baseSrc = Lex.baseFile(prefix: prefix)

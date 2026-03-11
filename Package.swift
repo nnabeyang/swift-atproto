@@ -114,6 +114,17 @@ let package = Package(
       dependencies: ["ATProtoCrypto"]
     ),
     .plugin(
+      name: "ATProtoLexiconFetcher",
+      capability: .command(
+        intent: .custom(verb: "swift-atproto-fetch", description: "Fetch AT Protocol lexicons files from remote resources."),
+        permissions: [
+          .writeToPackageDirectory(reason: "To save the downloaded lexicons to your project."),
+          .allowNetworkConnections(scope: .all(ports: [443]), reason: "fetch lexicons"),
+        ]
+      ),
+      dependencies: [.target(name: "swift-atproto")],
+    ),
+    .plugin(
       name: "Generate Source Code",
       capability: .command(
         intent: .custom(verb: "swift-atproto", description: "Formats Swift source files using SwiftFormat"),
@@ -124,5 +135,6 @@ let package = Package(
       ),
       dependencies: [.target(name: "swift-atproto")],
       path: "Plugins/SwiftAtprotoPlugin"),
+    .plugin(name: "ATProtoGenerator", capability: .buildTool(), dependencies: ["swift-atproto"]),
   ]
 )
