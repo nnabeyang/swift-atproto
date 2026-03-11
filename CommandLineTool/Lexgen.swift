@@ -20,6 +20,8 @@ struct Lexgen: AsyncParsableCommand {
     var configuration: String
     @Option(name: .long)
     var outdir: String?
+    @Flag(name: .customLong("fetch-only"))
+    var fetchOnly = false
   #endif
 
   mutating func run() async throws {
@@ -27,6 +29,7 @@ struct Lexgen: AsyncParsableCommand {
       let configurationURL = URL(filePath: configuration)
       let rootURL = configurationURL.deletingLastPathComponent()
       let config = try SourceControl.main(configurationURL: configurationURL, outdir: outdir)
+      guard !fetchOnly else { return }
       try await SwiftAtprotoLex.main(
         outdir: config.module,
         path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path(),
