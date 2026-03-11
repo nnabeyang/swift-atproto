@@ -127,7 +127,7 @@ let package = Package(
     .plugin(
       name: "Generate Source Code",
       capability: .command(
-        intent: .custom(verb: "swift-atproto", description: "Formats Swift source files using SwiftFormat"),
+        intent: .custom(verb: "swift-atproto", description: "Generate source code from AT Protocol definitions."),
         permissions: [
           .writeToPackageDirectory(reason: "This command reformats source files"),
           .allowNetworkConnections(scope: .all(ports: [443]), reason: "fetch lexicons"),
