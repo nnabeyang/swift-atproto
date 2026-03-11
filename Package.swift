@@ -23,8 +23,16 @@ let package = Package(
       targets: ["swift-atproto"]
     ),
     .plugin(
+      name: "ATProtoLexiconFetcher",
+      targets: ["ATProtoLexiconFetcher"]
+    ),
+    .plugin(
       name: "SwiftAtprotoPlugin",
       targets: ["Generate Source Code"]
+    ),
+    .plugin(
+      name: "ATProtoGenerator",
+      targets: ["ATProtoGenerator"]
     ),
   ],
   dependencies: [
