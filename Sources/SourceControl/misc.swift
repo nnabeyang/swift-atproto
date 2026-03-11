@@ -65,7 +65,7 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
         return config
       }
       clone = GitRepositoryProvider.openWorkingCopy(at: destURL.path())
-      // try clone.fetch()
+      try clone.fetch()
     }
 
     let revision: String
