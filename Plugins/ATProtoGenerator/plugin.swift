@@ -39,11 +39,21 @@ extension ATProtoGeneratorPlugin: BuildToolPlugin {
     }
     return try createBuildCommands(
       pluginWorkDirectoryURL: context.pluginWorkDirectoryURL,
-      configurationFileURL: context.package.directoryURL.appending(component: ".atproto.json"),
+      configurationFileURL: configurationFileURL(
+        packageDirectoryURL: context.package.directoryURL,
+        targetDirectoryURL: swiftTarget.directoryURL),
       tool: context.tool,
       sourceFiles: swiftTarget.sourceFiles,
       targetName: target.name
     )
+  }
+
+  private func configurationFileURL(packageDirectoryURL: URL, targetDirectoryURL: URL) -> URL {
+    let targetURL = targetDirectoryURL.appending(component: ".atproto.json")
+    if FileManager.default.fileExists(atPath: targetURL.path(percentEncoded: false)) {
+      return targetURL
+    }
+    return packageDirectoryURL.appending(component: ".atproto.json")
   }
 }
 

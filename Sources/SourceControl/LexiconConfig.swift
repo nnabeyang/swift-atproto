@@ -61,7 +61,7 @@ public struct LexiconConfig: Encodable, DecodableWithConfiguration, Sendable {
     generate = try container.decodeIfPresent(GenerateOption.self, forKey: .generate) ?? .client
   }
 
-  private static let defaultModule = "Sources/Lexicon"
+  private static let defaultModule = "."
 }
 
 public struct LexiconDependency: Codable, Sendable {

@@ -33,7 +33,10 @@ extension SwiftAtprotoPlugin: CommandPlugin {
     var argExtractor = ArgumentExtractor(arguments)
     let configurationFilePath: String? =
       if argExtractor.extractOption(named: "atproto-configuration").first == nil {
-        context.package.directoryURL.appending(component: ".atproto.json").path()
+        configurationFileURL(
+          packageDirectoryURL: context.package.directoryURL,
+          currentDirectoryURL: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        ).path(percentEncoded: false)
       } else {
         nil
       }
@@ -42,6 +45,14 @@ extension SwiftAtprotoPlugin: CommandPlugin {
       tool: codeGenerationTool,
       outputDirectoryPath: outputDirectoryPath,
       configurationFilePath: configurationFilePath)
+  }
+
+  private func configurationFileURL(packageDirectoryURL: URL, currentDirectoryURL: URL) -> URL {
+    let currentURL = currentDirectoryURL.appending(component: ".atproto.json")
+    if FileManager.default.fileExists(atPath: currentURL.path(percentEncoded: false)) {
+      return currentURL
+    }
+    return packageDirectoryURL.appending(component: ".atproto.json")
   }
 }
 
