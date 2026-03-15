@@ -14,8 +14,6 @@ struct Lexgen: AsyncParsableCommand {
     }
   #endif
   #if os(macOS)
-    private static let defaultModulePath = "Sources/Lexicon"
-
     @Option(name: .customLong("atproto-configuration"))
     var configuration: String
     @Option(name: .long)
