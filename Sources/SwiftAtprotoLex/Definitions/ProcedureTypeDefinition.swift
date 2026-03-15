@@ -220,12 +220,11 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                   leftAngle: .leftAngleToken(),
                                   arguments: GenericArgumentListSyntax([
                                     GenericArgumentSyntax(
-                                      argument: GenericArgumentSyntax.Argument(
-                                        MemberTypeSyntax(
-                                          baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
-                                          period: .periodToken(),
-                                          name: .identifier("AcceptableContentType")
-                                        )))
+                                      argument: MemberTypeSyntax(
+                                        baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                                        period: .periodToken(),
+                                        name: .identifier("AcceptableContentType")
+                                      ))
                                   ]),
                                   rightAngle: .rightAngleToken()
                                 )
@@ -256,12 +255,11 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                               name: .identifier("AcceptHeaderContentType"),
                               genericArgumentClause: GenericArgumentClauseSyntax {
                                 GenericArgumentSyntax(
-                                  argument: GenericArgumentSyntax.Argument(
-                                    MemberTypeSyntax(
-                                      baseType: IdentifierTypeSyntax(name: .identifier(ts.typeName)),
-                                      period: .periodToken(),
-                                      name: .identifier("AcceptableContentType")
-                                    ))
+                                  argument: MemberTypeSyntax(
+                                    baseType: IdentifierTypeSyntax(name: .identifier(ts.typeName)),
+                                    period: .periodToken(),
+                                    name: .identifier("AcceptableContentType")
+                                  )
                                 )
                               }
                             ),
