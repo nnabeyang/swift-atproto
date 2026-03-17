@@ -80,16 +80,29 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
     resolvedDendencies.append(.init(config: dependency, revision: revision))
 
     for lexicon in dependency.lexicons {
-      let srcBaseURL = destURL.appending(component: lexicon.path)
-      for name in try FileManager.default.contentsOfDirectory(atPath: srcBaseURL.path()) {
-        let srcURL = srcBaseURL.appending(component: name)
-        let lexiconBaseDirectory = lexiconsDirectory.appending(component: lexicon.prefix.replacingOccurrences(of: ".", with: "/"))
-        if !FileManager.default.fileExists(atPath: lexiconBaseDirectory.path()) {
-          try FileManager.default.createDirectory(at: lexiconBaseDirectory, withIntermediateDirectories: true)
+      if let nsIds = lexicon.nsIds {
+        let srcBaseURL = destURL.appending(component: lexicon.rootPath)
+        for nsId in nsIds {
+          let dest = nsId.url(from: lexiconsDirectory)
+          if !FileManager.default.fileExists(atPath: dest.deletingLastPathComponent().path(percentEncoded: false)) {
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+          }
+          try FileManager.default.copyItem(
+            at: nsId.url(from: srcBaseURL),
+            to: dest)
         }
-        let lexiconDirectory = lexiconBaseDirectory.appending(component: name)
-        if !FileManager.default.fileExists(atPath: lexiconDirectory.path()) {
-          try FileManager.default.copyItem(at: srcURL, to: lexiconDirectory)
+      } else {
+        let srcBaseURL = destURL.appending(component: lexicon.path)
+        for name in try FileManager.default.contentsOfDirectory(atPath: srcBaseURL.path()) {
+          let srcURL = srcBaseURL.appending(component: name)
+          let lexiconBaseDirectory = lexiconsDirectory.appending(component: lexicon.prefix.replacingOccurrences(of: ".", with: "/"))
+          if !FileManager.default.fileExists(atPath: lexiconBaseDirectory.path()) {
+            try FileManager.default.createDirectory(at: lexiconBaseDirectory, withIntermediateDirectories: true)
+          }
+          let lexiconDirectory = lexiconBaseDirectory.appending(component: name)
+          if !FileManager.default.fileExists(atPath: lexiconDirectory.path()) {
+            try FileManager.default.copyItem(at: srcURL, to: lexiconDirectory)
+          }
         }
       }
     }

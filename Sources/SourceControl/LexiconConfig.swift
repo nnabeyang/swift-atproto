@@ -68,6 +68,19 @@ public struct LexiconDependency: Codable, Sendable {
   public struct Lexicon: Codable, Sendable {
     public let prefix: String
     public let path: String
+    public let nsIds: [NSID]?
+
+    public var rootPath: String {
+      if path.hasSuffix(prefixAsPath) {
+        let index = path.index(path.endIndex, offsetBy: -prefixAsPath.count)
+        return String(path[..<index]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+      }
+      return path  // 一致しない場合は path そのものを返すか、空にする
+    }
+
+    private var prefixAsPath: String {
+      prefix.replacingOccurrences(of: ".", with: "/")
+    }
   }
 
   public enum SourceState: Codable, Sendable {
