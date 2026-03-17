@@ -44,7 +44,11 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   let lockFileURL = lockFileURL(packageRootURL: rootURL)
 
   if FileManager.default.fileExists(atPath: lexiconsDirectory.path()) {
-    try FileManager.default.removeItem(at: lexiconsDirectory)
+    do {
+      try FileManager.default.removeItem(at: lexiconsDirectory)
+    } catch {
+      return config
+    }
   }
   try FileManager.default.createDirectory(at: lexiconsDirectory, withIntermediateDirectories: true)
   var resolvedDendencies = [ResolvedLexiconDependency]()
