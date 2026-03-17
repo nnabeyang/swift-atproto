@@ -40,11 +40,11 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
         let id = cts.defName == "main" ? cts.id : #"\#(cts.id)#\#(cts.defName)"#
         let tn: TypeSyntaxProtocol =
           cts.prefix == ts.prefix
-          ? IdentifierTypeSyntax(name: .identifier(cts.typeName))
+          ? IdentifierTypeSyntax(name: .identifier(cts.typeName.escapedSwiftKeyword))
           : MemberTypeSyntax(
             baseType: IdentifierTypeSyntax(name: .identifier(Lex.structNameFor(prefix: cts.prefix))),
             period: .periodToken(),
-            name: .identifier(cts.typeName)
+            name: .identifier(cts.typeName.escapedSwiftKeyword)
           )
 
         EnumCaseDeclSyntax {

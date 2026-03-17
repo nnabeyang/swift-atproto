@@ -228,7 +228,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
     ) {
       for value in knownValues {
         EnumCaseDeclSyntax {
-          .init(name: .identifier(value.camelCased()))
+          .init(name: .identifier(value.camelCased().escapedSwiftKeyword))
         }
       }
       EnumCaseDeclSyntax {
