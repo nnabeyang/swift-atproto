@@ -70,6 +70,7 @@ func writeSchemaCode(
   to baseURL: URL,
   generate: GenerateOption
 ) async throws {
+  let schemasArray = schemasMap.sorted { $0.key < $1.key }
   var srcs = try await withThrowingTaskGroup(of: (String?, Int).self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
@@ -82,11 +83,11 @@ func writeSchemaCode(
     }
     let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
     try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
-    for (i, (prefix, schemas)) in schemasMap.enumerated() {
+    for (i, (prefix, schemas)) in schemasArray.enumerated() {
       group.addTask {
         let baseSrc = Lex.baseFile(prefix: prefix)
         let srcs = try await withThrowingTaskGroup(of: (String?, Int).self) { innerGroup in
-          for (j, schema) in schemas.enumerated() {
+          for (j, schema) in schemas.sorted(by: { $0.id < $1.id }).enumerated() {
             innerGroup.addTask {
               let src: String? = Lex.genCode(for: schema, defMap: defMap, generate: generate)
               return (src, j)
