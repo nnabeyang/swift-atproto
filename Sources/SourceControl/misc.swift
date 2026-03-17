@@ -42,7 +42,11 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   let checkoutDirectory = checkoutDirectoryURL(packageRootURL: rootURL)
   let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
   let lockFileURL = lockFileURL(packageRootURL: rootURL)
-
+  if let resolvedStore = try? LexiconsStore.load(from: lockFileURL),
+    originHash == resolvedStore.originHash
+  {
+    return config
+  }
   if FileManager.default.fileExists(atPath: lexiconsDirectory.path()) {
     try FileManager.default.removeItem(at: lexiconsDirectory)
   }
@@ -60,11 +64,6 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
         sourcePath: dependency.location.absoluteString,
         at: destURL.path())
     } else {
-      if let resolvedStore = try? LexiconsStore.load(from: lockFileURL),
-        originHash == resolvedStore.originHash
-      {
-        return config
-      }
       clone = GitRepositoryProvider.openWorkingCopy(at: destURL.path())
       try clone.fetch()
     }
