@@ -50,24 +50,39 @@ Sample configuration file is as follows. You can specify whether to generate cli
     {
       "location": "https://github.com/bluesky-social/atproto.git",
       "lexicons": [
-        { "prefix": "app.bsky", "path": "lexicons/app/bsky" },
-        { "prefix": "com.atproto", "path": "lexicons/com/atproto" },
-        { "prefix": "tools/ozone", "path": "lexicons/tools/ozone" }
-      ],
-      "state": {
-        "tag": "@atproto/api@0.15.5"
-      }
-    },
-    {
-      "location": "https://github.com/nnabeyang/soyokaze-lexicons.git",
-      "lexicons": [
         {
-          "prefix": "com.nnabeyang.soyokaze",
-          "path": "lexicons/com/nnabeyang/soyokaze"
+          "prefix": "app.bsky",
+          "path": "lexicons/app/bsky",
+          "nsIds": [
+            "app.bsky.actor.defs",
+            "app.bsky.embed.defs",
+            "app.bsky.embed.external",
+            "app.bsky.embed.images",
+            "app.bsky.embed.record",
+            "app.bsky.embed.recordWithMedia",
+            "app.bsky.embed.video",
+            "app.bsky.feed.defs",
+            "app.bsky.feed.getPosts",
+            "app.bsky.graph.defs",
+            "app.bsky.feed.threadgate",
+            "app.bsky.labeler.defs",
+            "app.bsky.richtext.facet",
+            "app.bsky.feed.postgate",
+            "app.bsky.notification.defs"
+          ]
+        },
+        {
+          "prefix": "com.atproto",
+          "path": "lexicons/com/atproto",
+          "nsIds": [
+            "com.atproto.label.defs",
+            "com.atproto.moderation.defs",
+            "com.atproto.repo.strongRef"
+          ]
         }
       ],
       "state": {
-        "tag": "0.0.1"
+        "tag": "@atproto/api@0.19.3"
       }
     }
   ],
