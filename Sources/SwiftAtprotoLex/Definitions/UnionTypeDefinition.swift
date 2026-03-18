@@ -22,9 +22,10 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
         } else {
           ref
         }
-      if let cts = defMap[refName]?.type {
-        tss.append(cts)
+      guard let cts = defMap[refName] else {
+        fatalError("no such ref: \(refName)")
       }
+      tss.append(cts.type)
     }
 
     return EnumDeclSyntax(
