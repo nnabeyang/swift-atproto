@@ -73,6 +73,28 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return queries
   }
 
+  func params(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [(key: String, isRequired: Bool, type: DeclReferenceExprSyntax)] {
+    var queries = [(key: String, isRequired: Bool, type: DeclReferenceExprSyntax)]()
+    guard let parameters else { return queries }
+    var required = [String: Bool]()
+    for req in parameters.required ?? [] {
+      required[req] = true
+    }
+    for (name, t) in parameters.sortedProperties {
+      let isRequired = required[name] ?? false
+      let tn: String
+      if case .string(let def) = t, def.enum != nil || def.knownValues != nil {
+        tn = "\(prefix).\(fname)_\(name.titleCased())"
+      } else {
+        let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
+        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
+      }
+      let type = DeclReferenceExprSyntax(baseName: .identifier(tn))
+      queries.append((key: name, isRequired: isRequired, type: type))
+    }
+    return queries
+  }
+
   var contentType: String {
     "*/*"
   }

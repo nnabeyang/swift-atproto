@@ -4,16 +4,21 @@ import SwiftSyntaxBuilder
 
 extension Lex {
   static func genXRPCAPIProtocolFile(for schemasMap: [String: [Schema]], defMap: ExtDefMap) -> String {
-    var procedureTypes = [(key: String, prefix: String, value: TypeSchema, def: ProcedureTypeDefinition)]()
+    var methodTypes = [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]()
     for schemas in schemasMap {
       for schema in schemas.value {
-        if let main = schema.defs["main"], case .procedure(let def) = main.type {
+        if let main = schema.defs["main"] {
           let prefix = Lex.structNameFor(prefix: main.prefix)
-          procedureTypes.append((Self.nameFromId(id: schema.id, prefix: schema.prefix), prefix, main, def))
+          switch main.type {
+          case .procedure(let def as any HTTPAPITypeDefinition), .query(let def as any HTTPAPITypeDefinition):
+            methodTypes.append((Self.nameFromId(id: schema.id, prefix: schema.prefix), prefix, main, def))
+          default:
+            break
+          }
         }
       }
     }
-    procedureTypes = procedureTypes.sorted(by: { $0.value.id < $1.value.id })
+    methodTypes = methodTypes.sorted(by: { $0.value.id < $1.value.id })
     let src = SourceFileSyntax(
       leadingTrivia: fileHeader,
       statementsBuilder: {
@@ -43,15 +48,15 @@ extension Lex {
           ],
           trailingTrivia: .newlines(2)
         )
-        genXRPCAPIProtocol(for: procedureTypes)
-        genXRPCExtension(for: procedureTypes)
-        genUnversalServerExtension(for: procedureTypes, defMap: defMap)
+        genXRPCAPIProtocol(for: methodTypes)
+        genXRPCExtension(for: methodTypes)
+        genUnversalServerExtension(for: methodTypes, defMap: defMap)
       },
       trailingTrivia: .newlines(2))
     return src.formatted().description
   }
 
-  private static func genXRPCAPIProtocol(leadingTrivia _: Trivia? = nil, for procedureTypes: [(key: String, prefix: String, value: TypeSchema, def: ProcedureTypeDefinition)]) -> ProtocolDeclSyntax {
+  private static func genXRPCAPIProtocol(leadingTrivia _: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> ProtocolDeclSyntax {
     ProtocolDeclSyntax(
       leadingTrivia: nil,
       modifiers: [
@@ -60,20 +65,20 @@ extension Lex {
       name: .identifier("XRPCAPIProtocol"),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable"])
     ) {
-      for (key, _, scheme, _) in procedureTypes {
+      for (key, _, scheme, _) in methodTypes {
         genXRPCFunctionDeclSyntax(key: key, scheme: scheme)
       }
     }
   }
 
-  private static func genXRPCExtension(leadingTrivia: Trivia? = nil, for procedureTypes: [(key: String, prefix: String, value: TypeSchema, def: ProcedureTypeDefinition)]) -> ExtensionDeclSyntax {
+  private static func genXRPCExtension(leadingTrivia: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> ExtensionDeclSyntax {
     ExtensionDeclSyntax(
       extendedType: IdentifierTypeSyntax(name: .identifier("XRPCAPIProtocol"))
     ) {
-      for (key, prefix, _, _) in procedureTypes {
+      for (key, prefix, _, _) in methodTypes {
         makeXRPCMethodStub(key: key, prefix: prefix)
       }
-      genRegisterHandlers(for: procedureTypes)
+      genRegisterHandlers(for: methodTypes)
     }
   }
 
@@ -168,7 +173,53 @@ extension Lex {
     )
   }
 
-  private static func makeHandlerRegistration(leadingTrivia: Trivia? = nil, prefix: String, type: String) -> TryExprSyntax {
+  private static func genXRPCFunctionDeclSyntaxQuery(leadingTrivia: Trivia? = nil, key: String, scheme: TypeSchema) -> FunctionDeclSyntax {
+    let prefix = Lex.structNameFor(prefix: scheme.prefix)
+    return FunctionDeclSyntax(
+      leadingTrivia: [.newlines(1), .spaces(2)],
+      name: .identifier("\(prefix)_\(key)"),
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax(
+          leftParen: .leftParenToken(),
+          parameters: [
+            FunctionParameterSyntax(
+              firstName: .wildcardToken(),
+              secondName: .identifier("input"),
+              colon: .colonToken(),
+              type: MemberTypeSyntax(
+                baseType: MemberTypeSyntax(
+                  baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+                  period: .periodToken(),
+                  name: .identifier(key)
+                ),
+                period: .periodToken(),
+                name: .identifier("Input")
+              )
+            )
+          ],
+          rightParen: .rightParenToken()
+        ),
+        effectSpecifiers: FunctionEffectSpecifiersSyntax(
+          asyncSpecifier: .keyword(.async),
+          throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+        ),
+        returnClause: ReturnClauseSyntax(
+          arrow: .arrowToken(),
+          type: MemberTypeSyntax(
+            baseType: MemberTypeSyntax(
+              baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+              period: .periodToken(),
+              name: .identifier(key)
+            ),
+            period: .periodToken(),
+            name: .identifier("Output")
+          )
+        )
+      )
+    )
+  }
+
+  private static func makeHandlerRegistration(leadingTrivia: Trivia? = nil, prefix: String, type: String, method: String) -> TryExprSyntax {
     TryExprSyntax(
       leadingTrivia: leadingTrivia,
       expression: FunctionCallExprSyntax(
@@ -200,7 +251,7 @@ extension Lex {
         LabeledExprSyntax(
           label: .identifier("method", leadingTrivia: [.newlines(1), .spaces(6)]),
           colon: .colonToken(),
-          expression: MemberAccessExprSyntax(declName: DeclReferenceExprSyntax(baseName: .identifier("post")))
+          expression: MemberAccessExprSyntax(declName: DeclReferenceExprSyntax(baseName: .identifier(method)))
         )
         LabeledExprSyntax(
           label: .identifier("path", leadingTrivia: [.newlines(1), .spaces(6)]),
@@ -226,7 +277,7 @@ extension Lex {
     )
   }
 
-  private static func genRegisterHandlers(leadingTrivia: Trivia? = nil, for procedureTypes: [(key: String, prefix: String, value: TypeSchema, def: ProcedureTypeDefinition)]) -> FunctionDeclSyntax {
+  private static func genRegisterHandlers(leadingTrivia: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> FunctionDeclSyntax {
     FunctionDeclSyntax(
       leadingTrivia: .spaces(2),
       modifiers: [
@@ -326,15 +377,24 @@ extension Lex {
         )
       }
 
-      for (type, prefix, _, _) in procedureTypes {
-        makeHandlerRegistration(leadingTrivia: .spaces(4), prefix: prefix, type: type)
+      for (type, prefix, _, def) in methodTypes {
+        let method: String =
+          switch def {
+          case is QueryTypeDefinition:
+            "get"
+          case is ProcedureTypeDefinition:
+            "post"
+          default:
+            fatalError("unreachable")
+          }
+        makeHandlerRegistration(leadingTrivia: .spaces(4), prefix: prefix, type: type, method: method)
       }
     }
     .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: [.spaces(2)]))
   }
 
   private static func genUnversalServerExtension(
-    leadingTrivia: Trivia? = nil, for procedureTypes: [(key: String, prefix: String, value: TypeSchema, def: ProcedureTypeDefinition)],
+    leadingTrivia: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)],
     defMap: ExtDefMap
   ) -> ExtensionDeclSyntax {
     ExtensionDeclSyntax(
@@ -351,13 +411,13 @@ extension Lex {
         ])
       )
     ) {
-      for (key, prefix, schema, def) in procedureTypes {
+      for (key, prefix, schema, def) in methodTypes {
         makeHandlerMethod(key: key, prefix: prefix, schema: schema, def: def, defMap: defMap)
       }
     }
   }
 
-  private static func makeHandlerMethod(leadingTrivia: Trivia? = nil, key: String, prefix: String, schema: TypeSchema, def: ProcedureTypeDefinition, defMap: ExtDefMap) -> FunctionDeclSyntax {
+  private static func makeHandlerMethod(leadingTrivia: Trivia? = nil, key: String, prefix: String, schema: TypeSchema, def: any HTTPAPITypeDefinition, defMap: ExtDefMap) -> FunctionDeclSyntax {
     FunctionDeclSyntax(
       leadingTrivia: .spaces(2),
       name: .identifier("\(prefix)_\(key)"),
@@ -479,6 +539,17 @@ extension Lex {
   }
 
   /// `deserializer`
+  private static func makeDeserializerExpr(key: String, prefix: String, schema: TypeSchema, def: any HTTPAPITypeDefinition, defMap: ExtDefMap) -> ClosureExprSyntax {
+    switch def {
+    case let def as ProcedureTypeDefinition:
+      makeDeserializerExpr(key: key, prefix: prefix, schema: schema, def: def, defMap: defMap)
+    case let def as QueryTypeDefinition:
+      makeDeserializerExpr(key: key, prefix: prefix, schema: schema, def: def, defMap: defMap)
+    default:
+      fatalError("Unhandled definition type: \(def)")
+    }
+  }
+
   private static func makeDeserializerExpr(key: String, prefix: String, schema: TypeSchema, def: ProcedureTypeDefinition, defMap: ExtDefMap) -> ClosureExprSyntax {
     ClosureExprSyntax(signaturesBuilder: {
       ClosureShorthandParameterSyntax(name: .identifier("request"))
@@ -578,6 +649,140 @@ extension Lex {
       )
     }
     .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)]))
+  }
+
+  private static func makeDeserializerExpr(key: String, prefix: String, schema: TypeSchema, def: QueryTypeDefinition, defMap: ExtDefMap) -> ClosureExprSyntax {
+    return ClosureExprSyntax(signaturesBuilder: {
+      ClosureShorthandParameterSyntax(name: .identifier("request"))
+      ClosureShorthandParameterSyntax(name: .identifier("requestBody"))
+      ClosureShorthandParameterSyntax(name: .identifier("metadata"))
+    }) {
+      for (i, (key, isRequired, type)) in def.params(ts: schema, fname: key, defMap: defMap, prefix: prefix).enumerated() {
+        VariableDeclSyntax(
+          leadingTrivia: [.newlines(1), .spaces(10)],
+          bindingSpecifier: .keyword(.let)
+        ) {
+          PatternBindingSyntax(
+            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("query\(i)"))),
+            initializer: InitializerClauseSyntax(
+              equal: .equalToken(),
+              value: TryExprSyntax(
+                expression: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(parts: [
+                    .identifier("converter"),
+                    .identifier(isRequired ? "getRequiredQueryItemAsURI" : "getOptionalQueryItemAsURI"),
+                  ])
+                ) {
+                  LabeledExprSyntax(
+                    label: .identifier("in", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("soar_query")])
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("style", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .identifier("form"))
+                    )
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("explode", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    colon: .colonToken(),
+                    expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("name", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: key)
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("as", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    colon: .colonToken(),
+                    expression: ExprSyntax(
+                      MemberAccessExprSyntax(
+                        base: type,
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                      ))
+                  )
+                }
+                .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+              )
+            )
+          )
+        }
+      }
+      VariableDeclSyntax(
+        bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)])
+      ) {
+        PatternBindingSyntax(
+          pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("query"))),
+          initializer: InitializerClauseSyntax(
+            equal: .equalToken(),
+            value: FunctionCallExprSyntax(
+              callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Query")])
+            ) {
+              for (i, (key, _)) in (def.parameters?.sortedProperties ?? []).enumerated() {
+                LabeledExprSyntax(
+                  label: .identifier(key),
+                  colon: .colonToken(),
+                  expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query\(i)")))
+                )
+              }
+            }
+          )
+        )
+      }
+      VariableDeclSyntax(
+        bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)])
+      ) {
+        PatternBindingSyntax(
+          pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("headers"))),
+          initializer: InitializerClauseSyntax(
+            equal: .equalToken(),
+            value: FunctionCallExprSyntax(
+              callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Headers")])
+            ) {
+              LabeledExprSyntax(
+                label: .identifier("accept"),
+                colon: .colonToken(),
+                expression: TryExprSyntax(
+                  expression: FunctionCallExprSyntax(
+                    callee: MemberAccessExprSyntax(parts: [.identifier("converter"), .identifier("extractAcceptHeaderIfPresent")])
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("in"),
+                      colon: .colonToken(),
+                      expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("headerFields")])
+                    )
+                  }
+                )
+              )
+            }
+          )
+        )
+      }
+      ReturnStmtSyntax(
+        returnKeyword: .keyword(.return, leadingTrivia: [.newlines(1), .spaces(10)]),
+        expression: FunctionCallExprSyntax(
+          callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
+        ) {
+          LabeledExprSyntax(
+            label: .identifier("query", leadingTrivia: [.newlines(1), .spaces(12)]),
+            colon: .colonToken(trailingTrivia: .space),
+            expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query"))),
+            trailingComma: .commaToken()
+          )
+          LabeledExprSyntax(
+            label: .identifier("headers", leadingTrivia: [.newlines(1), .spaces(12)]),
+            colon: .colonToken(trailingTrivia: .space),
+            expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("headers")))
+          )
+        }
+        .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+      )
+    }
   }
   /// `serializer`
   private static func makeSerializerExpr() -> ClosureExprSyntax {
