@@ -13,6 +13,10 @@ struct XRPCTestClient: XRPCClientProtocol {
 
   var auth: any XRPCAuth
 
+  func getAuthorizationHeaders(endpoint: String, method: SwiftAtproto.HTTPMethod) -> [String: String] {
+    fatalError()
+  }
+
   func tokenIsExpired(error _: SwiftAtproto.UnExpectedError) -> Bool {
     fatalError()
   }

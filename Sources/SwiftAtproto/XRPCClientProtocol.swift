@@ -16,7 +16,13 @@ public protocol ATPClientProtocol: Sendable {
 
   func getProxy(nsid: String) -> String?
   func tokenIsExpired(error: UnExpectedError) -> Bool
+  @available(
+    *, deprecated, renamed: "getAuthorizationHeaders(endpoint:method:)",
+    message: "Use 'getAuthorizationHeaders' to support OAuth (DPoP) and other flexible authentication methods."
+  )
   func getAuthorization(endpoint: String) -> String?
+
+  func getAuthorizationHeaders(endpoint: String, method: HTTPMethod) -> [String: String]
 
   mutating func fetch<T: Decodable>(
     endpoint: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?,
@@ -96,6 +102,7 @@ extension XRPCClientProtocol {
 extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
   public static var errorDomain: String { "ATPErrorDomain" }
+  public func getAuthorization(endpoint: String) -> String? { nil }
 
   private static func encode(_ string: String, component: XRPCComponent) -> String {
     switch component {
@@ -116,9 +123,10 @@ extension ATPClientProtocol {
 
     var request = URLRequest(url: url)
     request.addValue("application/json", forHTTPHeaderField: "Accept")
-    if let authorization = getAuthorization(endpoint: nsid) {
-      request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
+    for (key, value) in getAuthorizationHeaders(endpoint: nsid, method: httpMethod) {
+      request.addValue(value, forHTTPHeaderField: key)
     }
+
     if let proxy = getProxy(nsid: nsid) {
       request.addValue(proxy, forHTTPHeaderField: "atproto-proxy")
     }
