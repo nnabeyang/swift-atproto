@@ -74,23 +74,30 @@ public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
   }
 
   extension HTTPClient {
-    func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
+    func executeTask(for request: URLRequest) async throws -> (Data, UInt, [String: String]) {
       let response = try await execute(request, timeout: .seconds(30))
+      var responseHeaders: [String: String] = [:]
+      for header in response.headers {
+        responseHeaders[header.name] = header.value
+      }
+
       let expectedBytes = response.headers.first(name: "content-length").flatMap(Int.init) ?? 1024 * 1024
       var body = try await response.body.collect(upTo: expectedBytes)
       let data = Data(body.readableBytesView)
-      return (data, response.status.code)
+      return (data, response.status.code, responseHeaders)
     }
   }
 #else
   typealias HTTPClient = URLSession
   extension HTTPClient {
-    func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
+    func executeTask(for request: URLRequest) async throws -> (Data, UInt, [String: String]) {
       let (data, response) = try await URLSession.shared.data(for: request)
       guard let httpResponse = response as? HTTPURLResponse else {
         fatalError()
       }
-      return (data, UInt(httpResponse.statusCode))
+      let responseHeaders = httpResponse.allHeaderFields as? [String: String] ?? [:]
+
+      return (data, UInt(httpResponse.statusCode), responseHeaders)
     }
   }
 #endif
@@ -152,7 +159,7 @@ extension ATPClientProtocol {
       }
     }
 
-    let (data, statusCode) = try await HTTPClient.shared.executeTask(for: request)
+    let (data, statusCode, _) = try await HTTPClient.shared.executeTask(for: request)
 
     guard 200...299 ~= statusCode else {
       if let error = try? decoder.decode(UnExpectedError.self, from: data) {
