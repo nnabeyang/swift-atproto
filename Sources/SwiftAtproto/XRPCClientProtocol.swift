@@ -31,8 +31,6 @@ public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
   var auth: any XRPCAuth { get set }
 
   mutating func signout()
-
-  static var moduleName: String { get }
 }
 
 #if os(Linux)
@@ -93,7 +91,6 @@ public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
 
 extension XRPCClientProtocol {
   public static var errorDomain: String { "XRPCErrorDomain" }
-  public static var moduleName: String { _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? "" }
 }
 
 extension ATPClientProtocol {
