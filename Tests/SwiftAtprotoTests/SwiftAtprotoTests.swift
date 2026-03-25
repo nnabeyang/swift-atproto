@@ -17,7 +17,7 @@ struct XRPCTestClient: XRPCClientProtocol {
     fatalError()
   }
 
-  func tokenIsExpired(error _: SwiftAtproto.UnExpectedError) -> Bool {
+  func isRetriable(error: UnExpectedError?, statusCode: UInt, headers: [String: String]) async -> Bool {
     fatalError()
   }
 

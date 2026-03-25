@@ -15,7 +15,12 @@ public protocol ATPClientProtocol: Sendable {
   var decoder: JSONDecoder { get }
 
   func getProxy(nsid: String) -> String?
+
   func tokenIsExpired(error: UnExpectedError) -> Bool
+
+  func isRetriable(error: UnExpectedError?, statusCode: UInt, headers: [String: String]) async -> Bool
+  func shouldRetry(statusCode: UInt, data: Data, headers: [String: String]) async throws(UnExpectedError) -> Bool
+
   @available(
     *, deprecated, renamed: "getAuthorizationHeaders(endpoint:method:)",
     message: "Use 'getAuthorizationHeaders' to support OAuth (DPoP) and other flexible authentication methods."
@@ -110,6 +115,7 @@ extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
   public static var errorDomain: String { "ATPErrorDomain" }
   public func getAuthorization(endpoint: String) -> String? { nil }
+  public func tokenIsExpired(error _: SwiftAtproto.UnExpectedError) -> Bool { false }
 
   private static func encode(_ string: String, component: XRPCComponent) -> String {
     switch component {
@@ -118,6 +124,11 @@ extension ATPClientProtocol {
     case .parameter:
       string.addingPercentEncoding(withAllowedCharacters: .parameterAllowed) ?? string
     }
+  }
+
+  public func shouldRetry(statusCode: UInt, data: Data, headers: [String: String]) async throws(UnExpectedError) -> Bool {
+    let error = try? decoder.decode(UnExpectedError.self, from: data)
+    return await isRetriable(error: error, statusCode: statusCode, headers: headers)
   }
 
   public mutating func fetch<T: Decodable>(
@@ -159,17 +170,14 @@ extension ATPClientProtocol {
       }
     }
 
-    let (data, statusCode, _) = try await HTTPClient.shared.executeTask(for: request)
+    let (data, statusCode, headers) = try await HTTPClient.shared.executeTask(for: request)
 
     guard 200...299 ~= statusCode else {
-      if let error = try? decoder.decode(UnExpectedError.self, from: data) {
-        if tokenIsExpired(error: error), retry, await refreshSession() {
-          return try await fetch(
-            endpoint: Self.encode(nsid, component: .nsid), contentType: contentType, httpMethod: httpMethod,
-            params: params, input: input, retry: false
-          )
-        }
-        throw error
+      if try await shouldRetry(statusCode: statusCode, data: data, headers: headers), retry {
+        return try await fetch(
+          endpoint: Self.encode(nsid, component: .nsid), contentType: contentType, httpMethod: httpMethod,
+          params: params, input: input, retry: false
+        )
       } else {
         let message = String(decoding: data, as: UTF8.self)
         throw NSError(domain: Self.errorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(statusCode))"])
