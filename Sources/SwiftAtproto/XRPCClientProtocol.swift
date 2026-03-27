@@ -18,8 +18,8 @@ public protocol ATPClientProtocol: Sendable {
 
   func tokenIsExpired(error: UnExpectedError) -> Bool
 
-  func isRetriable(error: UnExpectedError?, statusCode: UInt, headers: [String: String]) async -> Bool
-  func shouldRetry(statusCode: UInt, data: Data, headers: [String: String]) async throws(UnExpectedError) -> Bool
+  mutating func isRetriable(error: UnExpectedError?, statusCode: UInt, headers: [String: String]) async -> Bool
+  mutating func shouldRetry(statusCode: UInt, data: Data, headers: [String: String]) async throws(UnExpectedError) -> Bool
 
   @available(
     *, deprecated, renamed: "getAuthorizationHeaders(endpoint:method:)",
@@ -126,7 +126,7 @@ extension ATPClientProtocol {
     }
   }
 
-  public func shouldRetry(statusCode: UInt, data: Data, headers: [String: String]) async throws(UnExpectedError) -> Bool {
+  public mutating func shouldRetry(statusCode: UInt, data: Data, headers: [String: String]) async throws(UnExpectedError) -> Bool {
     let error = try? decoder.decode(UnExpectedError.self, from: data)
     return await isRetriable(error: error, statusCode: statusCode, headers: headers)
   }
