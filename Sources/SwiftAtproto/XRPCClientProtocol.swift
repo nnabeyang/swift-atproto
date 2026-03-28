@@ -2,7 +2,6 @@ import Foundation
 
 #if os(Linux)
   import AsyncHTTPClient
-  import NIOFoundationCompat
   import NIOHTTP1
 #endif
 
@@ -75,7 +74,7 @@ public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
       let response = try await execute(request, timeout: .seconds(30))
       let expectedBytes = response.headers.first(name: "content-length").flatMap(Int.init) ?? 1024 * 1024
       var body = try await response.body.collect(upTo: expectedBytes)
-      let data = body.readData(length: body.readableBytes)!
+      let data = Data(body.readableBytesView)
       return (data, response.status.code)
     }
   }
