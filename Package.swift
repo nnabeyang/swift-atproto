@@ -43,7 +43,7 @@ let package = Package(
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
     .package(url: "https://github.com/apple/swift-crypto", exact: "3.10.2"),
-    .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.18.0"),
+    .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.18.0"..<"0.20.0"),
   ],
   targets: [
     .target(

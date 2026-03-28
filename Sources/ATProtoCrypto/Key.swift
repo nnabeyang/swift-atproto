@@ -240,8 +240,19 @@ extension secp256k1.Signing.PublicKey {
       var pubKeyLen = format.length
       var combinedKey = secp256k1_pubkey()
       var combinedBytes = [UInt8](repeating: 0, count: pubKeyLen)
-
-      let item = Swift.withUnsafeBytes(of: rawRepresentation) { buf in
+      var pubkey = secp256k1_pubkey()
+      let result = dataRepresentation.withUnsafeBytes { (rawPtr: UnsafeRawBufferPointer) in
+        secp256k1_ec_pubkey_parse(
+          context,
+          &pubkey,
+          rawPtr.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          dataRepresentation.count
+        )
+      }
+      guard result == 1 else {
+        throw secp256k1Error.underlyingCryptoError
+      }
+      let item = withUnsafeBytes(of: pubkey) { buf in
         buf.baseAddress!.assumingMemoryBound(to: secp256k1_pubkey.self)
       }
       guard secp256k1_ec_pubkey_combine(context, &combinedKey, [item], 1) > 0,
