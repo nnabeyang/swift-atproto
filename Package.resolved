@@ -1,5 +1,5 @@
 {
-  "originHash" : "88a0a0ff61f7cf61689c113932f46c958068c7c8ba048f3f17b6083fc4c36844",
+  "originHash" : "828c84e41f1caeb468f822d50a588b567608147bf890d88af3c3c3be625f06d1",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "c9c3df6ab812de32bae61fc0cd1bf6d45170ebf0",
         "version" : "1.8.2"
-      }
-    },
-    {
-      "identity" : "secp256k1.swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/GigaBitcoin/secp256k1.swift.git",
-      "state" : {
-        "revision" : "57ce9af6db14e0114af631ace25231a9d0ccccbd",
-        "version" : "0.18.0"
       }
     },
     {
@@ -51,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-asn1.git",
       "state" : {
-        "revision" : "810496cf121e525d660cd0ea89a758740476b85f",
-        "version" : "1.5.1"
+        "revision" : "9f542610331815e29cc3821d3b6f488db8715517",
+        "version" : "1.6.0"
       }
     },
     {
@@ -206,6 +197,15 @@
       "state" : {
         "revision" : "0a5bc04095a675662cf24757cc0640aa2204253b",
         "version" : "1.0.2"
+      }
+    },
+    {
+      "identity" : "swift-secp256k1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/21-DOT-DEV/swift-secp256k1",
+      "state" : {
+        "revision" : "57ce9af6db14e0114af631ace25231a9d0ccccbd",
+        "version" : "0.18.0"
       }
     },
     {
