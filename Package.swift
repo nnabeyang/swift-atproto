@@ -39,10 +39,10 @@ let package = Package(
     .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
     .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.0.2"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"603.0.0"),
-    .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.3.1"),
+    .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMajor(from: "1.3.1")),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
-    .package(url: "https://github.com/apple/swift-crypto", exact: "3.10.2"),
+    .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.0.0")),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.18.0"..<"0.20.0"),
   ],
   targets: [
