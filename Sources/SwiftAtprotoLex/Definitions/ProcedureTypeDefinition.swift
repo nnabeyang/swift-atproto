@@ -219,7 +219,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                 genericArgumentClause: GenericArgumentClauseSyntax(
                                   leftAngle: .leftAngleToken(),
                                   arguments: GenericArgumentListSyntax([
-                                    GenericArgumentSyntax(
+                                    GenericArgumentSyntax.create(
                                       argument: MemberTypeSyntax(
                                         baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
                                         period: .periodToken(),
@@ -254,7 +254,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                               period: .periodToken(),
                               name: .identifier("AcceptHeaderContentType"),
                               genericArgumentClause: GenericArgumentClauseSyntax {
-                                GenericArgumentSyntax(
+                                GenericArgumentSyntax.create(
                                   argument: MemberTypeSyntax(
                                     baseType: IdentifierTypeSyntax(name: .identifier(ts.typeName)),
                                     period: .periodToken(),
