@@ -334,7 +334,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                 genericArgumentClause: GenericArgumentClauseSyntax(
                                   leftAngle: .leftAngleToken(),
                                   arguments: GenericArgumentListSyntax([
-                                    GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier("AcceptableContentType")))
+                                    GenericArgumentSyntax.create(argument: IdentifierTypeSyntax(name: .identifier("AcceptableContentType")))
                                   ]),
                                   rightAngle: .rightAngleToken()
                                 )
@@ -370,7 +370,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                   genericArgumentClause: GenericArgumentClauseSyntax(
                                     leftAngle: .leftAngleToken(),
                                     arguments: GenericArgumentListSyntax([
-                                      GenericArgumentSyntax(argument: IdentifierTypeSyntax(name: .identifier("AcceptableContentType")))
+                                      GenericArgumentSyntax.create(argument: IdentifierTypeSyntax(name: .identifier("AcceptableContentType")))
                                     ]),
                                     rightAngle: .rightAngleToken()
                                   )

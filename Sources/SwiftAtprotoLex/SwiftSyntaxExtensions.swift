@@ -139,3 +139,15 @@ package func memberInitializer(leadingTrivia: Trivia? = nil, members: [(String, 
     }
   }
 }
+
+extension GenericArgumentSyntax {
+  static func create(argument: some TypeSyntaxProtocol) -> GenericArgumentSyntax {
+    #if canImport(SwiftSyntax601)
+      GenericArgumentSyntax(
+        argument: GenericArgumentSyntax.Argument(argument)
+      )
+    #else
+      GenericArgumentSyntax(argument: argument)
+    #endif
+  }
+}
