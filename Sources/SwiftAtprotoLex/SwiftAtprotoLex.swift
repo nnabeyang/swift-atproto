@@ -115,8 +115,27 @@ func writeSchemaCode(
       )
       ImportDeclSyntax(
         path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
-        trailingTrivia: .newlines(2)
+        trailingTrivia: generate.contains(.server) ? nil : .newlines(2)
       )
+      if generate.contains(.server) {
+        ImportDeclSyntax(
+          attributes: AttributeListSyntax {
+            AttributeSyntax(
+              atSign: .atSignToken(),
+              attributeName: IdentifierTypeSyntax(name: .identifier("_spi")),
+              leftParen: .leftParenToken(),
+              arguments: AttributeSyntax.Arguments([
+                LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("Generated"))))
+              ]),
+              rightParen: .rightParenToken()
+            )
+          },
+          path: [
+            ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
+          ],
+          trailingTrivia: .newlines(2)
+        )
+      }
     }.formatted().description, at: 0)
 
   let clientSrc = srcs.compactMap({ $0 }).joined(separator: "\n")
@@ -178,26 +197,8 @@ enum Lex {
     }
     let src = SourceFileSyntax(
       statementsBuilder: {
-        if generate.contains(.server) {
-          ImportDeclSyntax(
-            attributes: AttributeListSyntax {
-              AttributeSyntax(
-                atSign: .atSignToken(),
-                attributeName: IdentifierTypeSyntax(name: .identifier("_spi")),
-                leftParen: .leftParenToken(),
-                arguments: AttributeSyntax.Arguments([
-                  LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("Generated"))))
-                ]),
-                rightParen: .rightParenToken()
-              )
-            },
-            path: [
-              ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
-            ]
-          )
-        }
         if enumExtensionIsNeeded {
-          ExtensionDeclSyntax(leadingTrivia: .newlines(2), extendedType: TypeSyntax(stringLiteral: structName)) {
+          ExtensionDeclSyntax(leadingTrivia: .newline, extendedType: TypeSyntax(stringLiteral: structName)) {
             for (i, (name, ot)) in otherTypes.enumerated() {
               ot.lex(
                 leadingTrivia: i == 0 ? nil : .newlines(2),
