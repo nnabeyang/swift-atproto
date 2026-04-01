@@ -71,7 +71,7 @@ func writeSchemaCode(
   generate: GenerateOption
 ) async throws {
   let schemasArray = schemasMap.sorted { $0.key < $1.key }
-  var srcs = try await withThrowingTaskGroup(of: (String?, Int).self) { group in
+  let (blocks, methods) = try await withThrowingTaskGroup(of: (CodeBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
@@ -85,43 +85,112 @@ func writeSchemaCode(
     try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
     for (i, (prefix, schemas)) in schemasArray.enumerated() {
       group.addTask {
-        let baseSrc = Lex.baseFile(prefix: prefix)
-        let srcs = try await withThrowingTaskGroup(of: (String?, Int).self) { innerGroup in
+        let (types, methods, records) = try await withThrowingTaskGroup(of: (MemberBlockItemListSyntax, MemberBlockItemListSyntax, CodeBlockItemListSyntax, Int).self) { innerGroup in
           for (j, schema) in schemas.sorted(by: { $0.id < $1.id }).enumerated() {
             innerGroup.addTask {
-              let src: String? = Lex.genCode(for: schema, defMap: defMap, generate: generate)
-              return (src, j)
+              let prefix = schema.prefix
+              let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
+                $0.key.localizedStandardCompare($1.key) == .orderedAscending
+              })
+              let otherTypes = allTypes.filter { !$0.value.isRecord }
+              let methodTypes = allTypes.filter { !$0.value.isRecord && $0.value.isMethod }
+              let recordTypes = allTypes.filter(\.value.isRecord)
+
+              let types = Lex.genTypes(prefix: prefix, otherTypes: otherTypes, methods: methodTypes, defMap: defMap, generate: generate)
+              let methods = Lex.genMethods(leadingTrivia: otherTypes.isEmpty ? nil : .spaces(2), prefix: prefix, otherTypes: otherTypes, methods: methodTypes, defMap: defMap, generate: generate)
+              let records = Lex.genRecords(recordTypes: recordTypes, defMap: defMap, generate: generate)
+              return (types, methods, records, j)
             }
           }
-          var srcs: [String?] = Array(repeating: nil, count: schemas.count)
-          for try await (src, j) in innerGroup {
-            srcs[j] = src
+          var types: [MemberBlockItemListSyntax?] = Array(repeating: nil, count: schemas.count)
+          var methods: [MemberBlockItemListSyntax?] = Array(repeating: nil, count: schemas.count)
+          var records: [CodeBlockItemListSyntax?] = Array(repeating: nil, count: schemas.count)
+          for try await (type, method, record, j) in innerGroup {
+            types[j] = type
+            methods[j] = method
+            records[j] = record
           }
-          return srcs
+          return (combine(types.compactMap({ $0 })), combine(methods.compactMap({ $0 })), combine(records.compactMap({ $0 })))
         }
-        return (baseSrc + srcs.compactMap({ $0 }).joined(separator: "\n"), i)
+        return (
+          makeItemList(
+            initialDecl: DeclSyntax(
+              EnumDeclSyntax(
+                modifiers: [
+                  DeclModifierSyntax(name: .keyword(.public))
+                ],
+                name: .identifier(Lex.structNameFor(prefix: prefix))
+              ) { types }
+            ), parts: records),
+          methods,
+          i
+        )
       }
     }
-    var srcs: [String?] = Array(repeating: nil, count: schemasMap.count)
-    for try await (src, i) in group {
-      srcs[i] = src
+    var blocks: [CodeBlockItemListSyntax?] = Array(repeating: nil, count: schemasMap.count)
+    var methods: [MemberBlockItemListSyntax?] = Array(repeating: nil, count: schemasMap.count)
+    for try await (block, method, i) in group {
+      blocks[i] = block
+      methods[i] = method
     }
-    return srcs
+    return (combine(blocks.compactMap({ $0 })), combine(methods.compactMap({ $0 })))
   }
-  srcs.insert(
-    SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
+  let clientSrc: String = SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
+    ImportDeclSyntax(
+      path: [ImportPathComponentSyntax(name: "Foundation")]
+    )
+    ImportDeclSyntax(
+      path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
+      trailingTrivia: generate.contains(.server) ? nil : .newlines(2)
+    )
+    if generate.contains(.server) {
       ImportDeclSyntax(
-        path: [ImportPathComponentSyntax(name: "Foundation")]
-      )
-      ImportDeclSyntax(
-        path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
+        attributes: AttributeListSyntax {
+          AttributeSyntax(
+            atSign: .atSignToken(),
+            attributeName: IdentifierTypeSyntax(name: .identifier("_spi")),
+            leftParen: .leftParenToken(),
+            arguments: AttributeSyntax.Arguments([
+              LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("Generated"))))
+            ]),
+            rightParen: .rightParenToken()
+          )
+        },
+        path: [
+          ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
+        ],
         trailingTrivia: .newlines(2)
       )
-    }.formatted().description, at: 0)
-
-  let clientSrc = srcs.compactMap({ $0 }).joined(separator: "\n")
+    }
+    blocks
+    if !methods.isEmpty {
+      ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
+        methods
+      }
+    }
+  }.formatted().description
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
+}
+
+@CodeBlockItemListBuilder
+func makeItemList(initialDecl decl: DeclSyntax, parts: CodeBlockItemListSyntax) -> CodeBlockItemListSyntax {
+  decl
+  parts
+}
+
+@CodeBlockItemListBuilder
+func combine(_ parts: [CodeBlockItemListSyntax]) -> CodeBlockItemListSyntax {
+  for part in parts {
+    part
+  }
+}
+
+@MemberBlockItemListBuilder
+func combine(_ parts: [MemberBlockItemListSyntax]) -> MemberBlockItemListSyntax {
+  for part in parts {
+    part
+  }
 }
 
 extension URL {
@@ -163,121 +232,89 @@ enum Lex {
     return src.formatted().description
   }
 
-  static func genCode(for schema: Schema, defMap: ExtDefMap, generate: GenerateOption) -> String? {
-    let prefix = schema.prefix
-    let structName = Lex.structNameFor(prefix: prefix)
-    let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
-      $0.key.localizedStandardCompare($1.key) == .orderedAscending
-    })
-    let recordTypes = allTypes.filter(\.value.isRecord)
-    let otherTypes = allTypes.filter { !$0.value.isRecord }
-    let methods = allTypes.filter { !$0.value.isRecord && $0.value.isMethod }
-    let enumExtensionIsNeeded = !otherTypes.isEmpty || !methods.isEmpty
-    if otherTypes.isEmpty && methods.isEmpty && recordTypes.isEmpty {
-      return nil
+  @MemberBlockItemListBuilder
+  static func genTypes(prefix: String, otherTypes: [[String: TypeSchema].Element], methods: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> MemberBlockItemListSyntax {
+    for (i, (name, ot)) in otherTypes.enumerated() {
+      ot.lex(
+        leadingTrivia: i == 0 ? nil : .newlines(2),
+        name: name,
+        type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
+        defMap: defMap,
+        generate: generate
+      )
     }
-    let src = SourceFileSyntax(
-      statementsBuilder: {
-        if generate.contains(.server) {
-          ImportDeclSyntax(
-            attributes: AttributeListSyntax {
-              AttributeSyntax(
-                atSign: .atSignToken(),
-                attributeName: IdentifierTypeSyntax(name: .identifier("_spi")),
-                leftParen: .leftParenToken(),
-                arguments: AttributeSyntax.Arguments([
-                  LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("Generated"))))
-                ]),
-                rightParen: .rightParenToken()
-              )
-            },
-            path: [
-              ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
-            ]
-          )
-        }
-        if enumExtensionIsNeeded {
-          ExtensionDeclSyntax(leadingTrivia: .newlines(2), extendedType: TypeSyntax(stringLiteral: structName)) {
-            for (i, (name, ot)) in otherTypes.enumerated() {
-              ot.lex(
-                leadingTrivia: i == 0 ? nil : .newlines(2),
-                name: name,
-                type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
-                defMap: defMap,
-                generate: generate
-              )
-            }
-            for method in methods {
-              TypeAliasDeclSyntax(
-                leadingTrivia: .newlines(2),
-                attributes: [
-                  AttributeListSyntax.Element(
-                    AttributeSyntax(
-                      atSign: .atSignToken(),
-                      attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
-                      leftParen: .leftParenToken(),
-                      arguments: AttributeSyntax.Arguments(
-                        AvailabilityArgumentListSyntax {
-                          AvailabilityArgumentSyntax(
-                            argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
-                          )
-                          AvailabilityArgumentSyntax(
-                            argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
-                          )
-                          AvailabilityArgumentSyntax(
-                            argument: AvailabilityArgumentSyntax.Argument(
-                              AvailabilityLabeledArgumentSyntax(
-                                label: .keyword(.message),
-                                colon: .colonToken(),
-                                value: AvailabilityLabeledArgumentSyntax.Value(
-                                  SimpleStringLiteralExprSyntax(
-                                    openingQuote: .stringQuoteToken(),
-                                    segments: SimpleStringLiteralSegmentListSyntax([
-                                      StringSegmentSyntax(content: .stringSegment("Use `\(method.key).Error` instead."))
-                                    ]),
-                                    closingQuote: .stringQuoteToken()
-                                  ))
-                              )))
-                        }),
-                      rightParen: .rightParenToken()
-                    )
+    for method in methods {
+      TypeAliasDeclSyntax(
+        leadingTrivia: .newlines(2),
+        attributes: [
+          AttributeListSyntax.Element(
+            AttributeSyntax(
+              atSign: .atSignToken(),
+              attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
+              leftParen: .leftParenToken(),
+              arguments: AttributeSyntax.Arguments(
+                AvailabilityArgumentListSyntax {
+                  AvailabilityArgumentSyntax(
+                    argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
                   )
-                ],
-                modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
-                name: .identifier("\(method.key)_Error"),
-                initializer: TypeInitializerClauseSyntax(
-                  equal: .equalToken(),
-                  value: MemberTypeSyntax(parts: [.identifier(method.key), .identifier("Error")])
-                )
-              )
-            }
-          }
-        }
-        if generate.contains(.client) && !methods.isEmpty {
-          ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
-            for method in methods {
-              writeMethod(
-                leadingTrivia: otherTypes.isEmpty ? nil : .newlines(2),
-                typeName: Self.nameFromId(id: method.value.id, prefix: method.value.prefix),
-                typeSchema: method.value,
-                defMap: defMap,
-                prefix: structNameFor(prefix: prefix)
-              )
-            }
-          }
-        }
-        for (name, ot) in recordTypes {
-          ot.lex(
-            leadingTrivia: .newlines(2),
-            name: name,
-            type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
-            defMap: defMap,
-            generate: generate
+                  AvailabilityArgumentSyntax(
+                    argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
+                  )
+                  AvailabilityArgumentSyntax(
+                    argument: AvailabilityArgumentSyntax.Argument(
+                      AvailabilityLabeledArgumentSyntax(
+                        label: .keyword(.message),
+                        colon: .colonToken(),
+                        value: AvailabilityLabeledArgumentSyntax.Value(
+                          SimpleStringLiteralExprSyntax(
+                            openingQuote: .stringQuoteToken(),
+                            segments: SimpleStringLiteralSegmentListSyntax([
+                              StringSegmentSyntax(content: .stringSegment("Use `\(method.key).Error` instead."))
+                            ]),
+                            closingQuote: .stringQuoteToken()
+                          ))
+                      )))
+                }),
+              rightParen: .rightParenToken()
+            )
           )
-        }
-      },
-      trailingTrivia: .newline)
-    return src.formatted().description
+        ],
+        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+        name: .identifier("\(method.key)_Error"),
+        initializer: TypeInitializerClauseSyntax(
+          equal: .equalToken(),
+          value: MemberTypeSyntax(parts: [.identifier(method.key), .identifier("Error")])
+        )
+      )
+    }
+  }
+
+  @MemberBlockItemListBuilder
+  static func genMethods(leadingTrivia: Trivia? = nil, prefix: String, otherTypes: [[String: TypeSchema].Element], methods: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> MemberBlockItemListSyntax {
+    if generate.contains(.client) {
+      for (i, method) in methods.enumerated() {
+        writeMethod(
+          leadingTrivia: i == 0 ? leadingTrivia : nil,
+          typeName: Self.nameFromId(id: method.value.id, prefix: method.value.prefix),
+          typeSchema: method.value,
+          defMap: defMap,
+          prefix: structNameFor(prefix: prefix)
+        )
+      }
+    }
+  }
+
+  @CodeBlockItemListBuilder
+  static func genRecords(recordTypes: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> CodeBlockItemListSyntax {
+    for (name, ot) in recordTypes {
+      ot.lex(
+        leadingTrivia: .newlines(2),
+        name: name,
+        type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
+        defMap: defMap,
+        generate: generate
+      )
+    }
   }
 
   static func writeMethod(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
