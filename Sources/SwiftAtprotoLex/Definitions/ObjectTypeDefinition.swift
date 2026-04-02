@@ -58,7 +58,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     return StructDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-      name: .init(stringLiteral: ts.isRecord ? "\(Lex.structNameFor(prefix: ts.prefix))_\(name)" : name),
+      name: .identifier(name),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ts.isRecord ? ["ATProtoRecord"] : ["Codable", "Hashable", "Sendable"])
     ) {
       if ts.isRecord {
@@ -74,13 +74,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("nsId"))),
               initializer: InitializerClauseSyntax(
                 equal: .equalToken(),
-                value: StringLiteralExprSyntax(
-                  openingQuote: .stringQuoteToken(),
-                  segments: StringLiteralSegmentListSyntax([
-                    StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(typeName)))
-                  ]),
-                  closingQuote: .stringQuoteToken()
-                )
+                value: StringLiteralExprSyntax(content: typeName),
               )
             )
           ])
@@ -118,7 +112,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       }
       for (key, property) in sortedProperties {
         let isRequired = required[key] ?? false
-        let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: !ts.isRecord)
+        let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: true)
         property.variable(name: key, type: type, isMutable: !ts.isRecord)
       }
       VariableDeclSyntax(
@@ -158,7 +152,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                   equal: .equalToken(),
                   value: NilLiteralExprSyntax()
                 )
-              let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: !ts.isRecord)
+              let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: true)
               FunctionParameterSyntax(firstName: .identifier(key), type: type, defaultValue: defaultValue)
             }
           }
@@ -250,10 +244,10 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           let tname: String = {
             if case .string(let def) = property, def.enum != nil || def.knownValues != nil {
               let tname = "\(name)_\(key.titleCased())"
-              return ts.isRecord ? "\(Lex.structNameFor(prefix: ts.prefix)).\(tname)" : tname
+              return "\(Lex.structNameFor(prefix: ts.prefix)).\(tname)"
             } else {
               let cts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: key, type: property)
-              return TypeSchema.typeNameForField(name: name, k: key, v: cts, defMap: defMap, dropPrefix: !ts.isRecord)
+              return TypeSchema.typeNameForField(name: name, k: key, v: cts, defMap: defMap, dropPrefix: true)
             }
           }()
           SequenceExprSyntax {
