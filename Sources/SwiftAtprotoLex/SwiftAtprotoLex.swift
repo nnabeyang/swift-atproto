@@ -92,12 +92,11 @@ func writeSchemaCode(
               let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
                 $0.key.localizedStandardCompare($1.key) == .orderedAscending
               })
-              let otherTypes = allTypes.filter { !$0.value.isRecord }
               let methodTypes = allTypes.filter { !$0.value.isRecord && $0.value.isMethod }
               let recordTypes = allTypes.filter(\.value.isRecord)
 
-              let types = Lex.genTypes(prefix: prefix, otherTypes: otherTypes, methods: methodTypes, defMap: defMap, generate: generate)
-              let methods = Lex.genMethods(leadingTrivia: otherTypes.isEmpty ? nil : .spaces(2), prefix: prefix, otherTypes: otherTypes, methods: methodTypes, defMap: defMap, generate: generate)
+              let types = Lex.genTypes(prefix: prefix, otherTypes: allTypes, methods: methodTypes, defMap: defMap, generate: generate)
+              let methods = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .spaces(2), prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate)
               let records = Lex.genRecords(recordTypes: recordTypes, defMap: defMap, generate: generate)
               return (types, methods, records, j)
             }
@@ -290,7 +289,7 @@ enum Lex {
   }
 
   @MemberBlockItemListBuilder
-  static func genMethods(leadingTrivia: Trivia? = nil, prefix: String, otherTypes: [[String: TypeSchema].Element], methods: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> MemberBlockItemListSyntax {
+  static func genMethods(leadingTrivia: Trivia? = nil, prefix: String, methods: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> MemberBlockItemListSyntax {
     if generate.contains(.client) {
       for (i, method) in methods.enumerated() {
         writeMethod(
@@ -307,12 +306,47 @@ enum Lex {
   @CodeBlockItemListBuilder
   static func genRecords(recordTypes: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> CodeBlockItemListSyntax {
     for (name, ot) in recordTypes {
-      ot.lex(
+      TypeAliasDeclSyntax(
         leadingTrivia: .newlines(2),
-        name: name,
-        type: (ot.defName.isEmpty || ot.defName == "main") ? ot.id : "\(ot.id)#\(ot.defName)",
-        defMap: defMap,
-        generate: generate
+        attributes: [
+          AttributeListSyntax.Element(
+            AttributeSyntax(
+              atSign: .atSignToken(),
+              attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
+              leftParen: .leftParenToken(),
+              arguments: AttributeSyntax.Arguments(
+                AvailabilityArgumentListSyntax {
+                  AvailabilityArgumentSyntax(
+                    argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
+                  )
+                  AvailabilityArgumentSyntax(
+                    argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
+                  )
+                  AvailabilityArgumentSyntax(
+                    argument: AvailabilityArgumentSyntax.Argument(
+                      AvailabilityLabeledArgumentSyntax(
+                        label: .keyword(.message),
+                        colon: .colonToken(),
+                        value: AvailabilityLabeledArgumentSyntax.Value(
+                          SimpleStringLiteralExprSyntax(
+                            openingQuote: .stringQuoteToken(),
+                            segments: SimpleStringLiteralSegmentListSyntax([
+                              StringSegmentSyntax(content: .stringSegment("Use `\(Lex.structNameFor(prefix: ot.prefix)).\(name)` instead."))
+                            ]),
+                            closingQuote: .stringQuoteToken()
+                          ))
+                      )))
+                }),
+              rightParen: .rightParenToken()
+            )
+          )
+        ],
+        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+        name: .identifier("\(Lex.structNameFor(prefix: ot.prefix))_\(name)"),
+        initializer: TypeInitializerClauseSyntax(
+          equal: .equalToken(),
+          value: MemberTypeSyntax(parts: [.identifier(Lex.structNameFor(prefix: ot.prefix)), .identifier(name)])
+        )
       )
     }
   }
@@ -420,11 +454,7 @@ enum Lex {
                     DictionaryElementSyntax(
                       key: StringLiteralExprSyntax(openingQuote: .stringQuoteToken(leadingTrivia: [.newlines(1), .spaces(4)]), content: recordType.id),
                       colon: .colonToken(),
-                      value: MemberAccessExprSyntax(
-                        base: DeclReferenceExprSyntax(baseName: .identifier("\(Lex.structNameFor(prefix: recordType.prefix))_\(name)")),
-                        period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                      ),
+                      value: MemberAccessExprSyntax(parts: [.identifier(Lex.structNameFor(prefix: recordType.prefix)), .identifier(name), .keyword(.self)]),
                       trailingComma: .commaToken()
                     )
                   }

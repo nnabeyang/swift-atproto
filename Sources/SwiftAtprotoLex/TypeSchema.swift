@@ -196,9 +196,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       return ("INVALID", "String")
     }
     let tname: String =
-      if ts.isRecord {
-        "\(Lex.structNameFor(prefix: ts.prefix))_\(ts.typeName)"
-      } else if dropPrefix, ts.prefix == prefix {
+      if dropPrefix, ts.prefix == prefix {
         ts.typeName
       } else {
         "\(Lex.structNameFor(prefix: ts.prefix)).\(ts.typeName)"
