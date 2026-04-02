@@ -74,13 +74,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("nsId"))),
               initializer: InitializerClauseSyntax(
                 equal: .equalToken(),
-                value: StringLiteralExprSyntax(
-                  openingQuote: .stringQuoteToken(),
-                  segments: StringLiteralSegmentListSyntax([
-                    StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(typeName)))
-                  ]),
-                  closingQuote: .stringQuoteToken()
-                )
+                value: StringLiteralExprSyntax(content: typeName),
               )
             )
           ])
