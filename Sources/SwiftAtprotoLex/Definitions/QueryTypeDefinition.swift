@@ -201,32 +201,43 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
       ],
-      name: .identifier(ts.typeName)
+      name: .identifier(ts.typeName),
+      inheritanceClause: InheritanceClauseSyntax {
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQuery")))
+      }
     ) {
-      if generate.contains(.server) {
-        VariableDeclSyntax(
-          leadingTrivia: [.newlines(1), .spaces(2)],
-          modifiers: [
-            DeclModifierSyntax(name: .keyword(.public)),
-            DeclModifierSyntax(name: .keyword(.static)),
-          ],
-          bindingSpecifier: .keyword(.let)
-        ) {
-          PatternBindingSyntax(
-            pattern: IdentifierPatternSyntax(identifier: .identifier("id")),
-            initializer: InitializerClauseSyntax(
-              equal: .equalToken(),
-              value: StringLiteralExprSyntax(
-                openingQuote: .stringQuoteToken(),
-                segments: StringLiteralSegmentListSyntax([
-                  StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(type)))
-                ]),
-                closingQuote: .stringQuoteToken()
-              )
+      VariableDeclSyntax(
+        leadingTrivia: [.newlines(1), .spaces(2)],
+        modifiers: [
+          DeclModifierSyntax(name: .keyword(.public)),
+          DeclModifierSyntax(name: .keyword(.static)),
+        ],
+        bindingSpecifier: .keyword(.let)
+      ) {
+        PatternBindingSyntax(
+          pattern: IdentifierPatternSyntax(identifier: .identifier("id")),
+          initializer: InitializerClauseSyntax(
+            equal: .equalToken(),
+            value: StringLiteralExprSyntax(
+              openingQuote: .stringQuoteToken(),
+              segments: StringLiteralSegmentListSyntax([
+                StringLiteralSegmentListSyntax.Element(StringSegmentSyntax(content: .stringSegment(type)))
+              ]),
+              closingQuote: .stringQuoteToken()
             )
           )
-        }
-        genQueryInput(ts: ts, name: name, type: type, prefix: ts.prefix, defMap: defMap)
+        )
+      }
+      TypeAliasDeclSyntax(
+        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+        name: .identifier("ResponseBody"),
+        initializer: TypeInitializerClauseSyntax(
+          equal: .equalToken(),
+          value: IdentifierTypeSyntax(name: output(ts: ts, fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix)))
+        )
+      )
+      genQueryInput(ts: ts, name: name, type: type, prefix: ts.prefix, defMap: defMap, generate: generate)
+      if generate.contains(.server) {
         genQueryOutput(ts: ts, name: name, type: type, prefix: ts.prefix, defMap: defMap)
         genAcceptableContentType()
       }
@@ -234,14 +245,16 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     }
   }
 
-  private func genQueryInput(ts: TypeSchema, name: String, type: String, prefix: String, defMap: ExtDefMap) -> StructDeclSyntax {
+  private func genQueryInput(ts: TypeSchema, name: String, type: String, prefix: String, defMap: ExtDefMap, generate: GenerateOption) -> StructDeclSyntax {
     let prefix = Lex.structNameFor(prefix: prefix)
     return StructDeclSyntax(
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
       ],
       name: .identifier("Input"),
-      inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"])
+      inheritanceClause: InheritanceClauseSyntax {
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQueryInput")))
+      }
     ) {
       StructDeclSyntax(
         leadingTrivia: [.newlines(1), .spaces(4)],
@@ -249,7 +262,9 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           DeclModifierSyntax(name: .keyword(.public))
         ],
         name: .identifier("Query"),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"])
+        inheritanceClause: InheritanceClauseSyntax {
+          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCInputQuery")))
+        }
       ) {
         for query in queries(ts: ts, fname: name, defMap: defMap, prefix: prefix) {
           VariableDeclSyntax(
@@ -281,6 +296,36 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             }
           }
         }
+        VariableDeclSyntax(
+          modifiers: DeclModifierListSyntax([
+            DeclModifierSyntax(name: .keyword(.public))
+          ]),
+          bindingSpecifier: .keyword(.var),
+          bindings: PatternBindingListSyntax([
+            PatternBindingSyntax(
+              pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("asParameters"))),
+              typeAnnotation: TypeAnnotationSyntax(
+                colon: .colonToken(),
+                type: TypeSyntax(
+                  OptionalTypeSyntax(
+                    wrappedType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Parameters"))),
+                    questionMark: .postfixQuestionMarkToken()
+                  ))
+              ),
+              accessorBlock: AccessorBlockSyntax(
+                leftBrace: .leftBraceToken(),
+                accessors: AccessorBlockSyntax.Accessors(
+                  CodeBlockItemListSyntax([
+                    CodeBlockItemSyntax(
+                      item: CodeBlockItemSyntax.Item(
+                        rpcParams(id: ts.id, prefix: prefix)
+                      ))
+                  ])),
+                rightBrace: .rightBraceToken(leadingTrivia: .newline)
+              )
+            )
+          ])
+        )
       }
       VariableDeclSyntax(
         leadingTrivia: [.newlines(1), .spaces(4)],
@@ -301,63 +346,28 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           )
         ])
       )
-      StructDeclSyntax(
-        leadingTrivia: [.newlines(1), .spaces(4)],
-        modifiers: DeclModifierListSyntax([
-          DeclModifierSyntax(name: .keyword(.public))
-        ]),
-        name: .identifier("Headers"),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"]),
-        memberBlock: MemberBlockSyntax(
-          leftBrace: .leftBraceToken(),
-          members: MemberBlockItemListSyntax([
-            MemberBlockItemSyntax(
-              decl: DeclSyntax(
-                VariableDeclSyntax(
-                  modifiers: DeclModifierListSyntax([
-                    DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(8)]))
-                  ]),
-                  bindingSpecifier: .keyword(.var),
-                  bindings: PatternBindingListSyntax([
-                    PatternBindingSyntax(
-                      pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("accept"))),
-                      typeAnnotation: TypeAnnotationSyntax(
-                        colon: .colonToken(),
-                        type: TypeSyntax(
-                          ArrayTypeSyntax(
-                            leftSquare: .leftSquareToken(),
-                            element: TypeSyntax(
-                              MemberTypeSyntax(
-                                baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("OpenAPIRuntime"))),
-                                period: .periodToken(),
-                                name: .identifier("AcceptHeaderContentType"),
-                                genericArgumentClause: GenericArgumentClauseSyntax(
-                                  leftAngle: .leftAngleToken(),
-                                  arguments: GenericArgumentListSyntax([
-                                    GenericArgumentSyntax.create(argument: IdentifierTypeSyntax(name: .identifier("AcceptableContentType")))
-                                  ]),
-                                  rightAngle: .rightAngleToken()
-                                )
-                              )),
-                            rightSquare: .rightSquareToken()
-                          ))
-                      )
-                    )
-                  ])
-                ))),
-            MemberBlockItemSyntax(
-              decl: DeclSyntax(
-                InitializerDeclSyntax(
-                  modifiers: DeclModifierListSyntax([
-                    DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(8)]))
-                  ]),
-                  initKeyword: .keyword(.`init`),
-                  signature: FunctionSignatureSyntax(
-                    parameterClause: FunctionParameterClauseSyntax(
-                      leftParen: .leftParenToken(),
-                      parameters: FunctionParameterListSyntax([
-                        FunctionParameterSyntax(
-                          firstName: .identifier("accept"),
+      if generate.contains(.server) {
+        StructDeclSyntax(
+          leadingTrivia: [.newlines(1), .spaces(4)],
+          modifiers: DeclModifierListSyntax([
+            DeclModifierSyntax(name: .keyword(.public))
+          ]),
+          name: .identifier("Headers"),
+          inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"]),
+          memberBlock: MemberBlockSyntax(
+            leftBrace: .leftBraceToken(),
+            members: MemberBlockItemListSyntax([
+              MemberBlockItemSyntax(
+                decl: DeclSyntax(
+                  VariableDeclSyntax(
+                    modifiers: DeclModifierListSyntax([
+                      DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(8)]))
+                    ]),
+                    bindingSpecifier: .keyword(.var),
+                    bindings: PatternBindingListSyntax([
+                      PatternBindingSyntax(
+                        pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("accept"))),
+                        typeAnnotation: TypeAnnotationSyntax(
                           colon: .colonToken(),
                           type: TypeSyntax(
                             ArrayTypeSyntax(
@@ -376,144 +386,180 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                   )
                                 )),
                               rightSquare: .rightSquareToken()
-                            )),
-                          defaultValue: InitializerClauseSyntax(
-                            equal: .equalToken(),
-                            value: FunctionCallExprSyntax(
-                              callee: MemberAccessExprSyntax(
-                                period: .periodToken(),
-                                declName: DeclReferenceExprSyntax(baseName: .identifier("defaultValues"))
-                              ))
-                          )
+                            ))
                         )
-                      ]),
-                      rightParen: .rightParenToken()
-                    )),
-                  body: CodeBlockSyntax(
-                    leftBrace: .leftBraceToken(),
-                    statements: CodeBlockItemListSyntax([
-                      CodeBlockItemSyntax(
-                        item: CodeBlockItemSyntax.Item(
-                          SequenceExprSyntax(
-                            elements: ExprListSyntax([
-                              ExprSyntax(
-                                MemberAccessExprSyntax(
-                                  base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(12)]))),
-                                  period: .periodToken(),
-                                  declName: DeclReferenceExprSyntax(baseName: .identifier("accept"))
-                                )),
-                              ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-                              ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("accept"))),
-                            ]))))
+                      )
+                    ])
+                  ))),
+              MemberBlockItemSyntax(
+                decl: DeclSyntax(
+                  InitializerDeclSyntax(
+                    modifiers: DeclModifierListSyntax([
+                      DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(8)]))
                     ]),
-                    rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)])
-                  )
-                ))),
-          ]),
-          rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
-        )
-      )
-      VariableDeclSyntax(
-        modifiers: DeclModifierListSyntax([
-          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)]))
-        ]),
-        bindingSpecifier: .keyword(.var),
-        bindings: PatternBindingListSyntax([
-          PatternBindingSyntax(
-            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("headers"))),
-            typeAnnotation: TypeAnnotationSyntax(
-              colon: .colonToken(),
-              type: TypeSyntax(
-                MemberTypeSyntax(
-                  baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Input"))),
-                  period: .periodToken(),
-                  name: .identifier("Headers")
-                ))
-            )
+                    initKeyword: .keyword(.`init`),
+                    signature: FunctionSignatureSyntax(
+                      parameterClause: FunctionParameterClauseSyntax(
+                        leftParen: .leftParenToken(),
+                        parameters: FunctionParameterListSyntax([
+                          FunctionParameterSyntax(
+                            firstName: .identifier("accept"),
+                            colon: .colonToken(),
+                            type: TypeSyntax(
+                              ArrayTypeSyntax(
+                                leftSquare: .leftSquareToken(),
+                                element: TypeSyntax(
+                                  MemberTypeSyntax(
+                                    baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("OpenAPIRuntime"))),
+                                    period: .periodToken(),
+                                    name: .identifier("AcceptHeaderContentType"),
+                                    genericArgumentClause: GenericArgumentClauseSyntax(
+                                      leftAngle: .leftAngleToken(),
+                                      arguments: GenericArgumentListSyntax([
+                                        GenericArgumentSyntax.create(argument: IdentifierTypeSyntax(name: .identifier("AcceptableContentType")))
+                                      ]),
+                                      rightAngle: .rightAngleToken()
+                                    )
+                                  )),
+                                rightSquare: .rightSquareToken()
+                              )),
+                            defaultValue: InitializerClauseSyntax(
+                              equal: .equalToken(),
+                              value: FunctionCallExprSyntax(
+                                callee: MemberAccessExprSyntax(
+                                  period: .periodToken(),
+                                  declName: DeclReferenceExprSyntax(baseName: .identifier("defaultValues"))
+                                ))
+                            )
+                          )
+                        ]),
+                        rightParen: .rightParenToken()
+                      )),
+                    body: CodeBlockSyntax(
+                      leftBrace: .leftBraceToken(),
+                      statements: CodeBlockItemListSyntax([
+                        CodeBlockItemSyntax(
+                          item: CodeBlockItemSyntax.Item(
+                            SequenceExprSyntax(
+                              elements: ExprListSyntax([
+                                ExprSyntax(
+                                  MemberAccessExprSyntax(
+                                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(12)]))),
+                                    period: .periodToken(),
+                                    declName: DeclReferenceExprSyntax(baseName: .identifier("accept"))
+                                  )),
+                                ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+                                ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("accept"))),
+                              ]))))
+                      ]),
+                      rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)])
+                    )
+                  ))),
+            ]),
+            rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
           )
-        ])
-      )
-      InitializerDeclSyntax(
-        modifiers: DeclModifierListSyntax([
-          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)]))
-        ]),
-        initKeyword: .keyword(.`init`),
-        signature: FunctionSignatureSyntax(
-          parameterClause: FunctionParameterClauseSyntax(
-            leftParen: .leftParenToken(),
-            parameters: FunctionParameterListSyntax([
-              FunctionParameterSyntax(
-                leadingTrivia: [.newlines(1)],
-                firstName: .identifier("query"),
-                colon: .colonToken(),
-                type: TypeSyntax(
-                  MemberTypeSyntax(
-                    baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Input"))),
-                    period: .periodToken(),
-                    name: .identifier("Query")
-                  )),
-                trailingComma: .commaToken()
-              ),
-              FunctionParameterSyntax(
-                firstName: .identifier("headers", leadingTrivia: [.newlines(1), .spaces(8)]),
+        )
+        VariableDeclSyntax(
+          modifiers: DeclModifierListSyntax([
+            DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)]))
+          ]),
+          bindingSpecifier: .keyword(.var),
+          bindings: PatternBindingListSyntax([
+            PatternBindingSyntax(
+              pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("headers"))),
+              typeAnnotation: TypeAnnotationSyntax(
                 colon: .colonToken(),
                 type: TypeSyntax(
                   MemberTypeSyntax(
                     baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Input"))),
                     period: .periodToken(),
                     name: .identifier("Headers")
-                  )),
-                defaultValue: InitializerClauseSyntax(
-                  equal: .equalToken(),
-                  value: FunctionCallExprSyntax(
-                    callee: MemberAccessExprSyntax(
-                      period: .periodToken(),
-                      declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
-                    ))
-                )
-              ),
-            ]),
-            rightParen: .rightParenToken(leadingTrivia: [.newlines(1), .spaces(4)])
-          )),
-        body: CodeBlockSyntax(
-          leftBrace: .leftBraceToken(),
-          statements: CodeBlockItemListSyntax([
-            CodeBlockItemSyntax(
-              item: CodeBlockItemSyntax.Item(
-                SequenceExprSyntax(
-                  elements: ExprListSyntax([
-                    ExprSyntax(
-                      MemberAccessExprSyntax(
-                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(8)]))),
-                        period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .identifier("query"))
-                      )),
-                    ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-                    ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query"))),
-                  ])))),
-            CodeBlockItemSyntax(
-              item: CodeBlockItemSyntax.Item(
-                SequenceExprSyntax(
-                  elements: ExprListSyntax([
-                    ExprSyntax(
-                      MemberAccessExprSyntax(
-                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(8)]))),
-                        period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .identifier("headers"))
-                      )),
-                    ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
-                    ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("headers"))),
-                  ])))),
-          ]),
-          rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                  ))
+              )
+            )
+          ])
         )
-      )
+        InitializerDeclSyntax(
+          modifiers: DeclModifierListSyntax([
+            DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)]))
+          ]),
+          initKeyword: .keyword(.`init`),
+          signature: FunctionSignatureSyntax(
+            parameterClause: FunctionParameterClauseSyntax(
+              leftParen: .leftParenToken(),
+              parameters: FunctionParameterListSyntax([
+                FunctionParameterSyntax(
+                  leadingTrivia: [.newlines(1)],
+                  firstName: .identifier("query"),
+                  colon: .colonToken(),
+                  type: TypeSyntax(
+                    MemberTypeSyntax(
+                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Input"))),
+                      period: .periodToken(),
+                      name: .identifier("Query")
+                    )),
+                  trailingComma: .commaToken()
+                ),
+                FunctionParameterSyntax(
+                  firstName: .identifier("headers", leadingTrivia: [.newlines(1), .spaces(8)]),
+                  colon: .colonToken(),
+                  type: TypeSyntax(
+                    MemberTypeSyntax(
+                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Input"))),
+                      period: .periodToken(),
+                      name: .identifier("Headers")
+                    )),
+                  defaultValue: InitializerClauseSyntax(
+                    equal: .equalToken(),
+                    value: FunctionCallExprSyntax(
+                      callee: MemberAccessExprSyntax(
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+                      ))
+                  )
+                ),
+              ]),
+              rightParen: .rightParenToken(leadingTrivia: [.newlines(1), .spaces(4)])
+            )),
+          body: CodeBlockSyntax(
+            leftBrace: .leftBraceToken(),
+            statements: CodeBlockItemListSyntax([
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  SequenceExprSyntax(
+                    elements: ExprListSyntax([
+                      ExprSyntax(
+                        MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(8)]))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("query"))
+                        )),
+                      ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+                      ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query"))),
+                    ])))),
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  SequenceExprSyntax(
+                    elements: ExprListSyntax([
+                      ExprSyntax(
+                        MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(8)]))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("headers"))
+                        )),
+                      ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
+                      ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("headers"))),
+                    ])))),
+            ]),
+            rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+          )
+        )
+      }
     }
   }
 
   private func genQueryOutput(ts: TypeSchema, name: String, type: String, prefix: String, defMap: ExtDefMap) -> EnumDeclSyntax {
     let prefix = Lex.structNameFor(prefix: ts.prefix)
-    let output = output(ts: ts, fname: name, defMap: defMap, prefix: prefix)
     return EnumDeclSyntax(
       attributes: [
         AttributeListSyntax.Element(
@@ -554,7 +600,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                 pattern: IdentifierPatternSyntax(identifier: .identifier("json")),
                 typeAnnotation: TypeAnnotationSyntax(
                   colon: .colonToken(),
-                  type: IdentifierTypeSyntax(name: output)
+                  type: IdentifierTypeSyntax(name: .identifier("ResponseBody"))
                 ),
                 accessorBlock: AccessorBlockSyntax(
                   leftBrace: .leftBraceToken(),
@@ -830,8 +876,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
   }
 
   private func genQueryOutputBody(ts: TypeSchema, name: String, type: String, prefix: String, defMap: ExtDefMap) -> EnumCaseDeclSyntax {
-    let output = output(ts: ts, fname: name, defMap: defMap, prefix: prefix)
-    return EnumCaseDeclSyntax(
+    EnumCaseDeclSyntax(
       leadingTrivia: [.newlines(1), .spaces(18)],
       elements: EnumCaseElementListSyntax([
         EnumCaseElementSyntax(
@@ -840,7 +885,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             leftParen: .leftParenToken(),
             parameters: EnumCaseParameterListSyntax([
               EnumCaseParameterSyntax(
-                type: IdentifierTypeSyntax(name: output)
+                type: IdentifierTypeSyntax(name: .identifier("ResponseBody"))
               )
             ]),
             rightParen: .rightParenToken()
