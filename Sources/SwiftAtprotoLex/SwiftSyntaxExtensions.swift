@@ -2,33 +2,6 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-extension EnumDeclSyntax {
-  public init(
-    leadingTrivia: Trivia? = nil,
-    modifiers: DeclModifierListSyntax = [],
-    parts: [TokenSyntax],
-    @MemberBlockItemListBuilder memberBlockBuilder: () throws -> MemberBlockItemListSyntax
-  ) rethrows {
-    precondition(!parts.isEmpty, "MemberAccessExprSyntax.init(parts:) requires at least one token.")
-    if parts.count == 1 {
-      try self.init(
-        leadingTrivia: leadingTrivia,
-        modifiers: modifiers,
-        name: parts[0],
-        memberBlockBuilder: memberBlockBuilder
-      )
-    } else {
-      let reversed = Array(parts.reversed())
-      let initialEnum = try EnumDeclSyntax(modifiers: modifiers, name: reversed[0], memberBlockBuilder: memberBlockBuilder)
-      self = reversed.dropFirst().reduce(initialEnum) { currentBase, token in
-        EnumDeclSyntax(modifiers: modifiers, name: token) {
-          currentBase
-        }
-      }
-    }
-  }
-}
-
 extension MemberAccessExprSyntax {
   init(leadingTrivia: Trivia? = nil, parts: [TokenSyntax], isRoot: Bool = true) {
     precondition(!parts.isEmpty, "MemberAccessExprSyntax.init(parts:) requires at least one token.")
@@ -176,5 +149,27 @@ extension GenericArgumentSyntax {
     #else
       GenericArgumentSyntax(argument: argument)
     #endif
+  }
+}
+
+extension MemberBlockItemListSyntax {
+  static let empty = Self(itemsBuilder: {})
+}
+
+extension CodeBlockItemListSyntax {
+  static let empty = Self(itemsBuilder: {})
+}
+
+@CodeBlockItemListBuilder
+func combine(_ parts: [CodeBlockItemListSyntax]) -> CodeBlockItemListSyntax {
+  for part in parts {
+    part
+  }
+}
+
+@MemberBlockItemListBuilder
+func combine(_ parts: [MemberBlockItemListSyntax]) -> MemberBlockItemListSyntax {
+  for part in parts {
+    part
   }
 }
