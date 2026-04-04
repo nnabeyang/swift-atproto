@@ -71,7 +71,7 @@ func writeSchemaCode(
   generate: GenerateOption
 ) async throws {
   let schemasArray = schemasMap.sorted { $0.key < $1.key }
-  let (blocks, methods) = try await withThrowingTaskGroup(of: (CodeBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { group in
+  let (blocks, methods) = try await withThrowingTaskGroup(of: (DeclSyntax, MemberBlockItemListSyntax, Int).self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
@@ -85,51 +85,45 @@ func writeSchemaCode(
     try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
     for (i, (prefix, schemas)) in schemasArray.enumerated() {
       group.addTask {
-        let (types, methods, records) = try await withThrowingTaskGroup(of: (MemberBlockItemListSyntax, MemberBlockItemListSyntax, CodeBlockItemListSyntax, Int).self) { innerGroup in
+        let (types, methods) = try await withThrowingTaskGroup(of: (MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { innerGroup in
           for (j, schema) in schemas.sorted(by: { $0.id < $1.id }).enumerated() {
             innerGroup.addTask {
               let prefix = schema.prefix
               let allTypes = schema.allTypes(prefix: prefix).sorted(by: {
                 $0.key.localizedStandardCompare($1.key) == .orderedAscending
               })
-              let methodTypes = allTypes.filter { !$0.value.isRecord && $0.value.isMethod }
-              let recordTypes = allTypes.filter(\.value.isRecord)
-
+              let methodTypes = allTypes.filter { $0.value.isMethod }
               let types = Lex.genTypes(prefix: prefix, otherTypes: allTypes, methods: methodTypes, defMap: defMap, generate: generate)
               let methods = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .spaces(2), prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate)
-              let records = Lex.genRecords(recordTypes: recordTypes, defMap: defMap, generate: generate)
-              return (types, methods, records, j)
+              return (types, methods, j)
             }
           }
-          var types: [MemberBlockItemListSyntax?] = Array(repeating: nil, count: schemas.count)
-          var methods: [MemberBlockItemListSyntax?] = Array(repeating: nil, count: schemas.count)
-          var records: [CodeBlockItemListSyntax?] = Array(repeating: nil, count: schemas.count)
-          for try await (type, method, record, j) in innerGroup {
+          var types: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemas.count)
+          var methods: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemas.count)
+          for try await (type, method, j) in innerGroup {
             types[j] = type
             methods[j] = method
-            records[j] = record
           }
-          return (combine(types.compactMap({ $0 })), combine(methods.compactMap({ $0 })), combine(records.compactMap({ $0 })))
+          return (combine(types), combine(methods))
         }
         return (
-          makeItemList(
-            initialDecl: DeclSyntax(
-              ExtensionDeclSyntax(
-                extendedType: TypeSyntax(MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix)))
-              ) { types }
-            ), parts: records),
+          DeclSyntax(
+            ExtensionDeclSyntax(
+              extendedType: TypeSyntax(MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix)))
+            ) { types }),
           methods,
           i
         )
       }
     }
-    var blocks: [CodeBlockItemListSyntax?] = Array(repeating: nil, count: schemasMap.count)
-    var methods: [MemberBlockItemListSyntax?] = Array(repeating: nil, count: schemasMap.count)
-    for try await (block, method, i) in group {
-      blocks[i] = block
+
+    var blocks: [CodeBlockItemListSyntax] = Array(repeating: .empty, count: schemasMap.count)
+    var methods: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemasMap.count)
+    for try await (decl, method, i) in group {
+      blocks[i] = CodeBlockItemListSyntax { decl }
       methods[i] = method
     }
-    return (combine(blocks.compactMap({ $0 })), combine(methods.compactMap({ $0 })))
+    return (combine(blocks), combine(methods))
   }
   let prefixes = schemasArray.map(\.0)
   let clientSrc: String = SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
@@ -162,9 +156,6 @@ func writeSchemaCode(
     for node in EnumDeclSyntaxNode.buildTree(from: prefixes) {
       node.generateEnums()
     }
-    for prefix in prefixes {
-      genDeprecatedEnum(prefix: prefix)
-    }
     blocks
     if !methods.isEmpty {
       ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
@@ -174,12 +165,6 @@ func writeSchemaCode(
   }.formatted().description
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
-}
-
-@CodeBlockItemListBuilder
-func makeItemList(initialDecl decl: DeclSyntax, parts: CodeBlockItemListSyntax) -> CodeBlockItemListSyntax {
-  decl
-  parts
 }
 
 @CodeBlockItemListBuilder
@@ -240,51 +225,6 @@ class EnumDeclSyntaxNode {
   }
 }
 
-func genDeprecatedEnum(prefix: String) -> TypeAliasDeclSyntax {
-  TypeAliasDeclSyntax(
-    leadingTrivia: .newlines(2),
-    attributes: [
-      AttributeListSyntax.Element(
-        AttributeSyntax(
-          atSign: .atSignToken(),
-          attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
-          leftParen: .leftParenToken(),
-          arguments: AttributeSyntax.Arguments(
-            AvailabilityArgumentListSyntax {
-              AvailabilityArgumentSyntax(
-                argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
-              )
-              AvailabilityArgumentSyntax(
-                argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
-              )
-              AvailabilityArgumentSyntax(
-                argument: AvailabilityArgumentSyntax.Argument(
-                  AvailabilityLabeledArgumentSyntax(
-                    label: .keyword(.message),
-                    colon: .colonToken(),
-                    value: AvailabilityLabeledArgumentSyntax.Value(
-                      SimpleStringLiteralExprSyntax(
-                        openingQuote: .stringQuoteToken(),
-                        segments: SimpleStringLiteralSegmentListSyntax([
-                          StringSegmentSyntax(content: .stringSegment("Use `\(Lex.structNameFor(prefix: prefix))` instead."))
-                        ]),
-                        closingQuote: .stringQuoteToken()
-                      ))
-                  )))
-            }),
-          rightParen: .rightParenToken()
-        )
-      )
-    ],
-    modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
-    name: .identifier(Lex.enumNameFor(prefix: prefix)),
-    initializer: TypeInitializerClauseSyntax(
-      equal: .equalToken(),
-      value: MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix))
-    )
-  )
-}
-
 extension URL {
   fileprivate func prefix(baseURL: URL) -> String {
     precondition(path.hasPrefix(baseURL.path))
@@ -321,50 +261,6 @@ enum Lex {
         generate: generate
       )
     }
-    for method in methods {
-      TypeAliasDeclSyntax(
-        leadingTrivia: .newlines(2),
-        attributes: [
-          AttributeListSyntax.Element(
-            AttributeSyntax(
-              atSign: .atSignToken(),
-              attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
-              leftParen: .leftParenToken(),
-              arguments: AttributeSyntax.Arguments(
-                AvailabilityArgumentListSyntax {
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
-                  )
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
-                  )
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(
-                      AvailabilityLabeledArgumentSyntax(
-                        label: .keyword(.message),
-                        colon: .colonToken(),
-                        value: AvailabilityLabeledArgumentSyntax.Value(
-                          SimpleStringLiteralExprSyntax(
-                            openingQuote: .stringQuoteToken(),
-                            segments: SimpleStringLiteralSegmentListSyntax([
-                              StringSegmentSyntax(content: .stringSegment("Use `\(method.key).Error` instead."))
-                            ]),
-                            closingQuote: .stringQuoteToken()
-                          ))
-                      )))
-                }),
-              rightParen: .rightParenToken()
-            )
-          )
-        ],
-        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
-        name: .identifier("\(method.key)_Error"),
-        initializer: TypeInitializerClauseSyntax(
-          equal: .equalToken(),
-          value: MemberTypeSyntax(parts: [.identifier(method.key), .identifier("Error")])
-        )
-      )
-    }
   }
 
   @MemberBlockItemListBuilder
@@ -379,54 +275,6 @@ enum Lex {
           prefix: structNameFor(prefix: prefix)
         )
       }
-    }
-  }
-
-  @CodeBlockItemListBuilder
-  static func genRecords(recordTypes: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> CodeBlockItemListSyntax {
-    for (name, ot) in recordTypes {
-      TypeAliasDeclSyntax(
-        leadingTrivia: .newlines(2),
-        attributes: [
-          AttributeListSyntax.Element(
-            AttributeSyntax(
-              atSign: .atSignToken(),
-              attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
-              leftParen: .leftParenToken(),
-              arguments: AttributeSyntax.Arguments(
-                AvailabilityArgumentListSyntax {
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
-                  )
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
-                  )
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(
-                      AvailabilityLabeledArgumentSyntax(
-                        label: .keyword(.message),
-                        colon: .colonToken(),
-                        value: AvailabilityLabeledArgumentSyntax.Value(
-                          SimpleStringLiteralExprSyntax(
-                            openingQuote: .stringQuoteToken(),
-                            segments: SimpleStringLiteralSegmentListSyntax([
-                              StringSegmentSyntax(content: .stringSegment("Use `\(Lex.enumNameFor(prefix: ot.prefix)).\(name)` instead."))
-                            ]),
-                            closingQuote: .stringQuoteToken()
-                          ))
-                      )))
-                }),
-              rightParen: .rightParenToken()
-            )
-          )
-        ],
-        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
-        name: .identifier("\(Lex.enumNameFor(prefix: ot.prefix))_\(name)"),
-        initializer: TypeInitializerClauseSyntax(
-          equal: .equalToken(),
-          value: MemberTypeSyntax(parts: [.identifier(Lex.structNameFor(prefix: ot.prefix)), .identifier(name)])
-        )
-      )
     }
   }
 
@@ -737,50 +585,6 @@ enum Lex {
           ]
         )
       }
-      TypeAliasDeclSyntax(
-        leadingTrivia: .newlines(2),
-        attributes: [
-          AttributeListSyntax.Element(
-            AttributeSyntax(
-              atSign: .atSignToken(),
-              attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
-              leftParen: .leftParenToken(),
-              arguments: AttributeSyntax.Arguments(
-                AvailabilityArgumentListSyntax([
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*")),
-                    trailingComma: .commaToken()
-                  ),
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated)),
-                    trailingComma: .commaToken()
-                  ),
-                  AvailabilityArgumentSyntax(
-                    argument: AvailabilityArgumentSyntax.Argument(
-                      AvailabilityLabeledArgumentSyntax(
-                        label: .keyword(.message),
-                        colon: .colonToken(),
-                        value: AvailabilityLabeledArgumentSyntax.Value(
-                          SimpleStringLiteralExprSyntax(
-                            openingQuote: .stringQuoteToken(),
-                            segments: SimpleStringLiteralSegmentListSyntax([
-                              StringSegmentSyntax(content: .stringSegment("Use `UnknownATPValue` instead."))
-                            ]),
-                            closingQuote: .stringQuoteToken()
-                          ))
-                      ))),
-                ])),
-              rightParen: .rightParenToken()
-            )
-          )
-        ],
-        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
-        name: .identifier("LexiconTypeDecoder"),
-        initializer: TypeInitializerClauseSyntax(
-          equal: .equalToken(),
-          value: IdentifierTypeSyntax(name: .identifier("UnknownATPValue"))
-        )
-      )
     }
     .with(\.trailingTrivia, .newline)
     return src.formatted().description

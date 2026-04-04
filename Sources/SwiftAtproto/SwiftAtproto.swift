@@ -17,8 +17,6 @@ public protocol UnknownATPValueProtocol: Codable, Sendable, Hashable {
   var type: String? { get }
   var val: any Codable & Hashable & Sendable { get }
   static var allTypes: [String: any ATProtoRecord.Type] { get }
-  @available(*, deprecated, message: "Use `static func record(_:)` instead — this initializer is deprecated and will be removed in a future release.")
-  init(typeName: String, val: any Codable & Sendable)
 }
 
 extension UnknownATPValueProtocol {
@@ -51,16 +49,6 @@ extension UnknownATPValueProtocol {
       return left == right
     default:
       return false
-    }
-  }
-
-  @available(*, deprecated, message: "Use `static func record(_:)` instead — this initializer is deprecated and will be removed in a future release.")
-  public init(typeName: String, val: any Codable & Sendable) {
-    switch val {
-    case let val as (any ATProtoRecord):
-      self = .record(val)
-    default:
-      self = .any(AnyCodable(val))
     }
   }
 
