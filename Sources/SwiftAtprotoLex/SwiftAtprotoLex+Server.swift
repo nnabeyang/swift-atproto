@@ -83,17 +83,18 @@ extension Lex {
   }
 
   private static func makeXRPCMethodStub(leadingTrivia: Trivia? = nil, key: String, prefix: String) -> FunctionDeclSyntax {
-    FunctionDeclSyntax(
+    let prefixIdent: [TokenSyntax] = Lex.structNameFor(prefix: prefix).split(separator: ".").map({ .identifier(String($0)) })
+    return FunctionDeclSyntax(
       leadingTrivia: .spaces(2),
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-      name: .identifier("\(prefix)_\(key)"),
+      name: .identifier("\(Lex.enumNameFor(prefix: prefix))_\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax {
           FunctionParameterSyntax(
             firstName: .wildcardToken(),
             secondName: .identifier("input"),
             colon: .colonToken(),
-            type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
+            type: MemberTypeSyntax(parts: prefixIdent + [.identifier(key), .identifier("Input")])
           )
         },
         effectSpecifiers: FunctionEffectSpecifiersSyntax(
@@ -101,7 +102,7 @@ extension Lex {
           throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
         ),
         returnClause: ReturnClauseSyntax(
-          type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Output")])
+          type: MemberTypeSyntax(parts: prefixIdent + [.identifier(key), .identifier("Output")])
         )
       )
     ) {
@@ -131,7 +132,7 @@ extension Lex {
     let prefix = Lex.structNameFor(prefix: scheme.prefix)
     return FunctionDeclSyntax(
       leadingTrivia: [.newlines(1), .spaces(2)],
-      name: .identifier("\(prefix)_\(key)"),
+      name: .identifier("\(Lex.enumNameFor(prefix: scheme.prefix))_\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax(
           leftParen: .leftParenToken(),
@@ -177,7 +178,7 @@ extension Lex {
     let prefix = Lex.structNameFor(prefix: scheme.prefix)
     return FunctionDeclSyntax(
       leadingTrivia: [.newlines(1), .spaces(2)],
-      name: .identifier("\(prefix)_\(key)"),
+      name: .identifier("\(Lex.enumNameFor(prefix: scheme.prefix))_\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax(
           leftParen: .leftParenToken(),
@@ -220,7 +221,8 @@ extension Lex {
   }
 
   private static func makeHandlerRegistration(leadingTrivia: Trivia? = nil, prefix: String, type: String, method: String) -> TryExprSyntax {
-    TryExprSyntax(
+    let prefixIdent: [TokenSyntax] = Lex.structNameFor(prefix: prefix).split(separator: ".").map({ .identifier(String($0)) })
+    return TryExprSyntax(
       leadingTrivia: leadingTrivia,
       expression: FunctionCallExprSyntax(
         callee: MemberAccessExprSyntax(parts: [.identifier("transport"), .identifier("register")])
@@ -232,7 +234,7 @@ extension Lex {
               leadingTrivia: [.newlines(1), .spaces(8)],
               expression: AwaitExprSyntax(
                 expression: FunctionCallExprSyntax(
-                  callee: MemberAccessExprSyntax(parts: [.identifier("server"), .identifier("\(prefix)_\(type)")])
+                  callee: MemberAccessExprSyntax(parts: [.identifier("server"), .identifier("\(Lex.enumNameFor(prefix: prefix))_\(type)")])
                 ) {
                   for (i, label) in ["request", "body", "metadata"].enumerated() {
                     LabeledExprSyntax(
@@ -264,7 +266,7 @@ extension Lex {
                 StringSegmentSyntax(content: .stringSegment("/"))
                 ExpressionSegmentSyntax {
                   LabeledExprSyntax(
-                    expression: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(type), .identifier("id")])
+                    expression: MemberAccessExprSyntax(parts: prefixIdent + [.identifier(type), .identifier("id")])
                   )
                 }
                 StringSegmentSyntax(content: .stringSegment(""))
@@ -420,7 +422,7 @@ extension Lex {
   private static func makeHandlerMethod(leadingTrivia: Trivia? = nil, key: String, prefix: String, schema: TypeSchema, def: any HTTPAPITypeDefinition, defMap: ExtDefMap) -> FunctionDeclSyntax {
     FunctionDeclSyntax(
       leadingTrivia: .spaces(2),
-      name: .identifier("\(prefix)_\(key)"),
+      name: .identifier("\(Lex.enumNameFor(prefix: prefix))_\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax {
           FunctionParameterSyntax(
@@ -512,7 +514,7 @@ extension Lex {
                 FunctionCallExprSyntax(
                   callee: MemberAccessExprSyntax(
                     leadingTrivia: [.newlines(1), .spaces(10)],
-                    parts: [.identifier("APIHandler"), .identifier("\(prefix)_\(key)")]
+                    parts: [.identifier("APIHandler"), .identifier("\(Lex.enumNameFor(prefix: prefix))_\(key)")]
                   )
                 ) {
                   LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .dollarIdentifier("$0")))

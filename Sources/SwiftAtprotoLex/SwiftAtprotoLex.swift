@@ -114,11 +114,8 @@ func writeSchemaCode(
         return (
           makeItemList(
             initialDecl: DeclSyntax(
-              EnumDeclSyntax(
-                modifiers: [
-                  DeclModifierSyntax(name: .keyword(.public))
-                ],
-                name: .identifier(Lex.structNameFor(prefix: prefix))
+              ExtensionDeclSyntax(
+                extendedType: TypeSyntax(MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix)))
               ) { types }
             ), parts: records),
           methods,
@@ -134,6 +131,7 @@ func writeSchemaCode(
     }
     return (combine(blocks.compactMap({ $0 })), combine(methods.compactMap({ $0 })))
   }
+  let prefixes = schemasArray.map(\.0)
   let clientSrc: String = SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
     ImportDeclSyntax(
       path: [ImportPathComponentSyntax(name: "Foundation")]
@@ -160,6 +158,12 @@ func writeSchemaCode(
         ],
         trailingTrivia: .newlines(2)
       )
+    }
+    for node in EnumDeclSyntaxNode.buildTree(from: prefixes) {
+      node.generateEnums()
+    }
+    for prefix in prefixes {
+      genDeprecatedEnum(prefix: prefix)
     }
     blocks
     if !methods.isEmpty {
@@ -192,6 +196,95 @@ func combine(_ parts: [MemberBlockItemListSyntax]) -> MemberBlockItemListSyntax 
   }
 }
 
+class EnumDeclSyntaxNode {
+  let name: String
+  var children: [String: EnumDeclSyntaxNode] = [:]
+
+  init(name: String) {
+    self.name = name
+  }
+
+  func generateEnums() -> EnumDeclSyntax {
+    EnumDeclSyntax(
+      modifiers: [
+        DeclModifierSyntax(name: .keyword(.public))
+      ],
+      name: .identifier(name)
+    ) {
+      for childKey in children.keys.sorted() {
+        children[childKey]!.generateEnums()
+      }
+    }
+  }
+
+  static func buildTree(from strings: [String]) -> [EnumDeclSyntaxNode] {
+    var roots: [String: EnumDeclSyntaxNode] = [:]
+
+    for s in strings {
+      let parts = s.components(separatedBy: ".")
+      guard let firstPart = parts.first else { continue }
+
+      if roots[firstPart] == nil {
+        roots[firstPart] = EnumDeclSyntaxNode(name: firstPart.capitalized)
+      }
+
+      var current = roots[firstPart]!
+      for part in parts.dropFirst() {
+        if current.children[part] == nil {
+          current.children[part] = EnumDeclSyntaxNode(name: part.capitalized)
+        }
+        current = current.children[part]!
+      }
+    }
+    return roots.values.sorted { $0.name < $1.name }
+  }
+}
+
+func genDeprecatedEnum(prefix: String) -> TypeAliasDeclSyntax {
+  TypeAliasDeclSyntax(
+    leadingTrivia: .newlines(2),
+    attributes: [
+      AttributeListSyntax.Element(
+        AttributeSyntax(
+          atSign: .atSignToken(),
+          attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("available"))),
+          leftParen: .leftParenToken(),
+          arguments: AttributeSyntax.Arguments(
+            AvailabilityArgumentListSyntax {
+              AvailabilityArgumentSyntax(
+                argument: AvailabilityArgumentSyntax.Argument(.binaryOperator("*"))
+              )
+              AvailabilityArgumentSyntax(
+                argument: AvailabilityArgumentSyntax.Argument(.keyword(.deprecated))
+              )
+              AvailabilityArgumentSyntax(
+                argument: AvailabilityArgumentSyntax.Argument(
+                  AvailabilityLabeledArgumentSyntax(
+                    label: .keyword(.message),
+                    colon: .colonToken(),
+                    value: AvailabilityLabeledArgumentSyntax.Value(
+                      SimpleStringLiteralExprSyntax(
+                        openingQuote: .stringQuoteToken(),
+                        segments: SimpleStringLiteralSegmentListSyntax([
+                          StringSegmentSyntax(content: .stringSegment("Use `\(Lex.structNameFor(prefix: prefix))` instead."))
+                        ]),
+                        closingQuote: .stringQuoteToken()
+                      ))
+                  )))
+            }),
+          rightParen: .rightParenToken()
+        )
+      )
+    ],
+    modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+    name: .identifier(Lex.enumNameFor(prefix: prefix)),
+    initializer: TypeInitializerClauseSyntax(
+      equal: .equalToken(),
+      value: MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix))
+    )
+  )
+}
+
 extension URL {
   fileprivate func prefix(baseURL: URL) -> String {
     precondition(path.hasPrefix(baseURL.path))
@@ -215,20 +308,6 @@ enum Lex {
       .lineComment("//"),
       .newlines(2),
     ])
-  }
-
-  static func baseFile(prefix: String) -> String {
-    let src = SourceFileSyntax(
-      statementsBuilder: {
-        EnumDeclSyntax(
-          modifiers: [
-            DeclModifierSyntax(name: .keyword(.public))
-          ],
-          name: .identifier(Lex.structNameFor(prefix: prefix))
-        ) {}
-      },
-      trailingTrivia: .newline)
-    return src.formatted().description
   }
 
   @MemberBlockItemListBuilder
@@ -331,7 +410,7 @@ enum Lex {
                           SimpleStringLiteralExprSyntax(
                             openingQuote: .stringQuoteToken(),
                             segments: SimpleStringLiteralSegmentListSyntax([
-                              StringSegmentSyntax(content: .stringSegment("Use `\(Lex.structNameFor(prefix: ot.prefix)).\(name)` instead."))
+                              StringSegmentSyntax(content: .stringSegment("Use `\(Lex.enumNameFor(prefix: ot.prefix)).\(name)` instead."))
                             ]),
                             closingQuote: .stringQuoteToken()
                           ))
@@ -342,7 +421,7 @@ enum Lex {
           )
         ],
         modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
-        name: .identifier("\(Lex.structNameFor(prefix: ot.prefix))_\(name)"),
+        name: .identifier("\(Lex.enumNameFor(prefix: ot.prefix))_\(name)"),
         initializer: TypeInitializerClauseSyntax(
           equal: .equalToken(),
           value: MemberTypeSyntax(parts: [.identifier(Lex.structNameFor(prefix: ot.prefix)), .identifier(name)])
@@ -454,7 +533,7 @@ enum Lex {
                     DictionaryElementSyntax(
                       key: StringLiteralExprSyntax(openingQuote: .stringQuoteToken(leadingTrivia: [.newlines(1), .spaces(4)]), content: recordType.id),
                       colon: .colonToken(),
-                      value: MemberAccessExprSyntax(parts: [.identifier(Lex.structNameFor(prefix: recordType.prefix)), .identifier(name), .keyword(.self)]),
+                      value: MemberAccessExprSyntax(parts: Lex.enumIdentifiersFor(prefix: recordType.prefix) + [.identifier(name), .keyword(.self)]),
                       trailingComma: .commaToken()
                     )
                   }
@@ -732,7 +811,15 @@ enum Lex {
   }
 
   static func structNameFor(prefix: String) -> String {
+    prefix.split(separator: ".").map({ $0.capitalized }).joined(separator: ".")
+  }
+
+  static func enumNameFor(prefix: String) -> String {
     "\(prefix.split(separator: ".").joined())types"
+  }
+
+  static func enumIdentifiersFor(prefix: String) -> [TokenSyntax] {
+    prefix.split(separator: ".").map({ .identifier(.init(String($0).capitalized)) })
   }
 
   static func caseNameFromId(id: String, prefix: String) -> String {
