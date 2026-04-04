@@ -159,3 +159,17 @@ extension MemberBlockItemListSyntax {
 extension CodeBlockItemListSyntax {
   static let empty = Self(itemsBuilder: {})
 }
+
+@CodeBlockItemListBuilder
+func combine(_ parts: [CodeBlockItemListSyntax]) -> CodeBlockItemListSyntax {
+  for part in parts {
+    part
+  }
+}
+
+@MemberBlockItemListBuilder
+func combine(_ parts: [MemberBlockItemListSyntax]) -> MemberBlockItemListSyntax {
+  for part in parts {
+    part
+  }
+}

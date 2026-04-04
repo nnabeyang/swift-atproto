@@ -167,20 +167,6 @@ func writeSchemaCode(
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
 
-@CodeBlockItemListBuilder
-func combine(_ parts: [CodeBlockItemListSyntax]) -> CodeBlockItemListSyntax {
-  for part in parts {
-    part
-  }
-}
-
-@MemberBlockItemListBuilder
-func combine(_ parts: [MemberBlockItemListSyntax]) -> MemberBlockItemListSyntax {
-  for part in parts {
-    part
-  }
-}
-
 class EnumDeclSyntaxNode {
   let name: String
   var children: [String: EnumDeclSyntaxNode] = [:]
