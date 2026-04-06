@@ -1146,27 +1146,11 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       members: [
         (
           "headers",
-          MemberTypeSyntax(
-            baseType: MemberTypeSyntax(
-              baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(typeName))),
-              period: .periodToken(),
-              name: .identifier("Input")
-            ),
-            period: .periodToken(),
-            name: .identifier("Headers")
-          )
+          MemberTypeSyntax(parts: [.identifier(typeName), .identifier("Input"), .identifier("Headers")])
         ),
         (
           "body",
-          MemberTypeSyntax(
-            baseType: MemberTypeSyntax(
-              baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(typeName))),
-              period: .periodToken(),
-              name: .identifier("Input")
-            ),
-            period: .periodToken(),
-            name: .identifier("Body")
-          )
+          MemberTypeSyntax(parts: [.identifier(typeName), .identifier("Input"), .identifier("Body")])
         ),
       ])
   }
