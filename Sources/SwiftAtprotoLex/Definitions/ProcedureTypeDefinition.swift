@@ -48,7 +48,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return "*/*"
   }
 
-  func inputBody(fname: String, defMap: ExtDefMap, prefix: String) -> EnumCaseElementSyntax {
+  func inputBody(fname: String, defMap: ExtDefMap, prefix: String) -> EnumCaseElementSyntax? {
     if let input {
       switch input.encoding {
       case .json, .jsonl:
@@ -104,18 +104,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         )
       }
     }
-    return EnumCaseElementSyntax(
-      name: .identifier("json"),
-      parameterClause: EnumCaseParameterClauseSyntax(
-        leftParen: .leftParenToken(),
-        parameters: EnumCaseParameterListSyntax([
-          EnumCaseParameterSyntax(
-            type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("Bool")))
-          )
-        ]),
-        rightParen: .rightParenToken()
-      )
-    )
+    return nil
   }
 
   func requestBody(fname: String, defMap: ExtDefMap, prefix: String) -> IdentifierTypeSyntax {
@@ -371,31 +360,33 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   )
                 ])
               )
-              EnumDeclSyntax(
-                leadingTrivia: [.newlines(2), .spaces(4)],
-                attributes: AttributeListSyntax {
-                  AttributeSyntax(
-                    atSign: .atSignToken(),
-                    attributeName: IdentifierTypeSyntax(name: .identifier("frozen"))
-                  )
-                },
-                modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                name: .identifier("Body"),
-                inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"])
-              ) {
-                EnumCaseDeclSyntax(leadingTrivia: [.newlines(1), .spaces(6)]) {
-                  inputBody(fname: name, defMap: defMap, prefix: prefix)
+              if let input = inputBody(fname: name, defMap: defMap, prefix: prefix) {
+                EnumDeclSyntax(
+                  leadingTrivia: [.newlines(2), .spaces(4)],
+                  attributes: AttributeListSyntax {
+                    AttributeSyntax(
+                      atSign: .atSignToken(),
+                      attributeName: IdentifierTypeSyntax(name: .identifier("frozen"))
+                    )
+                  },
+                  modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                  name: .identifier("Body"),
+                  inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"])
+                ) {
+                  EnumCaseDeclSyntax(leadingTrivia: [.newlines(1), .spaces(6)]) {
+                    input
+                  }
                 }
+                varDecl(
+                  ident: "body",
+                  type: MemberTypeSyntax(
+                    baseType: MemberTypeSyntax(
+                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                      name: .identifier("Input")
+                    ),
+                    name: .identifier("Body")
+                  ))
               }
-              varDecl(
-                ident: "body",
-                type: MemberTypeSyntax(
-                  baseType: MemberTypeSyntax(
-                    baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
-                    name: .identifier("Input")
-                  ),
-                  name: .identifier("Body")
-                ))
               procedureInputInitializer(leadingTrivia: [.newlines(2), .spaces(4)], typeName: ts.typeName)
             }
           ))
@@ -1141,17 +1132,19 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
   }
 
   private func procedureInputInitializer(leadingTrivia: Trivia? = nil, typeName: String) -> InitializerDeclSyntax {
-    memberInitializer(
-      leadingTrivia: leadingTrivia,
-      members: [
-        (
-          "headers",
-          MemberTypeSyntax(parts: [.identifier(typeName), .identifier("Input"), .identifier("Headers")])
-        ),
+    var members: [(String, MemberTypeSyntax)] = [
+      (
+        "headers",
+        MemberTypeSyntax(parts: [.identifier(typeName), .identifier("Input"), .identifier("Headers")])
+      )
+    ]
+    if self.input != nil {
+      members.append(
         (
           "body",
           MemberTypeSyntax(parts: [.identifier(typeName), .identifier("Input"), .identifier("Body")])
-        ),
-      ])
+        ))
+    }
+    return memberInitializer(leadingTrivia: leadingTrivia, members: members)
   }
 }
