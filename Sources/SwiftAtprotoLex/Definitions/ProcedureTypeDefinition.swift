@@ -48,22 +48,6 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return "*/*"
   }
 
-  var inputRPCValue: ExprSyntax {
-    if input != nil {
-      ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("input")))
-    } else {
-      ExprSyntax(
-        MemberAccessExprSyntax(
-          base: OptionalChainingExprSyntax(
-            expression: DeclReferenceExprSyntax(baseName: .identifier("Bool")),
-            questionMark: .postfixQuestionMarkToken()
-          ),
-          period: .periodToken(),
-          declName: DeclReferenceExprSyntax(baseName: .identifier("none"))
-        ))
-    }
-  }
-
   func inputBody(fname: String, defMap: ExtDefMap, prefix: String) -> EnumCaseElementSyntax {
     if let input {
       switch input.encoding {
