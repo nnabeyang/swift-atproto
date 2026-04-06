@@ -134,6 +134,58 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     )
   }
 
+  func requestBody(fname: String, defMap: ExtDefMap, prefix: String) -> IdentifierTypeSyntax {
+    if let input {
+      switch input.encoding {
+      case .json, .jsonl:
+        let token: String = {
+          guard let schema = input.schema else {
+            return "EmptyResponse"
+          }
+          let outname: String
+          if case .ref(let def) = schema.type {
+            (_, outname) = schema.namesFromRef(ref: def.ref, defMap: defMap)
+          } else {
+            outname = "\(fname)_Input"
+          }
+          return outname
+        }()
+        return IdentifierTypeSyntax(name: .identifier(token))
+      case .text:
+        return IdentifierTypeSyntax(name: .identifier("String"))
+      case .cbor, .car, .any, .mp4:
+        return IdentifierTypeSyntax(name: .identifier("Data"))
+      }
+    }
+    return IdentifierTypeSyntax(name: .identifier("Bool"))
+  }
+
+  func responseBody(fname: String, defMap: ExtDefMap, prefix: String) -> IdentifierTypeSyntax {
+    if let output {
+      switch output.encoding {
+      case .json, .jsonl:
+        let token: String = {
+          guard let schema = output.schema else {
+            return "EmptyResponse"
+          }
+          let outname: String
+          if case .ref(let def) = schema.type {
+            (_, outname) = schema.namesFromRef(ref: def.ref, defMap: defMap)
+          } else {
+            outname = "\(fname)_Output"
+          }
+          return outname
+        }()
+        return IdentifierTypeSyntax(name: .identifier(token))
+      case .text:
+        return IdentifierTypeSyntax(name: .identifier("String"))
+      case .cbor, .car, .any, .mp4:
+        return IdentifierTypeSyntax(name: .identifier("Data"))
+      }
+    }
+    return IdentifierTypeSyntax(name: .identifier("Bool"))
+  }
+
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax] {
     var arguments = [FunctionParameterSyntax]()
     guard let input else { return arguments }
@@ -181,10 +233,30 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
       ],
-      name: .identifier(ts.typeName)
+      name: .identifier(ts.typeName),
+      inheritanceClause: InheritanceClauseSyntax {
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCProcedure")))
+      }
     ) {
+      staticLetDecl(leadingTrivia: [.newlines(1), .spaces(2)], ident: "id", value: StringLiteralExprSyntax(content: type))
+      staticLetDecl(leadingTrivia: [.newlines(1), .spaces(2)], ident: "contentType", value: StringLiteralExprSyntax(content: contentType))
+      TypeAliasDeclSyntax(
+        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+        name: .identifier("RequestBody"),
+        initializer: TypeInitializerClauseSyntax(
+          equal: .equalToken(),
+          value: requestBody(fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix))
+        )
+      )
+      TypeAliasDeclSyntax(
+        modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
+        name: .identifier("ResponseBody"),
+        initializer: TypeInitializerClauseSyntax(
+          equal: .equalToken(),
+          value: responseBody(fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix))
+        )
+      )
       if generate.contains(.server) {
-        staticLetDecl(leadingTrivia: [.newlines(1), .spaces(2)], ident: "id", value: StringLiteralExprSyntax(content: type))
         MemberBlockItemSyntax(
           decl: DeclSyntax(
             StructDeclSyntax(

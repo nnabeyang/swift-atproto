@@ -18,10 +18,13 @@ public protocol ATPClientProtocol: Sendable {
   func tokenIsExpired(error: UnExpectedError) -> Bool
   func getAuthorization(endpoint: String) -> String?
 
+  @available(*, deprecated, renamed: "call", message: "Use the type-safe 'call(_:input:retry:)' method instead.")
   mutating func fetch<T: Decodable>(
     endpoint: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?,
     input: (some Encodable)?, retry: Bool
   ) async throws -> T
+  mutating func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody
+  mutating func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?, retry: Bool) async throws -> X.ResponseBody
   mutating func refreshSession() async -> Bool
 
   static var errorDomain: String { get }
@@ -109,6 +112,7 @@ extension ATPClientProtocol {
     }
   }
 
+  @available(*, deprecated, renamed: "call", message: "Use the type-safe 'call(_:input:retry:)' method instead.")
   public mutating func fetch<T: Decodable>(
     endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?, input: (some Encodable)?, retry: Bool
   ) async throws -> T {
@@ -173,6 +177,89 @@ extension ATPClientProtocol {
     return try decoder.decode(T.self, from: data)
   }
 
+  public mutating func call<X: XRPCQuery>(_: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody {
+    let nsId = X.id
+    var url = serviceEndpoint.appending(path: Self.encode(nsId, component: .nsid))
+    if let params = input.asParameters {
+      url.append(percentEncodedQueryItems: Self.makeParameters(params: params))
+    }
+
+    var request = URLRequest(url: url)
+    request.addValue("application/json", forHTTPHeaderField: "Accept")
+    if let authorization = getAuthorization(endpoint: nsId) {
+      request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
+    }
+    if let proxy = getProxy(nsid: nsId) {
+      request.addValue(proxy, forHTTPHeaderField: "atproto-proxy")
+    }
+    request.httpMethod = "GET"
+    let (data, statusCode) = try await HTTPClient.shared.executeTask(for: request)
+
+    guard 200...299 ~= statusCode else {
+      if let error = try? decoder.decode(UnExpectedError.self, from: data) {
+        if tokenIsExpired(error: error), retry, await refreshSession() {
+          return try await self.call(X.self, input: input, retry: false)
+        }
+        throw X.Error(error: error)
+      } else {
+        let message = String(decoding: data, as: UTF8.self)
+        throw NSError(domain: Self.errorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(statusCode))"])
+      }
+    }
+    return try decoder.decode(X.ResponseBody.self, from: data)
+  }
+
+  public mutating func call<X: XRPCProcedure>(_: X.Type, input: X.RequestBody? = nil, retry: Bool) async throws -> X.ResponseBody {
+    let nsId = X.id
+    let url = serviceEndpoint.appending(path: Self.encode(nsId, component: .nsid))
+    var request = URLRequest(url: url)
+    request.addValue("application/json", forHTTPHeaderField: "Accept")
+    if let authorization = getAuthorization(endpoint: nsId) {
+      request.addValue("Bearer \(authorization)", forHTTPHeaderField: "Authorization")
+    }
+    if let proxy = getProxy(nsid: nsId) {
+      request.addValue(proxy, forHTTPHeaderField: "atproto-proxy")
+    }
+    request.httpMethod = "POST"
+    request.addValue(X.contentType, forHTTPHeaderField: "Content-Type")
+    if let input {
+      let encoder = JSONEncoder()
+      encoder.dataEncodingStrategy = Self.dataEncodingStrategy
+      encoder.outputFormatting = [.withoutEscapingSlashes]
+      let body: Data =
+        switch input {
+        case let data as Data:
+          data
+        default:
+          try encoder.encode(input)
+        }
+      request.httpBody = body
+      request.addValue("\(body.count)", forHTTPHeaderField: "Content-Length")
+    }
+
+    let (data, statusCode) = try await HTTPClient.shared.executeTask(for: request)
+
+    guard 200...299 ~= statusCode else {
+      if let error = try? decoder.decode(UnExpectedError.self, from: data) {
+        if tokenIsExpired(error: error), retry, await refreshSession() {
+          return try await self.call(X.self, input: input, retry: false)
+        }
+        throw X.Error(error: error)
+      } else {
+        let message = String(decoding: data, as: UTF8.self)
+        throw NSError(domain: Self.errorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(statusCode))"])
+      }
+    }
+
+    if X.ResponseBody.self == Bool.self {
+      return true as! X.ResponseBody
+    }
+    if X.ResponseBody.self == Data.self {
+      return data as! X.ResponseBody
+    }
+    return try decoder.decode(X.ResponseBody.self, from: data)
+  }
+
   public static func makeParameters(params: Parameters) -> [URLQueryItem] {
     var items = [URLQueryItem]()
     for (key, value) in params {
@@ -216,6 +303,7 @@ extension ATPClientProtocol {
 public protocol XRPCError: Error, LocalizedError, Decodable, Sendable {
   var error: String? { get }
   var message: String? { get }
+  init(error: UnExpectedError)
 }
 
 extension XRPCError {
@@ -230,6 +318,11 @@ public final class UnExpectedError: XRPCError {
   public init(error: String?, message: String?) {
     self.error = error
     self.message = message
+  }
+
+  public init(error: UnExpectedError) {
+    self.error = error.error
+    self.message = error.message
   }
 }
 

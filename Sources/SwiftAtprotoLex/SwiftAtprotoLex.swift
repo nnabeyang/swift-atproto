@@ -266,8 +266,10 @@ enum Lex {
 
   static func writeMethod(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
     switch ts.type {
-    case .procedure(let def as any HTTPAPITypeDefinition), .query(let def as any HTTPAPITypeDefinition):
-      ts.writeRPC(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix)
+    case .procedure(let def):
+      ts.writeProcedure(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix)
+    case .query(let def):
+      ts.writeQuery(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix)
     default:
       fatalError()
     }

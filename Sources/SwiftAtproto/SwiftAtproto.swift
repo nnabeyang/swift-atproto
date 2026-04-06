@@ -11,6 +11,33 @@ enum TypeCodingKeys: String, CodingKey {
   case type = "$type"
 }
 
+public protocol XRPCQuery: Sendable {
+  associatedtype ResponseBody: Codable & Sendable & Hashable
+  associatedtype Input: XRPCQueryInput
+  associatedtype Error: XRPCError
+
+  static var id: String { get }
+}
+
+public protocol XRPCQueryInput: Sendable & Hashable {
+  associatedtype Query: XRPCInputQuery
+
+  var query: Query { get }
+}
+
+public protocol XRPCInputQuery: Sendable, Hashable {
+  var asParameters: Parameters? { get }
+}
+
+public protocol XRPCProcedure: Sendable {
+  associatedtype RequestBody: Codable & Sendable & Hashable
+  associatedtype ResponseBody: Codable & Sendable & Hashable
+  associatedtype Error: XRPCError
+
+  static var id: String { get }
+  static var contentType: String { get }
+}
+
 public protocol UnknownATPValueProtocol: Codable, Sendable, Hashable {
   static func record(_: any ATProtoRecord) -> Self
   static func any(_: any Codable & Sendable & Hashable) -> Self
