@@ -95,22 +95,6 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return queries
   }
 
-  var contentType: String {
-    "*/*"
-  }
-
-  var inputRPCValue: ExprSyntax {
-    ExprSyntax(
-      MemberAccessExprSyntax(
-        base: OptionalChainingExprSyntax(
-          expression: DeclReferenceExprSyntax(baseName: .identifier("Bool")),
-          questionMark: .postfixQuestionMarkToken()
-        ),
-        period: .periodToken(),
-        declName: DeclReferenceExprSyntax(baseName: .identifier("none"))
-      ))
-  }
-
   func output(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> TokenSyntax {
     if let output {
       switch output.encoding {
@@ -131,7 +115,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return .identifier("Data")
       }
     }
-    return .identifier("Bool")
+    return .identifier("EmptyResponse")
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax] {

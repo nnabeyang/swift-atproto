@@ -553,7 +553,8 @@ extension Lex {
   }
 
   private static func makeDeserializerExpr(key: String, prefix: String, schema: TypeSchema, def: ProcedureTypeDefinition, defMap: ExtDefMap) -> ClosureExprSyntax {
-    ClosureExprSyntax(signaturesBuilder: {
+    let hasInput = def.input != nil
+    return ClosureExprSyntax(signaturesBuilder: {
       ClosureShorthandParameterSyntax(name: .identifier("request"))
       ClosureShorthandParameterSyntax(name: .identifier("requestBody"))
       ClosureShorthandParameterSyntax(name: .identifier("metadata"))
@@ -594,41 +595,43 @@ extension Lex {
           )
         )
       }
-      VariableDeclSyntax(
-        leadingTrivia: [.newlines(1), .spaces(10)],
-        bindingSpecifier: .keyword(.let),
-        bindings: PatternBindingListSyntax([
-          PatternBindingSyntax(
-            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("contentType"))),
-            initializer: InitializerClauseSyntax(
-              equal: .equalToken(),
-              value: FunctionCallExprSyntax(
-                callee: MemberAccessExprSyntax(parts: [.identifier("converter"), .identifier("extractContentTypeIfPresent")])
-              ) {
-                LabeledExprSyntax(
-                  label: .identifier("in"),
-                  colon: .colonToken(),
-                  expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("headerFields")])
-                )
-              }
+      if hasInput {
+        VariableDeclSyntax(
+          leadingTrivia: [.newlines(1), .spaces(10)],
+          bindingSpecifier: .keyword(.let),
+          bindings: PatternBindingListSyntax([
+            PatternBindingSyntax(
+              pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("contentType"))),
+              initializer: InitializerClauseSyntax(
+                equal: .equalToken(),
+                value: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(parts: [.identifier("converter"), .identifier("extractContentTypeIfPresent")])
+                ) {
+                  LabeledExprSyntax(
+                    label: .identifier("in"),
+                    colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("headerFields")])
+                  )
+                }
+              )
             )
-          )
-        ])
-      )
-      VariableDeclSyntax(
-        bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)]),
-        bindings: PatternBindingListSyntax([
-          PatternBindingSyntax(
-            pattern: IdentifierPatternSyntax(identifier: .identifier("body")),
-            typeAnnotation: TypeAnnotationSyntax(
-              colon: .colonToken(),
-              type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Body")])
+          ])
+        )
+        VariableDeclSyntax(
+          bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)]),
+          bindings: PatternBindingListSyntax([
+            PatternBindingSyntax(
+              pattern: IdentifierPatternSyntax(identifier: .identifier("body")),
+              typeAnnotation: TypeAnnotationSyntax(
+                colon: .colonToken(),
+                type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Body")])
+              )
             )
-          )
-        ])
-      )
-      genChosenContentType(key: key, def: def, prefix: prefix)
-      genInputBodySwitch(key: key, schema: schema, def: def, prefix: prefix, defMap: defMap)
+          ])
+        )
+        genChosenContentType(key: key, def: def, prefix: prefix)
+        genInputBodySwitch(key: key, schema: schema, def: def, prefix: prefix, defMap: defMap)
+      }
       ReturnStmtSyntax(
         leadingTrivia: [.newlines(1), .spaces(10)],
         expression: FunctionCallExprSyntax(
@@ -640,12 +643,14 @@ extension Lex {
             colon: .colonToken(),
             expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("headers"))),
           )
-          LabeledExprSyntax(
-            leadingTrivia: [.newlines(1), .spaces(12)],
-            label: .identifier("body"),
-            colon: .colonToken(),
-            expression: DeclReferenceExprSyntax(baseName: .identifier("body"))
-          )
+          if hasInput {
+            LabeledExprSyntax(
+              leadingTrivia: [.newlines(1), .spaces(12)],
+              label: .identifier("body"),
+              colon: .colonToken(),
+              expression: DeclReferenceExprSyntax(baseName: .identifier("body"))
+            )
+          }
         }
         .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
       )

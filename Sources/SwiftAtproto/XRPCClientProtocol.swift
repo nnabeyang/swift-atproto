@@ -206,6 +206,12 @@ extension ATPClientProtocol {
         throw NSError(domain: Self.errorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Server error: \(message)(\(statusCode))"])
       }
     }
+    if X.ResponseBody.self == EmptyResponse.self {
+      return EmptyResponse() as! X.ResponseBody
+    }
+    if X.ResponseBody.self == Data.self {
+      return data as! X.ResponseBody
+    }
     return try decoder.decode(X.ResponseBody.self, from: data)
   }
 
@@ -251,8 +257,8 @@ extension ATPClientProtocol {
       }
     }
 
-    if X.ResponseBody.self == Bool.self {
-      return true as! X.ResponseBody
+    if X.ResponseBody.self == EmptyResponse.self {
+      return EmptyResponse() as! X.ResponseBody
     }
     if X.ResponseBody.self == Data.self {
       return data as! X.ResponseBody
