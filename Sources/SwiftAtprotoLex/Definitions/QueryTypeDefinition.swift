@@ -115,7 +115,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return .identifier("Data")
       }
     }
-    return .identifier("Bool")
+    return .identifier("EmptyResponse")
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax] {

@@ -156,7 +156,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return IdentifierTypeSyntax(name: .identifier("Data"))
       }
     }
-    return IdentifierTypeSyntax(name: .identifier("Bool"))
+    return IdentifierTypeSyntax(name: .identifier("EmptyResponse"))
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax] {
@@ -202,6 +202,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
 
   func generateDeclaration(leadingTrivia: SwiftSyntax.Trivia?, ts: TypeSchema, name: String, type: String, defMap: ExtDefMap, generate: GenerateOption) -> any DeclSyntaxProtocol {
     let prefix = Lex.structNameFor(prefix: ts.prefix)
+    let responseBody = responseBody(fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix))
     return EnumDeclSyntax(
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
@@ -226,7 +227,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         name: .identifier("ResponseBody"),
         initializer: TypeInitializerClauseSyntax(
           equal: .equalToken(),
-          value: responseBody(fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix))
+          value: responseBody
         )
       )
       if generate.contains(.server) {
@@ -444,12 +445,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                               leftParen: .leftParenToken(),
                                               parameters: EnumCaseParameterListSyntax([
                                                 EnumCaseParameterSyntax(
-                                                  type: TypeSyntax(
-                                                    MemberTypeSyntax(
-                                                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Swift"))),
-                                                      period: .periodToken(),
-                                                      name: .identifier("Bool")
-                                                    ))
+                                                  type: TypeSyntax(responseBody)
                                                 )
                                               ]),
                                               rightParen: .rightParenToken()
@@ -469,12 +465,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                             pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("json"))),
                                             typeAnnotation: TypeAnnotationSyntax(
                                               colon: .colonToken(),
-                                              type: TypeSyntax(
-                                                MemberTypeSyntax(
-                                                  baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Swift"))),
-                                                  period: .periodToken(),
-                                                  name: .identifier("Bool")
-                                                ))
+                                              type: TypeSyntax(responseBody)
                                             ),
                                             accessorBlock: AccessorBlockSyntax(
                                               leftBrace: .leftBraceToken(),
