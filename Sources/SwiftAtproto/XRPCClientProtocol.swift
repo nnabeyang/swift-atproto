@@ -19,21 +19,21 @@ public protocol ATPClientProtocol: Sendable {
   func getAuthorization(endpoint: String) -> String?
 
   @available(*, deprecated, renamed: "call", message: "Use the type-safe 'call(_:input:retry:)' method instead.")
-  mutating func fetch<T: Decodable>(
+  func fetch<T: Decodable>(
     endpoint: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?,
     input: (some Encodable)?, retry: Bool
   ) async throws -> T
-  mutating func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody
-  mutating func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?, retry: Bool) async throws -> X.ResponseBody
-  mutating func refreshSession() async -> Bool
+  func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody
+  func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?, retry: Bool) async throws -> X.ResponseBody
+  func refreshSession() async -> Bool
 
   static var errorDomain: String { get }
 }
 
-public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
+public protocol XRPCClientProtocol: ATPClientProtocol {
   var auth: any XRPCAuth { get set }
 
-  mutating func signout()
+  func signout()
 
   static var moduleName: String { get }
 }
@@ -113,7 +113,7 @@ extension ATPClientProtocol {
   }
 
   @available(*, deprecated, renamed: "call", message: "Use the type-safe 'call(_:input:retry:)' method instead.")
-  public mutating func fetch<T: Decodable>(
+  public func fetch<T: Decodable>(
     endpoint nsid: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?, input: (some Encodable)?, retry: Bool
   ) async throws -> T {
     var url = serviceEndpoint.appending(path: Self.encode(nsid, component: .nsid))
@@ -177,7 +177,7 @@ extension ATPClientProtocol {
     return try decoder.decode(T.self, from: data)
   }
 
-  public mutating func call<X: XRPCQuery>(_: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody {
+  public func call<X: XRPCQuery>(_: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody {
     let nsId = X.id
     var url = serviceEndpoint.appending(path: Self.encode(nsId, component: .nsid))
     if let params = input.asParameters {
@@ -215,7 +215,7 @@ extension ATPClientProtocol {
     return try decoder.decode(X.ResponseBody.self, from: data)
   }
 
-  public mutating func call<X: XRPCProcedure>(_: X.Type, input: X.RequestBody? = nil, retry: Bool) async throws -> X.ResponseBody {
+  public func call<X: XRPCProcedure>(_: X.Type, input: X.RequestBody? = nil, retry: Bool) async throws -> X.ResponseBody {
     let nsId = X.id
     let url = serviceEndpoint.appending(path: Self.encode(nsId, component: .nsid))
     var request = URLRequest(url: url)

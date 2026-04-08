@@ -319,8 +319,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
     return FunctionDeclSyntax(
       modifiers: DeclModifierListSyntax([
-        DeclModifierSyntax(name: .keyword(.public)),
-        DeclModifierSyntax(name: .keyword(.mutating)),
+        DeclModifierSyntax(name: .keyword(.public))
       ]),
       name: .identifier(typeName),
       signature: FunctionSignatureSyntax(
@@ -370,8 +369,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
     return FunctionDeclSyntax(
       modifiers: DeclModifierListSyntax([
-        DeclModifierSyntax(name: .keyword(.public)),
-        DeclModifierSyntax(name: .keyword(.mutating)),
+        DeclModifierSyntax(name: .keyword(.public))
       ]),
       name: .identifier(typeName),
       signature: FunctionSignatureSyntax(
