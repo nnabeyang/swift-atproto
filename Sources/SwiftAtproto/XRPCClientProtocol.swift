@@ -30,7 +30,7 @@ public protocol ATPClientProtocol: Sendable {
   static var errorDomain: String { get }
 }
 
-public protocol XRPCClientProtocol: ATPClientProtocol, Sendable {
+public protocol XRPCClientProtocol: ATPClientProtocol {
   var auth: any XRPCAuth { get set }
 
   mutating func signout()
