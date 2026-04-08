@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol XRPCAuth: Sendable, Equatable, Hashable {
+public protocol XRPCAuth: AnyObject, Sendable, Equatable, Hashable {
   var accessJwt: String { get set }
   var refreshJwt: String { get set }
   var handle: String { get set }
