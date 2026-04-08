@@ -23,8 +23,8 @@ public protocol ATPClientProtocol: Sendable {
     endpoint: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?,
     input: (some Encodable)?, retry: Bool
   ) async throws -> T
-  func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody
-  func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?, retry: Bool) async throws -> X.ResponseBody
+  func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query) async throws -> X.ResponseBody
+  func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody
   func refreshSession() async -> Bool
 
   static var errorDomain: String { get }
@@ -175,6 +175,14 @@ extension ATPClientProtocol {
       return data as! T
     }
     return try decoder.decode(T.self, from: data)
+  }
+
+  public func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query) async throws -> X.ResponseBody {
+    try await call(request, input: input, retry: true)
+  }
+
+  public func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody {
+    try await call(request, input: input, retry: true)
   }
 
   public func call<X: XRPCQuery>(_: X.Type, input: X.Input.Query, retry: Bool) async throws -> X.ResponseBody {
