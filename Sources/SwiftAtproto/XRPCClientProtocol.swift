@@ -1,4 +1,5 @@
 import Foundation
+import GermConvenience
 
 #if os(Linux)
   import AsyncHTTPClient
@@ -10,7 +11,7 @@ public enum HTTPMethod {
   case post
 }
 
-public protocol ATPClientProtocol: Sendable {
+public protocol ATPClientProtocol: XRPCCallable {
   var serviceEndpoint: URL { get }
   var decoder: JSONDecoder { get }
 
@@ -23,8 +24,6 @@ public protocol ATPClientProtocol: Sendable {
     endpoint: String, contentType: String, httpMethod: HTTPMethod, params: Parameters?,
     input: (some Encodable)?, retry: Bool
   ) async throws -> T
-  func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query) async throws -> X.ResponseBody
-  func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody
   func refreshSession() async -> Bool
 
   static var errorDomain: String { get }
@@ -102,6 +101,9 @@ extension XRPCClientProtocol {
 extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
   public static var errorDomain: String { "ATPErrorDomain" }
+  public func response(_ requestComponents: XRPCRequestComponents) async throws -> HTTPDataResponse {
+    fatalError("Not Implemented")
+  }
 
   private static func encode(_ string: String, component: XRPCComponent) -> String {
     switch component {

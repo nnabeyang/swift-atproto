@@ -6,7 +6,7 @@ import PackageDescription
 
 let package = Package(
   name: "SwiftAtproto",
-  platforms: [.macOS(.v14), .iOS(.v17)],
+  platforms: [.macOS(.v15), .iOS(.v17)],
   products: [
     .library(
       name: "SwiftAtproto",
@@ -44,11 +44,13 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
     .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.0.0")),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.18.0"..<"0.20.0"),
+    .package(url: "https://github.com/germ-network/oauth4swift", from: "0.2.0"),
   ],
   targets: [
     .target(
       name: "SwiftAtproto",
       dependencies: [
+        .product(name: "OAuth", package: "oauth4swift"),
         .product(name: "CID", package: "swift-cid"),
         .product(name: "AsyncHTTPClient", package: "async-http-client", condition: .when(platforms: [.linux])),
         .product(name: "NIOHTTP1", package: "swift-nio", condition: .when(platforms: [.linux])),

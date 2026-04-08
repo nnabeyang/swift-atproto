@@ -158,7 +158,7 @@ func writeSchemaCode(
     }
     blocks
     if !methods.isEmpty {
-      ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
+      ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCCallable")) {
         methods
       }
     }
