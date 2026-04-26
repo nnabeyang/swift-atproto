@@ -117,7 +117,6 @@ extension String {
 }
 
 public typealias LexLink = CID
-extension CID: @unchecked @retroactive Sendable {}
 extension CID: @retroactive Hashable {
   public func hash(into hasher: inout Hasher) {
     hasher.combine(self.rawData)

@@ -1,5 +1,5 @@
 {
-  "originHash" : "2725500475ac7ccc0d790a2747ddb59d0711424425a85bc64f879662875b2543",
+  "originHash" : "77475285566c8d4548fc069c78cc51831bf049d3564550b3724aa864a3855f3b",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/krzyzanowskim/CryptoSwift.git",
       "state" : {
-        "revision" : "e45a26384239e028ec87fbcc788f513b67e10d8f",
-        "version" : "1.9.0"
+        "revision" : "f2a627b84c1ff96f21ac2fcb623ab36142dd5512",
+        "version" : "1.10.0"
       }
     },
     {
@@ -67,10 +67,9 @@
     {
       "identity" : "swift-bases",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swift-libp2p/swift-bases.git",
+      "location" : "https://github.com/nnabeyang/swift-bases.git",
       "state" : {
-        "revision" : "96615d4b582f9f6536d8278304ce2a64c8e5288a",
-        "version" : "0.2.0"
+        "revision" : "4e907a237db6494694881f488310ecab2856f22e"
       }
     },
     {
@@ -85,10 +84,9 @@
     {
       "identity" : "swift-cid",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swift-libp2p/swift-cid",
+      "location" : "https://github.com/nnabeyang/swift-cid.git",
       "state" : {
-        "revision" : "f2eb18409e87c0da057624b550a6c4a3e08de5c4",
-        "version" : "0.0.1"
+        "revision" : "00a5ecf04ef8479d537f8f33aae8c9a5b009236a"
       }
     },
     {
@@ -157,10 +155,9 @@
     {
       "identity" : "swift-multibase",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swift-libp2p/swift-multibase.git",
+      "location" : "https://github.com/nnabeyang/swift-multibase",
       "state" : {
-        "revision" : "45f3cf2844477b9d211e1d3e793d0853134fd942",
-        "version" : "0.0.2"
+        "revision" : "41e06fd49fc2b94307f8f47c1566bf0237d806d3"
       }
     },
     {
@@ -175,10 +172,9 @@
     {
       "identity" : "swift-multihash",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swift-libp2p/swift-multihash.git",
+      "location" : "https://github.com/nnabeyang/swift-multihash.git",
       "state" : {
-        "revision" : "7ea5a9866bd341601fa61647d521880944139353",
-        "version" : "0.0.4"
+        "revision" : "19d4a8a7e29cb38e8e528be58d2a5d2618b727db"
       }
     },
     {

@@ -36,8 +36,8 @@ let package = Package(
     ),
   ],
   dependencies: [
-    .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
-    .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.0.2"),
+    .package(url: "https://github.com/nnabeyang/swift-cid.git", revision: "00a5ecf04ef8479d537f8f33aae8c9a5b009236a"),
+    .package(url: "https://github.com/nnabeyang/swift-multibase", revision: "41e06fd49fc2b94307f8f47c1566bf0237d806d3"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"604.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMajor(from: "1.3.1")),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
