@@ -29,7 +29,7 @@ struct Lexgen: AsyncParsableCommand {
       let config = try SourceControl.main(configurationURL: configurationURL, outdir: outdir)
       guard !fetchOnly else { return }
       try await SwiftAtprotoLex.main(
-        outdir: config.module,
+        outdir: rootURL.appending(component: config.module),
         path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path(),
         generate: config.generate
       )

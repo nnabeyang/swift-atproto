@@ -42,12 +42,14 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   let checkoutDirectory = checkoutDirectoryURL(packageRootURL: rootURL)
   let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
   let lockFileURL = lockFileURL(packageRootURL: rootURL)
-  if let resolvedStore = try? LexiconsStore.load(from: lockFileURL),
+  let lexiconsIsExisting = FileManager.default.fileExists(atPath: lexiconsDirectory.path())
+  if lexiconsIsExisting,
+    let resolvedStore = try? LexiconsStore.load(from: lockFileURL),
     originHash == resolvedStore.originHash
   {
     return config
   }
-  if FileManager.default.fileExists(atPath: lexiconsDirectory.path()) {
+  if lexiconsIsExisting {
     try FileManager.default.removeItem(at: lexiconsDirectory)
   }
   try FileManager.default.createDirectory(at: lexiconsDirectory, withIntermediateDirectories: true)
