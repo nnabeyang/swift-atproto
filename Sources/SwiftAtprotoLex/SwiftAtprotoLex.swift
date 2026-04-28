@@ -6,13 +6,12 @@ import SwiftSyntaxBuilder
   import SourceControl
 #endif
 
-public func main(outdir: String, path: String, generate: GenerateOption) async throws {
+public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOption) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
   let schemasMap = try await decodeSchemasByPrefix(from: fileURLs, baseURL: url)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
-  let outdirBaseURL = URL(filePath: outdir)
   try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate)
 }
 
