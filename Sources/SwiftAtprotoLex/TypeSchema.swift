@@ -315,120 +315,132 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     }
   }
 
-  func writeProcedure(leadingTrivia: Trivia? = nil, def: ProcedureTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
+  func writeProcedure(leadingTrivia: Trivia? = nil, def: ProcedureTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> DeclSyntaxProtocol {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
     return FunctionDeclSyntax(
-      modifiers: DeclModifierListSyntax([
-        DeclModifierSyntax(name: .keyword(.public))
-      ]),
+      modifiers: DeclModifierListSyntax(
+        protocolRequirement
+          ? []
+          : [
+            DeclModifierSyntax(name: .keyword(.public))
+          ]),
       name: .identifier(typeName),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax {
-          def.rpcArguments(ts: self, fname: typeName, defMap: defMap, prefix: prefix)
+          def.rpcArguments(ts: self, fname: typeName, defMap: defMap, prefix: prefix, protocolRequirement: protocolRequirement)
         },
         effectSpecifiers: FunctionEffectSpecifiersSyntax(
           asyncSpecifier: .keyword(.async),
           throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
         ),
         returnClause: ReturnClauseSyntax(type: MemberTypeSyntax(parts: prefixIdentifiers + [.identifier(typeName), .identifier("ResponseBody")]))
-      )
-    ) {
-      TryExprSyntax(
-        leadingTrivia: [.newlines(1), .spaces(2)],
-        expression: ExprSyntax(
-          AwaitExprSyntax(
-            awaitKeyword: .keyword(.await),
+      ),
+      body: protocolRequirement
+        ? nil
+        : .init {
+          TryExprSyntax(
+            leadingTrivia: [.newlines(1), .spaces(2)],
             expression: ExprSyntax(
-              FunctionCallExprSyntax(
-                callee: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("call")))
-              ) {
-                LabeledExprSyntax(
-                  expression: MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .keyword(.self)])
+              AwaitExprSyntax(
+                awaitKeyword: .keyword(.await),
+                expression: ExprSyntax(
+                  FunctionCallExprSyntax(
+                    callee: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("call")))
+                  ) {
+                    LabeledExprSyntax(
+                      expression: MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .keyword(.self)])
+                    )
+                    if def.input != nil {
+                      LabeledExprSyntax(
+                        label: .identifier("input"),
+                        colon: .colonToken(),
+                        expression: DeclReferenceExprSyntax(baseName: .identifier("input")),
+                        trailingComma: .commaToken()
+                      )
+                    }
+                    LabeledExprSyntax(
+                      label: .identifier("retry"),
+                      colon: .colonToken(),
+                      expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
+                    )
+                  }
                 )
-                if def.input != nil {
-                  LabeledExprSyntax(
-                    label: .identifier("input"),
-                    colon: .colonToken(),
-                    expression: DeclReferenceExprSyntax(baseName: .identifier("input")),
-                    trailingComma: .commaToken()
-                  )
-                }
-                LabeledExprSyntax(
-                  label: .identifier("retry"),
-                  colon: .colonToken(),
-                  expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
-                )
-              }
-            )
-          ))
-      )
-    }
+              ))
+          )
+        })
   }
 
-  func writeQuery(leadingTrivia: Trivia? = nil, def: QueryTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
+  func writeQuery(leadingTrivia: Trivia? = nil, def: QueryTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> DeclSyntaxProtocol {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
+
     return FunctionDeclSyntax(
-      modifiers: DeclModifierListSyntax([
-        DeclModifierSyntax(name: .keyword(.public))
-      ]),
+      modifiers: DeclModifierListSyntax(
+        protocolRequirement
+          ? []
+          : [
+            DeclModifierSyntax(name: .keyword(.public))
+          ]),
       name: .identifier(typeName),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax {
-          def.rpcArguments(ts: self, fname: typeName, defMap: defMap, prefix: prefix)
+          def.rpcArguments(ts: self, fname: typeName, defMap: defMap, prefix: prefix, protocolRequirement: protocolRequirement)
         },
         effectSpecifiers: FunctionEffectSpecifiersSyntax(
           asyncSpecifier: .keyword(.async),
           throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
         ),
         returnClause: ReturnClauseSyntax(type: MemberTypeSyntax(parts: prefixIdentifiers + [.identifier(typeName), .identifier("ResponseBody")]))
-      )
-    ) {
-      TryExprSyntax(
-        leadingTrivia: [.newlines(1), .spaces(2)],
-        expression: ExprSyntax(
-          AwaitExprSyntax(
-            awaitKeyword: .keyword(.await),
+      ),
+      body: protocolRequirement
+        ? nil
+        : .init {
+          TryExprSyntax(
+            leadingTrivia: [.newlines(1), .spaces(2)],
             expression: ExprSyntax(
-              FunctionCallExprSyntax(
-                callee: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("call")))
-              ) {
-                LabeledExprSyntax(
-                  expression: MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .keyword(.self)])
-                )
-                LabeledExprSyntax(
-                  label: .identifier("input"),
-                  colon: .colonToken(),
-                  expression: ExprSyntax(
-                    FunctionCallExprSyntax(
-                      callee: ExprSyntax(
-                        MemberAccessExprSyntax(
-                          period: .periodToken(),
-                          declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
-                        ))
-                    ) {
-                      if let properties = def.parameters?.sortedProperties {
-                        for (name, _) in properties {
-                          LabeledExprSyntax(
-                            label: .identifier(name),
-                            colon: .colonToken(),
-                            expression: DeclReferenceExprSyntax(baseName: .identifier(name))
-                          )
+              AwaitExprSyntax(
+                awaitKeyword: .keyword(.await),
+                expression: ExprSyntax(
+                  FunctionCallExprSyntax(
+                    callee: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("call")))
+                  ) {
+                    LabeledExprSyntax(
+                      expression: MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .keyword(.self)])
+                    )
+                    LabeledExprSyntax(
+                      label: .identifier("input"),
+                      colon: .colonToken(),
+                      expression: ExprSyntax(
+                        FunctionCallExprSyntax(
+                          callee: ExprSyntax(
+                            MemberAccessExprSyntax(
+                              period: .periodToken(),
+                              declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+                            ))
+                        ) {
+                          if let properties = def.parameters?.sortedProperties {
+                            for (name, _) in properties {
+                              LabeledExprSyntax(
+                                label: .identifier(name),
+                                colon: .colonToken(),
+                                expression: DeclReferenceExprSyntax(baseName: .identifier(name))
+                              )
+                            }
+                          }
                         }
-                      }
-                    }
-                  ),
-                  trailingComma: .commaToken()
+                      ),
+                      trailingComma: .commaToken()
+                    )
+                    LabeledExprSyntax(
+                      label: .identifier("retry"),
+                      colon: .colonToken(),
+                      expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
+                    )
+                  }
                 )
-                LabeledExprSyntax(
-                  label: .identifier("retry"),
-                  colon: .colonToken(),
-                  expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
-                )
-              }
-            )
-          ))
-      )
-    }
+              ))
+          )
+        }
+    )
   }
 
   func typeIdentifier(name: String, property: FieldTypeDefinition, defMap: ExtDefMap, key: String, isRequired: Bool, dropPrefix: Bool = true) -> TypeSyntax {

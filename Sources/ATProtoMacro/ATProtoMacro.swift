@@ -8,5 +8,5 @@
 import SwiftAtproto
 
 @attached(member, names: named(init))
-@attached(extension, conformances: XRPCClientProtocol)
+@attached(extension, conformances: _XRPCClientProtocol)
 public macro XRPCClient() = #externalMacro(module: "Macros", type: "XRPCClientMacro")

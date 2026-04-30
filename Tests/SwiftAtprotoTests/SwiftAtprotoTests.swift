@@ -6,7 +6,7 @@ import XCTest
 
 @testable import SwiftAtproto
 
-struct XRPCTestClient: XRPCClientProtocol {
+struct XRPCTestClient: _XRPCClientProtocol {
   var serviceEndpoint: URL
 
   var decoder: JSONDecoder

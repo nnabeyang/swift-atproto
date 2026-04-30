@@ -47,7 +47,7 @@
             }
           }
 
-          extension TestClient: XRPCClientProtocol {
+          extension TestClient: _XRPCClientProtocol {
           }
           """,
         macros: testMacros,
