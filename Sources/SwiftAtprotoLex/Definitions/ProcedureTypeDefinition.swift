@@ -159,7 +159,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return IdentifierTypeSyntax(name: .identifier("EmptyResponse"))
   }
 
-  func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax] {
+  func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement _: Bool) -> [FunctionParameterSyntax] {
     var arguments = [FunctionParameterSyntax]()
     guard let input else { return arguments }
     switch input.encoding {

@@ -118,7 +118,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return .identifier("EmptyResponse")
   }
 
-  func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax] {
+  func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> [FunctionParameterSyntax] {
     var arguments = [FunctionParameterSyntax]()
     guard let parameters else { return arguments }
     var required = [String: Bool]()
@@ -135,13 +135,18 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
       let type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
-      let defaultValue: InitializerClauseSyntax? =
-        isRequired
-        ? nil
-        : InitializerClauseSyntax(
-          equal: .equalToken(),
-          value: NilLiteralExprSyntax()
-        )
+      let defaultValue: InitializerClauseSyntax?
+      if protocolRequirement {
+        defaultValue = nil
+      } else {
+        defaultValue =
+          isRequired
+          ? nil
+          : InitializerClauseSyntax(
+            equal: .equalToken(),
+            value: NilLiteralExprSyntax()
+          )
+      }
       arguments.append(
         .init(
           firstName: .identifier(name),
@@ -265,7 +270,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           modifiers: [DeclModifierSyntax(name: .keyword(.public))],
           signature: FunctionSignatureSyntax(
             parameterClause: FunctionParameterClauseSyntax {
-              rpcArguments(ts: ts, fname: name, defMap: defMap, prefix: prefix)
+              rpcArguments(ts: ts, fname: name, defMap: defMap, prefix: prefix, protocolRequirement: false)
             })
         ) {
           for (key, _) in parameters?.sortedProperties ?? [] {

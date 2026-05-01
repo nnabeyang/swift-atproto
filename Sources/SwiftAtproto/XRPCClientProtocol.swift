@@ -30,7 +30,7 @@ public protocol ATPClientProtocol: Sendable {
   static var errorDomain: String { get }
 }
 
-public protocol XRPCClientProtocol: ATPClientProtocol {
+public protocol _XRPCClientProtocol: ATPClientProtocol {
   var auth: any XRPCAuth { get set }
 
   func signout()
@@ -94,7 +94,7 @@ public protocol XRPCClientProtocol: ATPClientProtocol {
   }
 #endif
 
-extension XRPCClientProtocol {
+extension _XRPCClientProtocol {
   public static var errorDomain: String { "XRPCErrorDomain" }
   public static var moduleName: String { _typeName(type(of: self)).split(separator: ".").first.flatMap { String($0) } ?? "" }
 }

@@ -94,7 +94,7 @@
           extensionKeyword: .keyword(.extension),
           extendedType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(type.trimmedDescription))),
           inheritanceClause: InheritanceClauseSyntax {
-            InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCClientProtocol")))
+            InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("_XRPCClientProtocol")))
           }
         ) {}
       ]

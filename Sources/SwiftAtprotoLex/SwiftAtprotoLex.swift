@@ -70,7 +70,7 @@ func writeSchemaCode(
   generate: GenerateOption
 ) async throws {
   let schemasArray = schemasMap.sorted { $0.key < $1.key }
-  let (blocks, methods) = try await withThrowingTaskGroup(of: (DeclSyntax, MemberBlockItemListSyntax, Int).self) { group in
+  let (blocks, methods, requirements) = try await withThrowingTaskGroup(of: (DeclSyntax, MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
@@ -84,7 +84,7 @@ func writeSchemaCode(
     try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
     for (i, (prefix, schemas)) in schemasArray.enumerated() {
       group.addTask {
-        let (types, methods) = try await withThrowingTaskGroup(of: (MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { innerGroup in
+        let (types, methods, requirements) = try await withThrowingTaskGroup(of: (MemberBlockItemListSyntax, MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { innerGroup in
           for (j, schema) in schemas.sorted(by: { $0.id < $1.id }).enumerated() {
             innerGroup.addTask {
               let prefix = schema.prefix
@@ -93,17 +93,20 @@ func writeSchemaCode(
               })
               let methodTypes = allTypes.filter { $0.value.isMethod }
               let types = Lex.genTypes(prefix: prefix, otherTypes: allTypes, methods: methodTypes, defMap: defMap, generate: generate)
-              let methods = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .spaces(2), prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate)
-              return (types, methods, j)
+              let methods = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .spaces(2), prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate, protocolRequirement: false)
+              let requirements = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .spaces(2), prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate, protocolRequirement: true)
+              return (types, methods, requirements, j)
             }
           }
           var types: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemas.count)
           var methods: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemas.count)
-          for try await (type, method, j) in innerGroup {
+          var requirements: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemas.count)
+          for try await (type, method, requrement, j) in innerGroup {
             types[j] = type
             methods[j] = method
+            requirements[j] = requrement
           }
-          return (combine(types), combine(methods))
+          return (combine(types), combine(methods), combine(requirements))
         }
         return (
           DeclSyntax(
@@ -111,6 +114,7 @@ func writeSchemaCode(
               extendedType: TypeSyntax(MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix)))
             ) { types }),
           methods,
+          requirements,
           i
         )
       }
@@ -118,11 +122,13 @@ func writeSchemaCode(
 
     var blocks: [CodeBlockItemListSyntax] = Array(repeating: .empty, count: schemasMap.count)
     var methods: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemasMap.count)
-    for try await (decl, method, i) in group {
+    var requirements: [MemberBlockItemListSyntax] = Array(repeating: .empty, count: schemasMap.count)
+    for try await (decl, method, requirement, i) in group {
       blocks[i] = CodeBlockItemListSyntax { decl }
       methods[i] = method
+      requirements[i] = requirement
     }
-    return (combine(blocks), combine(methods))
+    return (combine(blocks), combine(methods), combine(requirements))
   }
   let prefixes = schemasArray.map(\.0)
   let clientSrc: String = SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
@@ -157,6 +163,16 @@ func writeSchemaCode(
     }
     blocks
     if !methods.isEmpty {
+      ProtocolDeclSyntax(
+        leadingTrivia: nil,
+        modifiers: [
+          DeclModifierSyntax(name: .keyword(.public))
+        ],
+        name: .identifier("XRPCClientProtocol"),
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["_XRPCClientProtocol"])
+      ) {
+        requirements
+      }
       ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
         methods
       }
@@ -249,7 +265,7 @@ enum Lex {
   }
 
   @MemberBlockItemListBuilder
-  static func genMethods(leadingTrivia: Trivia? = nil, prefix: String, methods: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption) -> MemberBlockItemListSyntax {
+  static func genMethods(leadingTrivia: Trivia? = nil, prefix: String, methods: [[String: TypeSchema].Element], defMap: ExtDefMap, generate: GenerateOption, protocolRequirement: Bool) -> MemberBlockItemListSyntax {
     if generate.contains(.client) {
       for (i, method) in methods.enumerated() {
         writeMethod(
@@ -257,18 +273,19 @@ enum Lex {
           typeName: Self.nameFromId(id: method.value.id, prefix: method.value.prefix),
           typeSchema: method.value,
           defMap: defMap,
-          prefix: structNameFor(prefix: prefix)
+          prefix: structNameFor(prefix: prefix),
+          protocolRequirement: protocolRequirement
         )
       }
     }
   }
 
-  static func writeMethod(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
+  static func writeMethod(leadingTrivia: Trivia? = nil, typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> DeclSyntaxProtocol {
     switch ts.type {
     case .procedure(let def):
-      ts.writeProcedure(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix)
+      ts.writeProcedure(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix, protocolRequirement: protocolRequirement)
     case .query(let def):
-      ts.writeQuery(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix)
+      ts.writeQuery(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix, protocolRequirement: protocolRequirement)
     default:
       fatalError()
     }

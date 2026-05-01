@@ -7,7 +7,7 @@ protocol HTTPAPITypeDefinition: Encodable, DecodableWithConfiguration, SwiftCode
   var output: OutputType? { get }
   var description: String? { get }
   var errors: [ErrorResponse]? { get }
-  func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [FunctionParameterSyntax]
+  func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> [FunctionParameterSyntax]
   func rpcOutput(fname: String, defMap: ExtDefMap, prefix: String) -> ReturnClauseSyntax
   func rpcParams(id: String, prefix: String) -> ExprSyntaxProtocol
   func makeErrorDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name typeName: String, type: String) -> any DeclSyntaxProtocol
