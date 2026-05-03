@@ -168,12 +168,12 @@ func writeSchemaCode(
         modifiers: [
           DeclModifierSyntax(name: .keyword(.public))
         ],
-        name: .identifier("XRPCClientProtocol"),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["_XRPCClientProtocol"])
+        name: .identifier("XRPCCallable"),
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["_XRPCCallable"])
       ) {
         requirements
       }
-      ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCClientProtocol")) {
+      ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCCallable")) {
         methods
       }
     }
