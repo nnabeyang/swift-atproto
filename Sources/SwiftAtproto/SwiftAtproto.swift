@@ -11,12 +11,15 @@ enum TypeCodingKeys: String, CodingKey {
   case type = "$type"
 }
 
-public protocol XRPCQuery: Sendable {
+public protocol XRPCRequest: Sendable {
   associatedtype ResponseBody: Codable & Sendable & Hashable
-  associatedtype Input: XRPCQueryInput
   associatedtype Error: XRPCError
 
   static var id: String { get }
+}
+
+public protocol XRPCQuery: XRPCRequest {
+  associatedtype Input: XRPCQueryInput
 }
 
 public protocol XRPCQueryInput: Sendable & Hashable {
@@ -29,12 +32,8 @@ public protocol XRPCInputQuery: Sendable, Hashable {
   var asParameters: Parameters? { get }
 }
 
-public protocol XRPCProcedure: Sendable {
+public protocol XRPCProcedure: XRPCRequest {
   associatedtype RequestBody: Codable & Sendable & Hashable
-  associatedtype ResponseBody: Codable & Sendable & Hashable
-  associatedtype Error: XRPCError
-
-  static var id: String { get }
   static var contentType: String { get }
 }
 
