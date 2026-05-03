@@ -350,18 +350,10 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                     LabeledExprSyntax(
                       expression: MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .keyword(.self)])
                     )
-                    if def.input != nil {
-                      LabeledExprSyntax(
-                        label: .identifier("input"),
-                        colon: .colonToken(),
-                        expression: DeclReferenceExprSyntax(baseName: .identifier("input")),
-                        trailingComma: .commaToken()
-                      )
-                    }
                     LabeledExprSyntax(
-                      label: .identifier("retry"),
+                      label: .identifier("input"),
                       colon: .colonToken(),
-                      expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
+                      expression: def.input == nil ? ExprSyntax(NilLiteralExprSyntax()) : ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("input"))),
                     )
                   }
                 )
@@ -427,13 +419,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                             }
                           }
                         }
-                      ),
-                      trailingComma: .commaToken()
-                    )
-                    LabeledExprSyntax(
-                      label: .identifier("retry"),
-                      colon: .colonToken(),
-                      expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
+                      )
                     )
                   }
                 )
