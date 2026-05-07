@@ -44,7 +44,7 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
     .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.0.0")),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.18.0"..<"0.20.0"),
-    .package(url: "https://github.com/germ-network/GermConvenience.git", from: "0.1.4"),
+    .package(url: "https://github.com/germ-network/GermConvenience.git", from: "0.1.5"),
   ],
   targets: [
     .target(
