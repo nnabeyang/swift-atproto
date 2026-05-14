@@ -35,11 +35,32 @@ pod 'SwiftAtproto'
 
 ### Usage
 
-Code generation is done as follows:
+Code generation is done using the Swift Package Manager plugin.
+
+#### For Xcode 26.4 / Swift 6.3 and later
+
+The `--disable-experimental-prebuilts` flag is required:
+
 ```bash
-swift package plugin --allow-writing-to-package-directory \
---allow-network-connections all:443 swift-atproto --outdir <OUTPUT_DIR> --atproto-configuration ./.atproto.json
+swift package --disable-experimental-prebuilts plugin \
+  --allow-writing-to-package-directory \
+  --allow-network-connections all:443 \
+  swift-atproto
+
 ```
+
+#### For earlier versions (Xcode 26.3 / Swift 6.2.4 and below)
+
+You can run the command without the prebuilts flag:
+
+```bash
+swift package plugin \
+  --allow-writing-to-package-directory \
+  --allow-network-connections all:443 \
+  swift-atproto
+
+```
+
 
 Sample configuration file is as follows. You can specify whether to generate client code, server code, or both using the `generate` field (defaults to `["client"]`).
 
