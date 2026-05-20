@@ -1,23 +1,33 @@
 {
-	"name": "Docker from Docker Compose",
-	"dockerComposeFile": "../docker-compose.yml",
-	"service": "app",
-	"workspaceFolder": "/home/user/work",
-	"customizations": {
-		"vscode": {
-			"settings": {
-				"terminal.integrated.defaultProfile.linux": "bash",
-				"[swift]": {
-					"editor.formatOnSave": true
-				},
-				"sourcekit-lsp.serverPath": "/usr/bin/sourcekit-lsp",
-				"apple-swift-format.path": "/usr/bin/swift-format"
-			},
-			"extensions": [
-				"vknabel.vscode-apple-swift-format",
-				"sswg.swift-lang"
-			]
-		}
-	},
-	"remoteUser": "user"
+    "name": "Swift Linux Development",
+    "dockerComposeFile": "docker-compose.yaml",
+    "service": "devcontainer",
+    "workspaceFolder": "${localWorkspaceFolder}",
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": "false",
+            "username": "root",
+            "upgradePackages": "false"
+        },
+        "ghcr.io/devcontainers/features/git:1": {
+            "version": "os-provided",
+            "ppa": "false"
+        }
+    },
+    "initializeCommand": ".devcontainer/init.sh",
+    "postCreateCommand": "apt-get update && apt-get install -y curl sqlite3 libsqlite3-dev libncurses5-dev python3 build-essential",
+    "postStartCommand": "cd ${WORKSPACE_DIR}",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "lldb.library": "/usr/lib/liblldb.so"
+            },
+            "extensions": [
+                "swiftlang.swift-vscode"
+            ]
+        }
+    },
+    // Use 'forwardPorts' to make a list of ports inside the container available locally.
+    // "forwardPorts": [],
+    "remoteUser": "root"
 }
