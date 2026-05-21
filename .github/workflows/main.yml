@@ -34,39 +34,19 @@ jobs:
             | xcpretty
 
   test-linux:
-    name: Test on Linux
-    runs-on: ubuntu-22.04
+    name: Test on Linux (Swift ${{ matrix.swift_version }})
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container_image }}
     strategy:
       matrix:
-        swift_version: ["6.0", "6.1"]
-    
+        include:
+          - swift_version: "6.1"
+            container_image: "swift:6.1-noble"
+          - swift_version: "6.3.2"
+            container_image: "swift:6.3.2-noble"
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Swift ${{ matrix.swift_version }}
-        run: |
-          SWIFT_VERSION=${{ matrix.swift_version }}
-          
-          case "$SWIFT_VERSION" in
-            "6.0")
-              SWIFT_URL="https://download.swift.org/swift-6.0-release/ubuntu2204/swift-6.0-RELEASE/swift-6.0-RELEASE-ubuntu22.04.tar.gz"
-              ;;
-            "6.1")
-              SWIFT_URL="https://download.swift.org/swift-6.1-release/ubuntu2204/swift-6.1-RELEASE/swift-6.1-RELEASE-ubuntu22.04.tar.gz"
-              ;;
-            *)
-              echo "Error: Unsupported Swift version."
-              exit 1
-              ;;
-          esac
-          
-          echo "Downloading Swift from $SWIFT_URL"
-          wget "$SWIFT_URL"
-          tar xzf "swift-${SWIFT_VERSION}-RELEASE-ubuntu22.04.tar.gz"
-          
-          export PATH="/home/runner/work/swift-${SWIFT_VERSION}-RELEASE-ubuntu22.04/usr/bin:$PATH"
-          
-          swift --version
-
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: Run SwiftPM tests
         run: swift test
