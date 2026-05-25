@@ -623,7 +623,7 @@ enum Lex {
   }
 
   static func enumNameFor(prefix: String) -> String {
-    "\(prefix.split(separator: ".").joined())types"
+    prefix.split(separator: ".").joined()
   }
 
   static func enumIdentifiersFor(prefix: String) -> [TokenSyntax] {
