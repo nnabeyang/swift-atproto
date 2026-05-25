@@ -7,6 +7,14 @@ import XCTest
 @testable import SwiftAtproto
 
 struct XRPCTestClient: _XRPCClientProtocol {
+  func tokenIsExpired(error: some XRPCError) -> Bool {
+    fatalError()
+  }
+
+  func response(_ requestComponents: XRPCRequestComponents) async throws -> Data {
+    fatalError()
+  }
+
   var serviceEndpoint: URL
 
   var decoder: JSONDecoder
@@ -50,7 +58,7 @@ final class SwiftAtprotoTests: XCTestCase {
     let cid = try CID(version: .v1, codec: .raw, multihash: Multihash(raw: "cids(1)", hashedWith: .sha2_256))
     XCTAssertEqual(link.toBaseEncodedString, cid.toBaseEncodedString)
     let encoder = JSONEncoder()
-    encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
+    encoder.dataEncodingStrategy = .xrpc
     XCTAssertEqual(try String(decoding: encoder.encode(link), as: UTF8.self), json)
   }
 
@@ -61,7 +69,7 @@ final class SwiftAtprotoTests: XCTestCase {
     XCTAssertEqual(blob.ref.toBaseEncodedString, "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy")
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-    encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
+    encoder.dataEncodingStrategy = .xrpc
     XCTAssertEqual(try String(decoding: encoder.encode(blob), as: UTF8.self), json)
   }
 
@@ -73,7 +81,7 @@ final class SwiftAtprotoTests: XCTestCase {
     XCTAssertEqual(blob.ref.toBaseEncodedString, "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy")
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-    encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
+    encoder.dataEncodingStrategy = .xrpc
     XCTAssertEqual(try String(decoding: encoder.encode(blob), as: UTF8.self), json)
   }
 
@@ -100,7 +108,7 @@ final class SwiftAtprotoTests: XCTestCase {
     let record = try decoder.decode(UnknownRecord.self, from: Data(json.utf8))
     XCTAssertEqual(record.type, "app.bsky.actor.defs#skyfeedBuilderFeedsPref")
     let encoder = JSONEncoder()
-    encoder.dataEncodingStrategy = XRPCTestClient.dataEncodingStrategy
+    encoder.dataEncodingStrategy = .xrpc
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     XCTAssertEqual(try String(decoding: encoder.encode(record), as: UTF8.self), json)
   }
