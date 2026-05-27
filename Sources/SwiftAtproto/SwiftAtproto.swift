@@ -1,7 +1,9 @@
 import CID
 import Foundation
 
-public struct EmptyResponse: Codable, Sendable, Hashable {}
+public struct EmptyResponse: Codable, Sendable, Hashable {
+  public init() {}
+}
 
 public protocol ATProtoRecord: Codable, Sendable, Hashable {
   static var nsId: String { get }
