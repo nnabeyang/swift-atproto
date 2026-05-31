@@ -40,8 +40,6 @@ let package = Package(
     .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.0.2"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"604.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMajor(from: "1.3.1")),
-    .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.19.0"),
-    .package(url: "https://github.com/apple/swift-nio.git", from: "2.63.0"),
     .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.0.0")),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.18.0"..<"0.20.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.0"),
@@ -52,8 +50,6 @@ let package = Package(
       dependencies: [
         .product(name: "CID", package: "swift-cid"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "AsyncHTTPClient", package: "async-http-client", condition: .when(platforms: [.linux])),
-        .product(name: "NIOHTTP1", package: "swift-nio", condition: .when(platforms: [.linux])),
       ]
     ),
     .target(
