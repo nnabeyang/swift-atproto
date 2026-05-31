@@ -13,7 +13,7 @@ struct Lexgen: AsyncParsableCommand {
       CommandConfiguration(commandName: "swift-atproto", version: SourceControl.version)
     }
   #endif
-  #if os(macOS)
+  #if os(macOS) || os(Linux)
     @Option(name: .customLong("atproto-configuration"))
     var configuration: String
     @Option(name: .long)
@@ -23,7 +23,7 @@ struct Lexgen: AsyncParsableCommand {
   #endif
 
   mutating func run() async throws {
-    #if os(macOS)
+    #if os(macOS) || os(Linux)
       let configurationURL = URL(filePath: configuration)
       let rootURL = configurationURL.deletingLastPathComponent()
       let config = try SourceControl.main(configurationURL: configurationURL, outdir: outdir)
@@ -33,9 +33,6 @@ struct Lexgen: AsyncParsableCommand {
         path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path(),
         generate: config.generate
       )
-    #elseif os(Linux)
-      print("swift-atproto lexgen is not supported on Linux yet.\n")
-      print(Self.helpMessage())
     #endif
   }
 }
