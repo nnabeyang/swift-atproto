@@ -1,8 +1,7 @@
 import Foundation
 
-#if os(Linux)
-  import AsyncHTTPClient
-  import NIOHTTP1
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
 #endif
 
 public enum HTTPMethod {
@@ -33,61 +32,15 @@ public protocol _XRPCClientProtocol: ATPClientProtocol {
   func signout()
 }
 
-#if os(Linux)
-  typealias URLRequest = HTTPClientRequest
-  extension URLRequest {
-    init(url: URL) {
-      self.init(url: url.absoluteString)
+extension URLSession {
+  func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      fatalError()
     }
-
-    mutating func addValue(_ value: String, forHTTPHeaderField field: String) {
-      headers.add(name: field, value: value)
-    }
-
-    var httpBody: Data? {
-      get {
-        // Not Implemented
-        nil
-      }
-
-      set {
-        guard let newValue else { return }
-        body = .bytes(newValue)
-      }
-    }
-
-    var httpMethod: String? {
-      get {
-        method.rawValue
-      }
-      set {
-        guard let newValue else { return }
-        method = .init(rawValue: newValue)
-      }
-    }
+    return (data, UInt(httpResponse.statusCode))
   }
-
-  extension HTTPClient {
-    func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
-      let response = try await execute(request, timeout: .seconds(30))
-      let expectedBytes = response.headers.first(name: "content-length").flatMap(Int.init) ?? 1024 * 1024
-      var body = try await response.body.collect(upTo: expectedBytes)
-      let data = Data(body.readableBytesView)
-      return (data, response.status.code)
-    }
-  }
-#else
-  typealias HTTPClient = URLSession
-  extension HTTPClient {
-    func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
-      let (data, response) = try await URLSession.shared.data(for: request)
-      guard let httpResponse = response as? HTTPURLResponse else {
-        fatalError()
-      }
-      return (data, UInt(httpResponse.statusCode))
-    }
-  }
-#endif
+}
 
 extension _XRPCClientProtocol {
   public static var errorDomain: String { "XRPCErrorDomain" }
@@ -145,7 +98,7 @@ extension ATPClientProtocol {
       }
     }
 
-    let (data, statusCode) = try await HTTPClient.shared.executeTask(for: request)
+    let (data, statusCode) = try await URLSession.shared.executeTask(for: request)
 
     guard 200...299 ~= statusCode else {
       if let error = try? decoder.decode(UnExpectedError.self, from: data) {
