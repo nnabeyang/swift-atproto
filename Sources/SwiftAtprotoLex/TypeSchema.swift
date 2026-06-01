@@ -317,7 +317,9 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
 
   func writeProcedure(leadingTrivia: Trivia? = nil, def: ProcedureTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> DeclSyntaxProtocol {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
+    let docTrivia: Trivia? = def.description.map { Trivia(pieces: [.docLineComment("/// \($0)"), .newlines(1)]) }
     return FunctionDeclSyntax(
+      leadingTrivia: docTrivia ?? leadingTrivia,
       modifiers: DeclModifierListSyntax(
         protocolRequirement
           ? []
@@ -364,8 +366,9 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
 
   func writeQuery(leadingTrivia: Trivia? = nil, def: QueryTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> DeclSyntaxProtocol {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
-
+    let docTrivia: Trivia? = def.description.map { Trivia(pieces: [.docLineComment("/// \($0)"), .newlines(1)]) }
     return FunctionDeclSyntax(
+      leadingTrivia: docTrivia ?? leadingTrivia,
       modifiers: DeclModifierListSyntax(
         protocolRequirement
           ? []

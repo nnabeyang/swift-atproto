@@ -10,6 +10,11 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
   let refs: [String]
   let closed: Bool?
 
+  private var declModifierSyntax: DeclModifierSyntax {
+    guard let description else { return DeclModifierSyntax(name: .keyword(.public)) }
+    return DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.docLineComment("/// \(description)"), .newlines(1)]))
+  }
+
   func generateDeclaration(
     leadingTrivia: Trivia?, ts: TypeSchema, name: String, type typeName: String,
     defMap: ExtDefMap, generate: GenerateOption
@@ -31,7 +36,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
     return EnumDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [
-        DeclModifierSyntax(name: .keyword(.public)),
+        declModifierSyntax,
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
       name: .init(stringLiteral: name),

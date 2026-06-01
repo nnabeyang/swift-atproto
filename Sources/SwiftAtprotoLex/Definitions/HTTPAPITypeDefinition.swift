@@ -30,7 +30,10 @@ extension HTTPAPITypeDefinition {
       inheritanceClause: InheritanceClauseSyntax(typeNames: ["XRPCError"])
     ) {
       for error in errors.sorted() {
-        EnumCaseDeclSyntax {
+        let docTrivia: Trivia? = error.description.map {
+          Trivia(pieces: [.docLineComment("/// \($0)"), .newlines(1)])
+        }
+        EnumCaseDeclSyntax(leadingTrivia: docTrivia) {
           EnumCaseElementSyntax(
             name: .identifier(error.name.camelCased()),
             parameterClause: EnumCaseParameterClauseSyntax(

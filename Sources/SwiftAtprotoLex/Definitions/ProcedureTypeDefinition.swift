@@ -200,12 +200,17 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     input?.isBinary ?? false
   }
 
+  private var declModifierSyntax: DeclModifierSyntax {
+    guard let description else { return DeclModifierSyntax(name: .keyword(.public)) }
+    return DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.docLineComment("/// \(description)"), .newlines(1)]))
+  }
+
   func generateDeclaration(leadingTrivia: SwiftSyntax.Trivia?, ts: TypeSchema, name: String, type: String, defMap: ExtDefMap, generate: GenerateOption) -> any DeclSyntaxProtocol {
     let prefix = Lex.structNameFor(prefix: ts.prefix)
     let responseBody = responseBody(fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix))
     return EnumDeclSyntax(
       modifiers: [
-        DeclModifierSyntax(name: .keyword(.public))
+        declModifierSyntax
       ],
       name: .identifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {

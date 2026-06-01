@@ -33,6 +33,11 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
     `enum` == nil
   }
 
+  private var declModifierSyntax: DeclModifierSyntax {
+    guard let description else { return DeclModifierSyntax(name: .keyword(.public)) }
+    return DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.docLineComment("/// \(description)"), .newlines(1)]))
+  }
+
   func generateDeclaration(leadingTrivia: Trivia? = nil, ts _: TypeSchema, name: String, type typeName: String, defMap: ExtDefMap, generate: GenerateOption) -> any DeclSyntaxProtocol {
     if let knownValues = knownValues {
       genCodeStringWithKnownValues(leadingTrivia: leadingTrivia, name: name, knownValues: knownValues)
@@ -47,7 +52,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
     return DeclSyntax(
       EnumDeclSyntax(
         modifiers: [
-          DeclModifierSyntax(name: .keyword(.public)),
+          declModifierSyntax,
           DeclModifierSyntax(name: .keyword(.indirect)),
         ],
         name: .identifier(name),
@@ -220,7 +225,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
     return EnumDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [
-        DeclModifierSyntax(name: .keyword(.public)),
+        declModifierSyntax,
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
       name: .identifier(name),
