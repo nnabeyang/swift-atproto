@@ -129,8 +129,23 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
     }
   }
 
-  func variable(name: String, type: TypeSyntax, isMutable: Bool = true) -> VariableDeclSyntax {
+  var lexDescription: String? {
+    switch self {
+    case .boolean(let d): d.description
+    case .integer(let d): d.description
+    case .string(let d): d.description
+    case .array(let d): d.description
+    case .ref(let d): d.description
+    case .object(let d): d.description
+    case .union(let d): d.description
+    case .token(let d): d.description
+    default: nil
+    }
+  }
+
+  func variable(name: String, type: TypeSyntax, isMutable: Bool = true, leadingTrivia: Trivia? = nil) -> VariableDeclSyntax {
     VariableDeclSyntax(
+      leadingTrivia: leadingTrivia,
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
       ],

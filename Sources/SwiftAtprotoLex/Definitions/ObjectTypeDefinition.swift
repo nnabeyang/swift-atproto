@@ -42,6 +42,11 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
   }
 
+  private var declModifierSyntax: DeclModifierSyntax {
+    guard let description else { return DeclModifierSyntax(name: .keyword(.public)) }
+    return DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.docLineComment("/// \(description)"), .newlines(1)]))
+  }
+
   func generateDeclaration(
     leadingTrivia: Trivia? = nil, ts: TypeSchema, name: String, type typeName: String,
     defMap: ExtDefMap, generate: GenerateOption
@@ -57,7 +62,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
     return StructDeclSyntax(
       leadingTrivia: leadingTrivia,
-      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+      modifiers: [declModifierSyntax],
       name: .identifier(name),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ts.isRecord ? ["ATProtoRecord"] : ["Codable", "Hashable", "Sendable"])
     ) {
@@ -113,7 +118,10 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       for (key, property) in sortedProperties {
         let isRequired = required[key] ?? false
         let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: true)
-        property.variable(name: key, type: type, isMutable: !ts.isRecord)
+        let docTrivia: Trivia? = property.lexDescription.map {
+          Trivia(pieces: [.docLineComment("/// \($0)"), .newlines(1)])
+        }
+        property.variable(name: key, type: type, isMutable: !ts.isRecord, leadingTrivia: docTrivia)
       }
       VariableDeclSyntax(
         modifiers: [
