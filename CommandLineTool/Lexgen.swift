@@ -28,8 +28,9 @@ struct Lexgen: AsyncParsableCommand {
       let rootURL = configurationURL.deletingLastPathComponent()
       let config = try SourceControl.main(configurationURL: configurationURL, outdir: outdir)
       guard !fetchOnly else { return }
+      let outdirURL = outdir.map { URL(filePath: $0) } ?? rootURL.appending(component: config.module)
       try await SwiftAtprotoLex.main(
-        outdir: rootURL.appending(component: config.module),
+        outdir: outdirURL,
         path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path(),
         generate: config.generate
       )
