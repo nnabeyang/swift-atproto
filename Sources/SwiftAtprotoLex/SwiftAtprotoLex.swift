@@ -1,4 +1,5 @@
 import Foundation
+import SwiftBasicFormat
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
@@ -177,7 +178,7 @@ func writeSchemaCode(
         methods
       }
     }
-  }.formatted().description
+  }.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
