@@ -112,6 +112,7 @@ func writeSchemaCode(
         return (
           DeclSyntax(
             ExtensionDeclSyntax(
+              leadingTrivia: .newlines(2),
               extendedType: TypeSyntax(MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix)))
             ) { types }),
           methods,
@@ -159,13 +160,13 @@ func writeSchemaCode(
         trailingTrivia: .newlines(2)
       )
     }
-    for node in EnumDeclSyntaxNode.buildTree(from: prefixes) {
-      node.generateEnums()
+    for (i, node) in EnumDeclSyntaxNode.buildTree(from: prefixes).enumerated() {
+      node.generateEnums(leadingTrivia: i == 0 ? nil : .newlines(2))
     }
     blocks
     if !methods.isEmpty {
       ProtocolDeclSyntax(
-        leadingTrivia: nil,
+        leadingTrivia: .newlines(2),
         modifiers: [
           DeclModifierSyntax(name: .keyword(.public))
         ],
@@ -174,7 +175,7 @@ func writeSchemaCode(
       ) {
         requirements
       }
-      ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCCallable")) {
+      ExtensionDeclSyntax(leadingTrivia: .newlines(2), extendedType: TypeSyntax(stringLiteral: "XRPCCallable")) {
         methods
       }
     }
@@ -192,8 +193,8 @@ class EnumDeclSyntaxNode {
     self.name = name
   }
 
-  func generateEnums(depth: Int = 0) -> EnumDeclSyntax {
-    let lt: Trivia? = depth > 0 ? .newline : nil
+  func generateEnums(leadingTrivia: Trivia? = nil, depth: Int = 0) -> EnumDeclSyntax {
+    let lt: Trivia? = depth > 0 ? .newline : leadingTrivia
     return EnumDeclSyntax(
       leadingTrivia: lt,
       modifiers: [

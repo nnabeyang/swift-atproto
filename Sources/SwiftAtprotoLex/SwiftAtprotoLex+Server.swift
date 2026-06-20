@@ -50,8 +50,8 @@ extension Lex {
           trailingTrivia: .newlines(2)
         )
         genXRPCAPIProtocol(for: methodTypes)
-        genXRPCExtension(for: methodTypes)
-        genUnversalServerExtension(for: methodTypes, defMap: defMap)
+        genXRPCExtension(leadingTrivia: .newlines(2), for: methodTypes)
+        genUnversalServerExtension(leadingTrivia: .newlines(2), for: methodTypes, defMap: defMap)
       },
       trailingTrivia: .newlines(2))
     return src.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
@@ -66,14 +66,15 @@ extension Lex {
       name: .identifier("XRPCAPIProtocol"),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable"])
     ) {
-      for (key, _, scheme, _) in methodTypes {
-        genXRPCFunctionDeclSyntax(key: key, scheme: scheme)
+      for (i, (key, _, scheme, _)) in methodTypes.enumerated() {
+        genXRPCFunctionDeclSyntax(leadingTrivia: i == 0 ? .newline : .newlines(2), key: key, scheme: scheme)
       }
     }
   }
 
   private static func genXRPCExtension(leadingTrivia: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> ExtensionDeclSyntax {
     ExtensionDeclSyntax(
+      leadingTrivia: leadingTrivia,
       extendedType: IdentifierTypeSyntax(name: .identifier("XRPCAPIProtocol"))
     ) {
       for (key, prefix, _, _) in methodTypes {
@@ -130,7 +131,7 @@ extension Lex {
   private static func genXRPCFunctionDeclSyntax(leadingTrivia: Trivia? = nil, key: String, scheme: TypeSchema) -> FunctionDeclSyntax {
     let prefix = Lex.structNameFor(prefix: scheme.prefix)
     return FunctionDeclSyntax(
-      leadingTrivia: .newline,
+      leadingTrivia: leadingTrivia ?? .newline,
       name: .identifier("\(Lex.enumNameFor(prefix: prefix))\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax(
@@ -398,6 +399,7 @@ extension Lex {
     defMap: ExtDefMap
   ) -> ExtensionDeclSyntax {
     ExtensionDeclSyntax(
+      leadingTrivia: leadingTrivia,
       extendedType: IdentifierTypeSyntax(name: .identifier("UniversalServer")),
       genericWhereClause: GenericWhereClauseSyntax(
         requirements: GenericRequirementListSyntax([
