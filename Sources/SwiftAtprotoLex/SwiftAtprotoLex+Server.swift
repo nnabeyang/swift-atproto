@@ -24,13 +24,10 @@ extension Lex {
       leadingTrivia: fileHeader,
       statementsBuilder: {
         ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "SwiftAtproto")]
+          path: [ImportPathComponentSyntax(name: "Foundation")]
         )
         ImportDeclSyntax(
           path: [ImportPathComponentSyntax(name: "HTTPTypes")]
-        )
-        ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "Foundation")]
         )
         ImportDeclSyntax(
           attributes: AttributeListSyntax {
@@ -46,7 +43,10 @@ extension Lex {
           },
           path: [
             ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
-          ],
+          ]
+        )
+        ImportDeclSyntax(
+          path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
           trailingTrivia: .newlines(2)
         )
         genXRPCAPIProtocol(for: methodTypes)

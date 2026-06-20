@@ -137,10 +137,6 @@ func writeSchemaCode(
     ImportDeclSyntax(
       path: [ImportPathComponentSyntax(name: "Foundation")]
     )
-    ImportDeclSyntax(
-      path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
-      trailingTrivia: generate.contains(.server) ? nil : .newlines(2)
-    )
     if generate.contains(.server) {
       ImportDeclSyntax(
         attributes: AttributeListSyntax {
@@ -156,10 +152,13 @@ func writeSchemaCode(
         },
         path: [
           ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
-        ],
-        trailingTrivia: .newlines(2)
+        ]
       )
     }
+    ImportDeclSyntax(
+      path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
+      trailingTrivia: .newlines(2)
+    )
     for (i, node) in EnumDeclSyntaxNode.buildTree(from: prefixes).enumerated() {
       node.generateEnums(leadingTrivia: i == 0 ? nil : .newlines(2))
     }
