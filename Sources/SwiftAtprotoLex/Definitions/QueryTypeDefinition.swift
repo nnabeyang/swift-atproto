@@ -614,18 +614,15 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                 leadingTrivia: .newline,
                                 caseItems: SwitchCaseItemListSyntax([
                                   SwitchCaseItemSyntax(
-                                    pattern: ValueBindingPatternSyntax(
-                                      bindingSpecifier: .keyword(.let),
-                                      pattern: ExpressionPatternSyntax(
-                                        expression: FunctionCallExprSyntax(
-                                          callee: MemberAccessExprSyntax(
-                                            period: .periodToken(),
-                                            declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
-                                          )
-                                        ) {
-                                          LabeledExprSyntax(expression: PatternExprSyntax(pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("body")))))
-                                        }
-                                      )
+                                    pattern: ExpressionPatternSyntax(
+                                      expression: FunctionCallExprSyntax(
+                                        callee: MemberAccessExprSyntax(
+                                          period: .periodToken(),
+                                          declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
+                                        )
+                                      ) {
+                                        LabeledExprSyntax(expression: PatternExprSyntax(pattern: ValueBindingPatternSyntax(bindingSpecifier: .keyword(.let), pattern: IdentifierPatternSyntax(identifier: .identifier("body")))))
+                                      }
                                     ))
                                 ]),
                                 colon: .colonToken()
@@ -774,18 +771,15 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                 leadingTrivia: .newline,
                                 caseItems: SwitchCaseItemListSyntax([
                                   SwitchCaseItemSyntax(
-                                    pattern: ValueBindingPatternSyntax(
-                                      bindingSpecifier: .keyword(.let),
-                                      pattern: ExpressionPatternSyntax(
-                                        expression: FunctionCallExprSyntax(
-                                          callee: MemberAccessExprSyntax(
-                                            period: .periodToken(),
-                                            declName: DeclReferenceExprSyntax(baseName: .identifier("ok"))
-                                          )
-                                        ) {
-                                          LabeledExprSyntax(expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("response"))))
-                                        }
-                                      )
+                                    pattern: ExpressionPatternSyntax(
+                                      expression: FunctionCallExprSyntax(
+                                        callee: MemberAccessExprSyntax(
+                                          period: .periodToken(),
+                                          declName: DeclReferenceExprSyntax(baseName: .identifier("ok"))
+                                        )
+                                      ) {
+                                        LabeledExprSyntax(expression: PatternExprSyntax(pattern: ValueBindingPatternSyntax(bindingSpecifier: .keyword(.let), pattern: IdentifierPatternSyntax(identifier: .identifier("response")))))
+                                      }
                                     ))
                                 ]),
                                 colon: .colonToken()
@@ -1048,20 +1042,15 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                     ) {
                                       SwitchCaseItemSyntax(
                                         pattern: PatternSyntax(
-                                          ValueBindingPatternSyntax(
-                                            bindingSpecifier: .keyword(.let),
-                                            pattern: PatternSyntax(
-                                              ExpressionPatternSyntax(
-                                                expression: FunctionCallExprSyntax(
-                                                  callee: MemberAccessExprSyntax(
-                                                    period: .periodToken(),
-                                                    declName: DeclReferenceExprSyntax(baseName: .identifier("other"))
-                                                  )
-                                                ) {
-                                                  LabeledExprSyntax(expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("string"))))
-                                                }
+                                          ExpressionPatternSyntax(
+                                            expression: FunctionCallExprSyntax(
+                                              callee: MemberAccessExprSyntax(
+                                                period: .periodToken(),
+                                                declName: DeclReferenceExprSyntax(baseName: .identifier("other"))
                                               )
-                                            )
+                                            ) {
+                                              LabeledExprSyntax(expression: PatternExprSyntax(pattern: ValueBindingPatternSyntax(bindingSpecifier: .keyword(.let), pattern: IdentifierPatternSyntax(identifier: .identifier("string")))))
+                                            }
                                           )))
                                     },
                                   )

@@ -195,22 +195,24 @@ extension HTTPAPITypeDefinition {
                         SwitchCaseLabelSyntax(
                           caseItems: [
                             SwitchCaseItemSyntax(
-                              pattern: ValueBindingPatternSyntax(
-                                bindingSpecifier: .keyword(.let),
-                                pattern: ExpressionPatternSyntax(
-                                  expression: FunctionCallExprSyntax(
-                                    callee: MemberAccessExprSyntax(
-                                      period: .periodToken(),
-                                      declName: DeclReferenceExprSyntax(baseName: .identifier("unexpected"))
-                                    )
-                                  ) {
-                                    LabeledExprSyntax(
-                                      expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("error"))),
-                                      trailingComma: .commaToken()
-                                    )
-                                    LabeledExprSyntax(expression: DiscardAssignmentExprSyntax(wildcard: .wildcardToken()))
-                                  }
-                                )
+                              pattern: ExpressionPatternSyntax(
+                                expression: FunctionCallExprSyntax(
+                                  callee: MemberAccessExprSyntax(
+                                    period: .periodToken(),
+                                    declName: DeclReferenceExprSyntax(baseName: .identifier("unexpected"))
+                                  )
+                                ) {
+                                  LabeledExprSyntax(
+                                    expression: PatternExprSyntax(
+                                      pattern: ValueBindingPatternSyntax(
+                                        bindingSpecifier: .keyword(.let),
+                                        pattern: IdentifierPatternSyntax(identifier: .identifier("error"))
+                                      )
+                                    ),
+                                    trailingComma: .commaToken()
+                                  )
+                                  LabeledExprSyntax(expression: DiscardAssignmentExprSyntax(wildcard: .wildcardToken()))
+                                }
                               ))
                           ],
                           colon: .colonToken()
@@ -252,18 +254,22 @@ extension HTTPAPITypeDefinition {
                               SwitchCaseLabelSyntax(
                                 caseItems: SwitchCaseItemListSyntax([
                                   SwitchCaseItemSyntax(
-                                    pattern: ValueBindingPatternSyntax(
-                                      bindingSpecifier: .keyword(.let),
-                                      pattern: ExpressionPatternSyntax(
-                                        expression: FunctionCallExprSyntax(
-                                          callee: MemberAccessExprSyntax(
-                                            period: .periodToken(),
-                                            declName: DeclReferenceExprSyntax(baseName: .identifier(error.name.camelCased()))
+                                    pattern: ExpressionPatternSyntax(
+                                      expression: FunctionCallExprSyntax(
+                                        callee: MemberAccessExprSyntax(
+                                          period: .periodToken(),
+                                          declName: DeclReferenceExprSyntax(baseName: .identifier(error.name.camelCased()))
+                                        )
+                                      ) {
+                                        LabeledExprSyntax(
+                                          expression: PatternExprSyntax(
+                                            pattern: ValueBindingPatternSyntax(
+                                              bindingSpecifier: .keyword(.let),
+                                              pattern: IdentifierPatternSyntax(identifier: .identifier("message"))
+                                            )
                                           )
-                                        ) {
-                                          LabeledExprSyntax(expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("message"))))
-                                        }
-                                      )
+                                        )
+                                      }
                                     ))
                                 ]),
                                 colon: .colonToken()
@@ -279,23 +285,25 @@ extension HTTPAPITypeDefinition {
                           label: SwitchCaseSyntax.Label(
                             SwitchCaseLabelSyntax {
                               SwitchCaseItemSyntax(
-                                pattern: ValueBindingPatternSyntax(
-                                  bindingSpecifier: .keyword(.let),
-                                  pattern: ExpressionPatternSyntax(
-                                    expression: ExprSyntax(
-                                      FunctionCallExprSyntax(
-                                        callee: MemberAccessExprSyntax(
-                                          period: .periodToken(),
-                                          declName: DeclReferenceExprSyntax(baseName: .identifier("unexpected"))
+                                pattern: ExpressionPatternSyntax(
+                                  expression: FunctionCallExprSyntax(
+                                    callee: MemberAccessExprSyntax(
+                                      period: .periodToken(),
+                                      declName: DeclReferenceExprSyntax(baseName: .identifier("unexpected"))
+                                    )
+                                  ) {
+                                    LabeledExprSyntax(
+                                      expression: DiscardAssignmentExprSyntax(wildcard: .wildcardToken()),
+                                      trailingComma: .commaToken())
+                                    LabeledExprSyntax(
+                                      expression: PatternExprSyntax(
+                                        pattern: ValueBindingPatternSyntax(
+                                          bindingSpecifier: .keyword(.let),
+                                          pattern: IdentifierPatternSyntax(identifier: .identifier("message"))
                                         )
-                                      ) {
-                                        LabeledExprSyntax(
-                                          expression: DiscardAssignmentExprSyntax(wildcard: .wildcardToken()),
-                                          trailingComma: .commaToken())
-                                        LabeledExprSyntax(
-                                          expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("message")))
-                                        )
-                                      }))
+                                      )
+                                    )
+                                  }
                                 ))
                             }
                           ),
