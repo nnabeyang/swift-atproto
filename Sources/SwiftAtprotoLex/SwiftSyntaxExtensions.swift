@@ -2,6 +2,33 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
+extension String {
+  var identifierSegments: [TokenSyntax] {
+    split(separator: ".", omittingEmptySubsequences: false).map { .identifier(String($0)) }
+  }
+}
+
+extension Lex {
+  static func typeSyntax(_ name: String) -> TypeSyntax {
+    if name.hasPrefix("["), name.hasSuffix("]") {
+      return TypeSyntax(ArrayTypeSyntax(element: typeSyntax(String(name.dropFirst().dropLast()))))
+    }
+    let segments = name.identifierSegments
+    if segments.count <= 1 {
+      return TypeSyntax(IdentifierTypeSyntax(name: .identifier(name)))
+    }
+    return TypeSyntax(MemberTypeSyntax(parts: segments))
+  }
+
+  static func refExpr(_ name: String) -> ExprSyntax {
+    let segments = name.identifierSegments
+    if segments.count <= 1 {
+      return ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(name)))
+    }
+    return ExprSyntax(MemberAccessExprSyntax(parts: segments))
+  }
+}
+
 extension MemberAccessExprSyntax {
   init(leadingTrivia: Trivia? = nil, parts: [TokenSyntax], isRoot: Bool = true) {
     precondition(!parts.isEmpty, "MemberAccessExprSyntax.init(parts:) requires at least one token.")

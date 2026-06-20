@@ -275,7 +275,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               ) {
                 LabeledExprSyntax(
                   expression: MemberAccessExprSyntax(
-                    base: DeclReferenceExprSyntax(baseName: .identifier(tname)),
+                    base: Lex.refExpr(tname),
                     period: .periodToken(),
                     declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                   ),

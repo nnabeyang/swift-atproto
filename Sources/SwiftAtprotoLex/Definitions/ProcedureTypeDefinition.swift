@@ -70,7 +70,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             leftParen: .leftParenToken(),
             parameters: EnumCaseParameterListSyntax([
               EnumCaseParameterSyntax(
-                type: IdentifierTypeSyntax(name: .identifier(token))
+                type: Lex.typeSyntax(token)
               )
             ]),
             rightParen: .rightParenToken()
@@ -107,7 +107,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return nil
   }
 
-  func requestBody(fname: String, defMap: ExtDefMap, prefix: String) -> IdentifierTypeSyntax {
+  func requestBody(fname: String, defMap: ExtDefMap, prefix: String) -> TypeSyntax {
     if let input {
       switch input.encoding {
       case .json, .jsonl:
@@ -123,17 +123,17 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           }
           return outname
         }()
-        return IdentifierTypeSyntax(name: .identifier(token))
+        return Lex.typeSyntax(token)
       case .text:
-        return IdentifierTypeSyntax(name: .identifier("String"))
+        return Lex.typeSyntax("String")
       case .cbor, .car, .any, .mp4:
-        return IdentifierTypeSyntax(name: .identifier("Data"))
+        return Lex.typeSyntax("Data")
       }
     }
-    return IdentifierTypeSyntax(name: .identifier("Bool"))
+    return Lex.typeSyntax("Bool")
   }
 
-  func responseBody(fname: String, defMap: ExtDefMap, prefix: String) -> IdentifierTypeSyntax {
+  func responseBody(fname: String, defMap: ExtDefMap, prefix: String) -> TypeSyntax {
     if let output {
       switch output.encoding {
       case .json, .jsonl:
@@ -149,14 +149,14 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           }
           return outname
         }()
-        return IdentifierTypeSyntax(name: .identifier(token))
+        return Lex.typeSyntax(token)
       case .text:
-        return IdentifierTypeSyntax(name: .identifier("String"))
+        return Lex.typeSyntax("String")
       case .cbor, .car, .any, .mp4:
-        return IdentifierTypeSyntax(name: .identifier("Data"))
+        return Lex.typeSyntax("Data")
       }
     }
-    return IdentifierTypeSyntax(name: .identifier("EmptyResponse"))
+    return Lex.typeSyntax("EmptyResponse")
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement _: Bool) -> [FunctionParameterSyntax] {

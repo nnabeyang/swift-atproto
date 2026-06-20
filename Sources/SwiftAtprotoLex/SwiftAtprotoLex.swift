@@ -636,7 +636,7 @@ enum Lex {
   }
 
   static func enumIdentifiersFor(prefix: String) -> [TokenSyntax] {
-    prefix.split(separator: ".").map({ .identifier(.init(String($0).capitalized)) })
+    prefix.split(separator: ".").map({ .identifier(String($0).capitalized) })
   }
 
   static func caseNameFromId(id: String, prefix: String) -> String {

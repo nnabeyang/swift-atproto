@@ -54,11 +54,11 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       }
       let type: TypeSyntax
       if isRequired {
-        type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
+        type = Lex.typeSyntax(tn)
       } else {
         type = TypeSyntax(
           OptionalTypeSyntax(
-            wrappedType: IdentifierTypeSyntax(name: .identifier(tn)),
+            wrappedType: Lex.typeSyntax(tn),
             questionMark: .postfixQuestionMarkToken()
           ))
       }
@@ -73,8 +73,8 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return queries
   }
 
-  func params(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [(key: String, isRequired: Bool, type: DeclReferenceExprSyntax)] {
-    var queries = [(key: String, isRequired: Bool, type: DeclReferenceExprSyntax)]()
+  func params(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [(key: String, isRequired: Bool, type: ExprSyntax)] {
+    var queries = [(key: String, isRequired: Bool, type: ExprSyntax)]()
     guard let parameters else { return queries }
     var required = [String: Bool]()
     for req in parameters.required ?? [] {
@@ -89,18 +89,18 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
         tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
-      let type = DeclReferenceExprSyntax(baseName: .identifier(tn))
+      let type = Lex.refExpr(tn)
       queries.append((key: name, isRequired: isRequired, type: type))
     }
     return queries
   }
 
-  func output(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> TokenSyntax {
+  func output(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> TypeSyntax {
     if let output {
       switch output.encoding {
       case .json, .jsonl:
         guard let schema = output.schema else {
-          return .identifier("EmptyResponse")
+          return Lex.typeSyntax("EmptyResponse")
         }
         let outname: String
         if case .ref(let def) = schema.type {
@@ -108,14 +108,14 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         } else {
           outname = "\(fname)_Output"
         }
-        return .identifier("\(prefix).\(outname)")
+        return Lex.typeSyntax("\(prefix).\(outname)")
       case .text:
-        return .identifier("String")
+        return Lex.typeSyntax("String")
       case .cbor, .car, .any, .mp4:
-        return .identifier("Data")
+        return Lex.typeSyntax("Data")
       }
     }
-    return .identifier("EmptyResponse")
+    return Lex.typeSyntax("EmptyResponse")
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> [FunctionParameterSyntax] {
@@ -134,7 +134,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
         tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
-      let type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
+      let type = Lex.typeSyntax(tn)
       let defaultValue: InitializerClauseSyntax?
       if protocolRequirement {
         defaultValue = nil
@@ -170,9 +170,9 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           let isRequired = required[name] ?? false
           let stringLiteral =
             if case .string(let def) = t, def.enum != nil || def.knownValues != nil {
-              isRequired ? ".\(tn)(\(name).rawValue)" : ".\(tn)(\(name)?.rawValue)"
+              isRequired ? ".\(tn)(\(name.escapedSwiftKeyword).rawValue)" : ".\(tn)(\(name.escapedSwiftKeyword)?.rawValue)"
             } else {
-              ".\(tn)(\(name))"
+              ".\(tn)(\(name.escapedSwiftKeyword))"
             }
           DictionaryElementSyntax(
             key: StringLiteralExprSyntax(content: name),
@@ -227,7 +227,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         name: .identifier("ResponseBody"),
         initializer: TypeInitializerClauseSyntax(
           equal: .equalToken(),
-          value: IdentifierTypeSyntax(name: output(ts: ts, fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix)))
+          value: output(ts: ts, fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix))
         )
       )
       genQueryInput(ts: ts, name: name, type: type, prefix: ts.prefix, defMap: defMap, generate: generate)

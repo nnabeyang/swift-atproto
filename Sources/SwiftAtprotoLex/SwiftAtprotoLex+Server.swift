@@ -143,7 +143,7 @@ extension Lex {
               colon: .colonToken(),
               type: MemberTypeSyntax(
                 baseType: MemberTypeSyntax(
-                  baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+                  baseType: Lex.typeSyntax(prefix),
                   period: .periodToken(),
                   name: .identifier(key)
                 ),
@@ -162,7 +162,7 @@ extension Lex {
           arrow: .arrowToken(),
           type: MemberTypeSyntax(
             baseType: MemberTypeSyntax(
-              baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+              baseType: Lex.typeSyntax(prefix),
               period: .periodToken(),
               name: .identifier(key)
             ),
@@ -189,7 +189,7 @@ extension Lex {
               colon: .colonToken(),
               type: MemberTypeSyntax(
                 baseType: MemberTypeSyntax(
-                  baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+                  baseType: Lex.typeSyntax(prefix),
                   period: .periodToken(),
                   name: .identifier(key)
                 ),
@@ -208,7 +208,7 @@ extension Lex {
           arrow: .arrowToken(),
           type: MemberTypeSyntax(
             baseType: MemberTypeSyntax(
-              baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+              baseType: Lex.typeSyntax(prefix),
               period: .periodToken(),
               name: .identifier(key)
             ),
@@ -504,7 +504,7 @@ extension Lex {
             LabeledExprSyntax(
               label: .identifier("forOperation", leadingTrivia: .newline),
               colon: .colonToken(),
-              expression: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("id")])
+              expression: MemberAccessExprSyntax(parts: prefix.identifierSegments + [.identifier(key), .identifier("id")])
             )
             LabeledExprSyntax(
               label: .identifier("using", leadingTrivia: .newline),
@@ -566,7 +566,7 @@ extension Lex {
           pattern: IdentifierPatternSyntax(identifier: .identifier("headers")),
           typeAnnotation: TypeAnnotationSyntax(
             colon: .colonToken(),
-            type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Headers")])
+            type: MemberTypeSyntax(parts: prefix.identifierSegments + [.identifier(key), .identifier("Input"), .identifier("Headers")])
           ),
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
@@ -623,7 +623,7 @@ extension Lex {
               pattern: IdentifierPatternSyntax(identifier: .identifier("body")),
               typeAnnotation: TypeAnnotationSyntax(
                 colon: .colonToken(),
-                type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Body")])
+                type: MemberTypeSyntax(parts: prefix.identifierSegments + [.identifier(key), .identifier("Input"), .identifier("Body")])
               )
             )
           ])
@@ -634,7 +634,7 @@ extension Lex {
       ReturnStmtSyntax(
         leadingTrivia: .newline,
         expression: FunctionCallExprSyntax(
-          callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
+          callee: MemberAccessExprSyntax(parts: prefix.identifierSegments + [.identifier(key), .identifier("Input")])
         ) {
           LabeledExprSyntax(
             leadingTrivia: .newline,
@@ -727,7 +727,7 @@ extension Lex {
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
             value: FunctionCallExprSyntax(
-              callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Query")])
+              callee: MemberAccessExprSyntax(parts: prefix.identifierSegments + [.identifier(key), .identifier("Input"), .identifier("Query")])
             ) {
               for (i, (key, _)) in (def.parameters?.sortedProperties ?? []).enumerated() {
                 LabeledExprSyntax(
@@ -748,7 +748,7 @@ extension Lex {
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
             value: FunctionCallExprSyntax(
-              callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Headers")])
+              callee: MemberAccessExprSyntax(parts: prefix.identifierSegments + [.identifier(key), .identifier("Input"), .identifier("Headers")])
             ) {
               LabeledExprSyntax(
                 label: .identifier("accept"),
@@ -772,7 +772,7 @@ extension Lex {
       ReturnStmtSyntax(
         returnKeyword: .keyword(.return, leadingTrivia: .newline),
         expression: FunctionCallExprSyntax(
-          callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
+          callee: MemberAccessExprSyntax(parts: prefix.identifierSegments + [.identifier(key), .identifier("Input")])
         ) {
           LabeledExprSyntax(
             label: .identifier("query", leadingTrivia: .newline),
