@@ -217,8 +217,8 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCProcedure")))
       }
     ) {
-      staticLetDecl(leadingTrivia: [.newlines(1), .spaces(2)], ident: "id", value: StringLiteralExprSyntax(content: type))
-      staticLetDecl(leadingTrivia: [.newlines(1), .spaces(2)], ident: "contentType", value: StringLiteralExprSyntax(content: contentType))
+      staticLetDecl(leadingTrivia: .newline, ident: "id", value: StringLiteralExprSyntax(content: type))
+      staticLetDecl(leadingTrivia: .newline, ident: "contentType", value: StringLiteralExprSyntax(content: contentType))
       TypeAliasDeclSyntax(
         modifiers: [DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))],
         name: .identifier("RequestBody"),
@@ -239,19 +239,19 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         MemberBlockItemSyntax(
           decl: DeclSyntax(
             StructDeclSyntax(
-              leadingTrivia: [.newlines(1), .spaces(2)],
+              leadingTrivia: .newline,
               modifiers: [DeclModifierSyntax(name: .keyword(.public))],
               name: .identifier("Input"),
               inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"])
             ) {
               StructDeclSyntax(
-                leadingTrivia: [.newlines(1), .spaces(4)],
+                leadingTrivia: .newline,
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 name: .identifier("Headers"),
                 inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"])
               ) {
                 VariableDeclSyntax(
-                  leadingTrivia: [.newlines(1), .spaces(6)],
+                  leadingTrivia: .newline,
                   modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                   bindingSpecifier: .keyword(.var),
                   bindings: PatternBindingListSyntax([
@@ -287,7 +287,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   ])
                 )
                 InitializerDeclSyntax(
-                  leadingTrivia: [.newlines(1), .spaces(6)],
+                  leadingTrivia: .newline,
                   modifiers: DeclModifierListSyntax([
                     DeclModifierSyntax(name: .keyword(.public))
                   ]),
@@ -329,7 +329,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                       rightParen: .rightParenToken()
                     ))
                 ) {
-                  SequenceExprSyntax(leadingTrivia: [.newlines(1), .spaces(8)]) {
+                  SequenceExprSyntax(leadingTrivia: .newline) {
                     MemberAccessExprSyntax(
                       base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
                       period: .periodToken(),
@@ -341,7 +341,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                 }
               }
               VariableDeclSyntax(
-                leadingTrivia: [.newlines(1), .spaces(4)],
+                leadingTrivia: .newline,
                 modifiers: [
                   DeclModifierSyntax(name: .keyword(.public))
                 ],
@@ -368,7 +368,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
               )
               if let input = inputBody(fname: name, defMap: defMap, prefix: prefix) {
                 EnumDeclSyntax(
-                  leadingTrivia: [.newlines(2), .spaces(4)],
+                  leadingTrivia: [.newlines(2)],
                   attributes: AttributeListSyntax {
                     AttributeSyntax(
                       atSign: .atSignToken(),
@@ -379,7 +379,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   name: .identifier("Body"),
                   inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable", "Hashable"])
                 ) {
-                  EnumCaseDeclSyntax(leadingTrivia: [.newlines(1), .spaces(6)]) {
+                  EnumCaseDeclSyntax(leadingTrivia: .newline) {
                     input
                   }
                 }
@@ -393,7 +393,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                     name: .identifier("Body")
                   ))
               }
-              procedureInputInitializer(leadingTrivia: [.newlines(2), .spaces(4)], typeName: ts.typeName)
+              procedureInputInitializer(leadingTrivia: [.newlines(2)], typeName: ts.typeName)
             }
           ))
         MemberBlockItemSyntax(
@@ -401,7 +401,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             EnumDeclSyntax(
               attributes: AttributeListSyntax {
                 AttributeSyntax(
-                  atSign: .atSignToken(leadingTrivia: [.newlines(1), .spaces(2)]),
+                  atSign: .atSignToken(leadingTrivia: .newline),
                   attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("frozen")))
                 )
               },
@@ -417,7 +417,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   MemberBlockItemSyntax(
                     decl: DeclSyntax(
                       StructDeclSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(4)],
+                        leadingTrivia: .newline,
                         modifiers: [
                           DeclModifierSyntax(name: .keyword(.public))
                         ],
@@ -429,7 +429,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                             EnumDeclSyntax(
                               attributes: AttributeListSyntax {
                                 AttributeSyntax(
-                                  atSign: .atSignToken(leadingTrivia: [.newlines(1), .spaces(6)]),
+                                  atSign: .atSignToken(leadingTrivia: .newline),
                                   attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("frozen")))
                                 )
                               },
@@ -442,7 +442,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                   MemberBlockItemSyntax(
                                     decl: DeclSyntax(
                                       EnumCaseDeclSyntax(
-                                        leadingTrivia: [.newlines(1), .spaces(8)],
+                                        leadingTrivia: .newline,
                                         elements: EnumCaseElementListSyntax([
                                           EnumCaseElementSyntax(
                                             name: .identifier("json"),
@@ -462,7 +462,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                     decl: DeclSyntax(
                                       VariableDeclSyntax(
                                         modifiers: DeclModifierListSyntax([
-                                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(8)]))
+                                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))
                                         ]),
                                         bindingSpecifier: .keyword(.var),
                                         bindings: PatternBindingListSyntax([
@@ -477,7 +477,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                               accessors: .accessors(
                                                 AccessorDeclListSyntax([
                                                   AccessorDeclSyntax(
-                                                    accessorSpecifier: .keyword(.get, leadingTrivia: [.newlines(1), .spaces(10)]),
+                                                    accessorSpecifier: .keyword(.get, leadingTrivia: .newline),
                                                     effectSpecifiers: AccessorEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))),
                                                     body: CodeBlockSyntax(
                                                       leftBrace: .leftBraceToken(),
@@ -487,13 +487,13 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                                             ExpressionStmtSyntax(
                                                               expression: ExprSyntax(
                                                                 SwitchExprSyntax(
-                                                                  leadingTrivia: [.newlines(1), .spaces(12)],
+                                                                  leadingTrivia: .newline,
                                                                   subject: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self)))
                                                                 ) {
                                                                   SwitchCaseSyntax(
                                                                     label: SwitchCaseSyntax.Label(
                                                                       SwitchCaseLabelSyntax(
-                                                                        leadingTrivia: [.newlines(1), .spaces(12)],
+                                                                        leadingTrivia: .newline,
                                                                         caseItems: SwitchCaseItemListSyntax([
                                                                           SwitchCaseItemSyntax(
                                                                             pattern: PatternSyntax(
@@ -520,33 +520,33 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                                                       CodeBlockItemSyntax(
                                                                         item: CodeBlockItemSyntax.Item(
                                                                           ReturnStmtSyntax(
-                                                                            leadingTrivia: [.newlines(1), .spaces(14)],
+                                                                            leadingTrivia: .newline,
                                                                             expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("body")))
                                                                           )))
                                                                     ])
                                                                   )
                                                                 }
-                                                                .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(12)]))
+                                                                .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
                                                               ))))
                                                       ]),
-                                                      rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(10)])
+                                                      rightBrace: .rightBraceToken(leadingTrivia: .newline)
                                                     )
                                                   )
                                                 ])),
-                                              rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)])
+                                              rightBrace: .rightBraceToken(leadingTrivia: .newline)
                                             )
                                           )
                                         ])
                                       ))),
                                 ]),
-                                rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(6)])
+                                rightBrace: .rightBraceToken(leadingTrivia: .newline)
                               )
                             )))
                         MemberBlockItemSyntax(
                           decl: DeclSyntax(
                             VariableDeclSyntax(
                               modifiers: DeclModifierListSyntax([
-                                DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2), .spaces(6)]))
+                                DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2)]))
                               ]),
                               bindingSpecifier: .keyword(.var),
                               bindings: PatternBindingListSyntax([
@@ -578,7 +578,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                           decl: DeclSyntax(
                             InitializerDeclSyntax(
                               modifiers: DeclModifierListSyntax([
-                                DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2), .spaces(6)]))
+                                DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2)]))
                               ]),
                               initKeyword: .keyword(.`init`),
                               signature: FunctionSignatureSyntax(
@@ -617,7 +617,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                         elements: ExprListSyntax([
                                           ExprSyntax(
                                             MemberAccessExprSyntax(
-                                              base: DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(8)])),
+                                              base: DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: .newline)),
                                               period: .periodToken(),
                                               declName: DeclReferenceExprSyntax(baseName: .identifier("body"))
                                             )),
@@ -625,7 +625,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                           ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("body"))),
                                         ]))))
                                 ]),
-                                rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(6)])
+                                rightBrace: .rightBraceToken(leadingTrivia: .newline)
                               )
                             )))
                       }
@@ -633,7 +633,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   MemberBlockItemSyntax(
                     decl: DeclSyntax(
                       EnumCaseDeclSyntax(
-                        leadingTrivia: [.newlines(2), .spaces(4)],
+                        leadingTrivia: [.newlines(2)],
                         elements: EnumCaseElementListSyntax([
                           EnumCaseElementSyntax(
                             name: .identifier("ok"),
@@ -663,7 +663,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                     decl: DeclSyntax(
                       VariableDeclSyntax(
                         modifiers: DeclModifierListSyntax([
-                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2), .spaces(4)]))
+                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(2)]))
                         ]),
                         bindingSpecifier: .keyword(.var),
                         bindings: PatternBindingListSyntax([
@@ -688,7 +688,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                               accessors: AccessorBlockSyntax.Accessors(
                                 AccessorDeclListSyntax([
                                   AccessorDeclSyntax(
-                                    accessorSpecifier: .keyword(.get, leadingTrivia: [.newlines(1), .spaces(6)]),
+                                    accessorSpecifier: .keyword(.get, leadingTrivia: .newline),
                                     effectSpecifiers: AccessorEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))),
                                     body: CodeBlockSyntax(
                                       leftBrace: .leftBraceToken(),
@@ -698,56 +698,57 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                             ExpressionStmtSyntax(
                                               expression: ExprSyntax(
                                                 SwitchExprSyntax(
-                                                  leadingTrivia: [.newlines(1), .spaces(8)],
+                                                  leadingTrivia: .newline,
                                                   subject: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
                                                 ) {
                                                   SwitchCaseSyntax(
                                                     label: SwitchCaseSyntax.Label(
                                                       SwitchCaseLabelSyntax(
-                                                        leadingTrivia: [.newlines(1), .spaces(8)]) {
-                                                          SwitchCaseItemSyntax(
-                                                            pattern: PatternSyntax(
-                                                              ExpressionPatternSyntax(
-                                                                expression: ExprSyntax(
-                                                                  FunctionCallExprSyntax(
-                                                                    callee: ExprSyntax(
-                                                                      MemberAccessExprSyntax(
-                                                                        period: .periodToken(),
-                                                                        declName: DeclReferenceExprSyntax(baseName: .identifier("ok"))
-                                                                      ))
-                                                                  ) {
-                                                                    LabeledExprSyntax(
-                                                                      expression: ExprSyntax(
-                                                                        PatternExprSyntax(
-                                                                          pattern: PatternSyntax(
-                                                                            ValueBindingPatternSyntax(
-                                                                              bindingSpecifier: .keyword(.let),
-                                                                              pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("response")))
-                                                                            )))))
-                                                                  }
-                                                                ))))
-                                                        }
+                                                        leadingTrivia: .newline
+                                                      ) {
+                                                        SwitchCaseItemSyntax(
+                                                          pattern: PatternSyntax(
+                                                            ExpressionPatternSyntax(
+                                                              expression: ExprSyntax(
+                                                                FunctionCallExprSyntax(
+                                                                  callee: ExprSyntax(
+                                                                    MemberAccessExprSyntax(
+                                                                      period: .periodToken(),
+                                                                      declName: DeclReferenceExprSyntax(baseName: .identifier("ok"))
+                                                                    ))
+                                                                ) {
+                                                                  LabeledExprSyntax(
+                                                                    expression: ExprSyntax(
+                                                                      PatternExprSyntax(
+                                                                        pattern: PatternSyntax(
+                                                                          ValueBindingPatternSyntax(
+                                                                            bindingSpecifier: .keyword(.let),
+                                                                            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("response")))
+                                                                          )))))
+                                                                }
+                                                              ))))
+                                                      }
                                                     )
                                                   ) {
                                                     ReturnStmtSyntax(
-                                                      leadingTrivia: [.newlines(1), .spaces(10)],
+                                                      leadingTrivia: .newline,
                                                       expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("response")))
                                                     )
                                                   }
                                                   SwitchCaseSyntax(
                                                     label: SwitchCaseSyntax.Label(
                                                       SwitchDefaultLabelSyntax(
-                                                        leadingTrivia: [.newlines(1), .spaces(8)],
+                                                        leadingTrivia: .newline,
                                                         colon: .colonToken()
                                                       ))
                                                   ) {
                                                     TryExprSyntax(
-                                                      leadingTrivia: [.newlines(1), .spaces(10)],
+                                                      leadingTrivia: .newline,
                                                       expression: FunctionCallExprSyntax(
                                                         callee: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("throwUnexpectedResponseStatus")))
                                                       ) {
                                                         LabeledExprSyntax(
-                                                          label: .identifier("expectedStatus", leadingTrivia: [.newlines(1), .spaces(12)]),
+                                                          label: .identifier("expectedStatus", leadingTrivia: .newline),
                                                           colon: .colonToken(),
                                                           expression: ExprSyntax(
                                                             StringLiteralExprSyntax(
@@ -760,23 +761,23 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                                           trailingComma: .commaToken()
                                                         )
                                                         LabeledExprSyntax(
-                                                          label: .identifier("response", leadingTrivia: [.newlines(1), .spaces(12)]),
+                                                          label: .identifier("response", leadingTrivia: .newline),
                                                           colon: .colonToken(),
                                                           expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self)))
                                                         )
                                                       }
-                                                      .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+                                                      .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
                                                     )
                                                   }
                                                 }
-                                                .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)]))
+                                                .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
                                               ))))
                                       ]),
-                                      rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(6)])
+                                      rightBrace: .rightBraceToken(leadingTrivia: .newline)
                                     )
                                   )
                                 ])),
-                              rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                              rightBrace: .rightBraceToken(leadingTrivia: .newline)
                             )
                           )
                         ])
@@ -784,7 +785,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   MemberBlockItemSyntax(
                     decl: DeclSyntax(
                       EnumCaseDeclSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(4)],
+                        leadingTrivia: .newline,
                         elements: EnumCaseElementListSyntax([
                           EnumCaseElementSyntax(
                             name: .identifier("undocumented"),
@@ -817,7 +818,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                         ])
                       ))),
                 ]),
-                rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(2)])
+                rightBrace: .rightBraceToken(leadingTrivia: .newline)
               )
             )))
         MemberBlockItemSyntax(
@@ -825,7 +826,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             EnumDeclSyntax(
               attributes: AttributeListSyntax {
                 AttributeSyntax(
-                  atSign: .atSignToken(leadingTrivia: [.newlines(1), .spaces(2)]),
+                  atSign: .atSignToken(leadingTrivia: .newline),
                   attributeName: TypeSyntax(IdentifierTypeSyntax(name: .identifier("frozen")))
                 )
               },
@@ -838,7 +839,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   MemberBlockItemSyntax(
                     decl: DeclSyntax(
                       EnumCaseDeclSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(4)],
+                        leadingTrivia: .newline,
                         elements: EnumCaseElementListSyntax([
                           EnumCaseElementSyntax(name: .identifier("json"))
                         ])
@@ -846,7 +847,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   MemberBlockItemSyntax(
                     decl: DeclSyntax(
                       EnumCaseDeclSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(4)],
+                        leadingTrivia: .newline,
                         elements: EnumCaseElementListSyntax([
                           EnumCaseElementSyntax(
                             name: .identifier("other"),
@@ -871,7 +872,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                     decl: DeclSyntax(
                       InitializerDeclSyntax(
                         modifiers: DeclModifierListSyntax([
-                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)]))
+                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))
                         ]),
                         initKeyword: .keyword(.`init`),
                         optionalMark: .postfixQuestionMarkToken(),
@@ -899,7 +900,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                 ExpressionStmtSyntax(
                                   expression: ExprSyntax(
                                     SwitchExprSyntax(
-                                      leadingTrivia: [.newlines(1), .spaces(6)],
+                                      leadingTrivia: .newline,
                                       subject: FunctionCallExprSyntax(
                                         callee: ExprSyntax(
                                           MemberAccessExprSyntax(
@@ -913,18 +914,19 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                       SwitchCaseSyntax(
                                         label: SwitchCaseSyntax.Label(
                                           SwitchCaseLabelSyntax(
-                                            leadingTrivia: [.newlines(1), .spaces(6)]) {
-                                              SwitchCaseItemSyntax(
-                                                pattern: PatternSyntax(
-                                                  ExpressionPatternSyntax(
-                                                    expression: ExprSyntax(
-                                                      StringLiteralExprSyntax(content: "application/json")
-                                                    ))
-                                                ))
-                                            })
+                                            leadingTrivia: .newline
+                                          ) {
+                                            SwitchCaseItemSyntax(
+                                              pattern: PatternSyntax(
+                                                ExpressionPatternSyntax(
+                                                  expression: ExprSyntax(
+                                                    StringLiteralExprSyntax(content: "application/json")
+                                                  ))
+                                              ))
+                                          })
                                       ) {
                                         SequenceExprSyntax {
-                                          ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(8)])))
+                                          ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: .newline)))
                                           ExprSyntax(AssignmentExprSyntax(equal: .equalToken()))
                                           ExprSyntax(
                                             MemberAccessExprSyntax(
@@ -936,7 +938,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                       SwitchCaseSyntax(
                                         label: SwitchCaseSyntax.Label(
                                           SwitchDefaultLabelSyntax(
-                                            leadingTrivia: [.newlines(1), .spaces(6)],
+                                            leadingTrivia: .newline,
                                             colon: .colonToken()
                                           )),
                                         statements: CodeBlockItemListSyntax([
@@ -944,7 +946,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                             item: CodeBlockItemSyntax.Item(
                                               SequenceExprSyntax(
                                                 elements: ExprListSyntax([
-                                                  ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: [.newlines(1), .spaces(8)]))),
+                                                  ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self, leadingTrivia: .newline))),
                                                   ExprSyntax(AssignmentExprSyntax(equal: .equalToken())),
                                                   ExprSyntax(
                                                     FunctionCallExprSyntax(
@@ -961,17 +963,17 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                         ])
                                       )
                                     }
-                                    .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(6)]))
+                                    .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
                                   ))))
                           ]),
-                          rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                          rightBrace: .rightBraceToken(leadingTrivia: .newline)
                         )
                       ))),
                   MemberBlockItemSyntax(
                     decl: DeclSyntax(
                       VariableDeclSyntax(
                         modifiers: DeclModifierListSyntax([
-                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)]))
+                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline))
                         ]),
                         bindingSpecifier: .keyword(.var),
                         bindings: PatternBindingListSyntax([
@@ -995,13 +997,13 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                       ExpressionStmtSyntax(
                                         expression: ExprSyntax(
                                           SwitchExprSyntax(
-                                            leadingTrivia: [.newlines(1), .spaces(6)],
+                                            leadingTrivia: .newline,
                                             subject: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self)))
                                           ) {
                                             SwitchCaseSyntax(
                                               label: SwitchCaseSyntax.Label(
                                                 SwitchCaseLabelSyntax(
-                                                  leadingTrivia: [.newlines(1), .spaces(6)],
+                                                  leadingTrivia: .newline,
                                                   caseItems: SwitchCaseItemListSyntax([
                                                     SwitchCaseItemSyntax(
                                                       pattern: PatternSyntax(
@@ -1029,14 +1031,14 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                                 ))
                                             ) {
                                               ReturnStmtSyntax(
-                                                leadingTrivia: [.newlines(1), .spaces(8)],
+                                                leadingTrivia: .newline,
                                                 expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("string")))
                                               )
                                             }
                                             SwitchCaseSyntax(
                                               label: SwitchCaseSyntax.Label(
                                                 SwitchCaseLabelSyntax(
-                                                  leadingTrivia: [.newlines(1), .spaces(6)],
+                                                  leadingTrivia: .newline,
                                                   caseItems: SwitchCaseItemListSyntax([
                                                     SwitchCaseItemSyntax(
                                                       pattern: PatternSyntax(
@@ -1053,7 +1055,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                                 CodeBlockItemSyntax(
                                                   item: CodeBlockItemSyntax.Item(
                                                     ReturnStmtSyntax(
-                                                      leadingTrivia: [.newlines(1), .spaces(8)],
+                                                      leadingTrivia: .newline,
                                                       expression: ExprSyntax(
                                                         StringLiteralExprSyntax(
                                                           openingQuote: .stringQuoteToken(),
@@ -1066,10 +1068,10 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                               ])
                                             )
                                           }
-                                          .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(6)]))
+                                          .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
                                         ))))
                                 ])),
-                              rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                              rightBrace: .rightBraceToken(leadingTrivia: .newline)
                             )
                           )
                         ])
@@ -1078,7 +1080,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                     decl: DeclSyntax(
                       VariableDeclSyntax(
                         modifiers: DeclModifierListSyntax([
-                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.newlines(1), .spaces(4)])),
+                          DeclModifierSyntax(name: .keyword(.public, leadingTrivia: .newline)),
                           DeclModifierSyntax(name: .keyword(.static)),
                         ]),
                         bindingSpecifier: .keyword(.var),
@@ -1101,25 +1103,25 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                   CodeBlockItemSyntax(
                                     item: CodeBlockItemSyntax.Item(
                                       ArrayExprSyntax(
-                                        leadingTrivia: [.newlines(1), .spaces(6)],
-                                        rightSquare: .rightSquareToken(leadingTrivia: [.newlines(1), .spaces(6)])
+                                        leadingTrivia: .newline,
+                                        rightSquare: .rightSquareToken(leadingTrivia: .newline)
                                       ) {
                                         ArrayElementSyntax(
                                           expression: ExprSyntax(
                                             MemberAccessExprSyntax(
-                                              period: .periodToken(leadingTrivia: [.newlines(1), .spaces(8)]),
+                                              period: .periodToken(leadingTrivia: .newline),
                                               declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
                                             )))
                                       }
                                     ))
                                 ])),
-                              rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                              rightBrace: .rightBraceToken(leadingTrivia: .newline)
                             )
                           )
                         ])
                       ))),
                 ]),
-                rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(2)])
+                rightBrace: .rightBraceToken(leadingTrivia: .newline)
               )
             )))
       }

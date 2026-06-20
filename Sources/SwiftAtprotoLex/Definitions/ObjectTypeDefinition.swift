@@ -68,7 +68,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     ) {
       if ts.isRecord {
         VariableDeclSyntax(
-          leadingTrivia: [.newlines(1), .spaces(4)],
+          leadingTrivia: .newline,
           modifiers: DeclModifierListSyntax([
             DeclModifierSyntax(name: .keyword(.public)),
             DeclModifierSyntax(name: .keyword(.static)),
@@ -85,7 +85,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           ])
         )
         VariableDeclSyntax(
-          leadingTrivia: [.newlines(1), .spaces(4)],
+          leadingTrivia: .newline,
           modifiers: DeclModifierListSyntax([
             DeclModifierSyntax(name: .keyword(.public))
           ]),
