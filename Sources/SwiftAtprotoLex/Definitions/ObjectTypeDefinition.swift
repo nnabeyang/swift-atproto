@@ -63,7 +63,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     return StructDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [declModifierSyntax],
-      name: .identifier(name),
+      name: .lexIdentifier(name),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ts.isRecord ? ["ATProtoRecord"] : ["Codable", "Hashable", "Sendable"])
     ) {
       if ts.isRecord {
@@ -161,7 +161,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                   value: NilLiteralExprSyntax()
                 )
               let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: true)
-              FunctionParameterSyntax(firstName: .identifier(key), type: type, defaultValue: defaultValue)
+              FunctionParameterSyntax(firstName: .lexIdentifier(key), type: type, defaultValue: defaultValue)
             }
           }
         )
@@ -171,10 +171,10 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
             MemberAccessExprSyntax(
               base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
               period: .periodToken(),
-              declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+              declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
             )
             AssignmentExprSyntax(equal: .equalToken())
-            DeclReferenceExprSyntax(baseName: .identifier(key.escapedSwiftKeyword))
+            DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
           }
         }
         SequenceExprSyntax {
@@ -262,7 +262,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
             MemberAccessExprSyntax(
               base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
               period: .periodToken(),
-              declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+              declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
             )
             AssignmentExprSyntax(equal: .equalToken())
             TryExprSyntax(
@@ -275,7 +275,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               ) {
                 LabeledExprSyntax(
                   expression: MemberAccessExprSyntax(
-                    base: DeclReferenceExprSyntax(baseName: .identifier(tname)),
+                    base: Lex.refExpr(tname),
                     period: .periodToken(),
                     declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                   ),
@@ -286,7 +286,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                   colon: .colonToken(),
                   expression: MemberAccessExprSyntax(
                     period: .periodToken(),
-                    declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                    declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                   )
                 )
               }
@@ -468,7 +468,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 expression: MemberAccessExprSyntax(
                   base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
                   period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                  declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                 ),
                 trailingComma: .commaToken()
               )
@@ -477,7 +477,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 colon: .colonToken(),
                 expression: MemberAccessExprSyntax(
                   period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                  declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                 )
               )
             }

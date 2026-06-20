@@ -85,7 +85,7 @@ extension Lex {
   }
 
   private static func makeXRPCMethodStub(leadingTrivia: Trivia? = nil, key: String, prefix: String) -> FunctionDeclSyntax {
-    let prefixIdent: [TokenSyntax] = Lex.structNameFor(prefix: prefix).split(separator: ".").map({ .identifier(String($0)) })
+    let prefixIdent: [TokenSyntax] = Lex.structNameFor(prefix: prefix).split(separator: ".").map({ .lexIdentifier(String($0)) })
     return FunctionDeclSyntax(
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
       name: .identifier("\(Lex.enumNameFor(prefix: prefix))\(key)"),
@@ -95,7 +95,7 @@ extension Lex {
             firstName: .wildcardToken(),
             secondName: .identifier("input"),
             colon: .colonToken(),
-            type: MemberTypeSyntax(parts: prefixIdent + [.identifier(key), .identifier("Input")])
+            type: MemberTypeSyntax(parts: prefixIdent + [.lexIdentifier(key), .identifier("Input")])
           )
         },
         effectSpecifiers: FunctionEffectSpecifiersSyntax(
@@ -103,7 +103,7 @@ extension Lex {
           throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
         ),
         returnClause: ReturnClauseSyntax(
-          type: MemberTypeSyntax(parts: prefixIdent + [.identifier(key), .identifier("Output")])
+          type: MemberTypeSyntax(parts: prefixIdent + [.lexIdentifier(key), .identifier("Output")])
         )
       )
     ) {
@@ -143,9 +143,9 @@ extension Lex {
               colon: .colonToken(),
               type: MemberTypeSyntax(
                 baseType: MemberTypeSyntax(
-                  baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+                  baseType: Lex.typeSyntax(prefix),
                   period: .periodToken(),
-                  name: .identifier(key)
+                  name: .lexIdentifier(key)
                 ),
                 period: .periodToken(),
                 name: .identifier("Input")
@@ -162,9 +162,9 @@ extension Lex {
           arrow: .arrowToken(),
           type: MemberTypeSyntax(
             baseType: MemberTypeSyntax(
-              baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+              baseType: Lex.typeSyntax(prefix),
               period: .periodToken(),
-              name: .identifier(key)
+              name: .lexIdentifier(key)
             ),
             period: .periodToken(),
             name: .identifier("Output")
@@ -189,9 +189,9 @@ extension Lex {
               colon: .colonToken(),
               type: MemberTypeSyntax(
                 baseType: MemberTypeSyntax(
-                  baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+                  baseType: Lex.typeSyntax(prefix),
                   period: .periodToken(),
-                  name: .identifier(key)
+                  name: .lexIdentifier(key)
                 ),
                 period: .periodToken(),
                 name: .identifier("Input")
@@ -208,9 +208,9 @@ extension Lex {
           arrow: .arrowToken(),
           type: MemberTypeSyntax(
             baseType: MemberTypeSyntax(
-              baseType: IdentifierTypeSyntax(name: .identifier(prefix)),
+              baseType: Lex.typeSyntax(prefix),
               period: .periodToken(),
-              name: .identifier(key)
+              name: .lexIdentifier(key)
             ),
             period: .periodToken(),
             name: .identifier("Output")
@@ -221,7 +221,7 @@ extension Lex {
   }
 
   private static func makeHandlerRegistration(leadingTrivia: Trivia? = nil, prefix: String, type: String, method: String) -> TryExprSyntax {
-    let prefixIdent: [TokenSyntax] = Lex.structNameFor(prefix: prefix).split(separator: ".").map({ .identifier(String($0)) })
+    let prefixIdent: [TokenSyntax] = Lex.structNameFor(prefix: prefix).split(separator: ".").map({ .lexIdentifier(String($0)) })
     return TryExprSyntax(
       leadingTrivia: leadingTrivia,
       expression: FunctionCallExprSyntax(
@@ -504,7 +504,7 @@ extension Lex {
             LabeledExprSyntax(
               label: .identifier("forOperation", leadingTrivia: .newline),
               colon: .colonToken(),
-              expression: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("id")])
+              expression: MemberAccessExprSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("id")])
             )
             LabeledExprSyntax(
               label: .identifier("using", leadingTrivia: .newline),
@@ -566,7 +566,7 @@ extension Lex {
           pattern: IdentifierPatternSyntax(identifier: .identifier("headers")),
           typeAnnotation: TypeAnnotationSyntax(
             colon: .colonToken(),
-            type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Headers")])
+            type: MemberTypeSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("Input"), .identifier("Headers")])
           ),
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
@@ -623,7 +623,7 @@ extension Lex {
               pattern: IdentifierPatternSyntax(identifier: .identifier("body")),
               typeAnnotation: TypeAnnotationSyntax(
                 colon: .colonToken(),
-                type: MemberTypeSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Body")])
+                type: MemberTypeSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("Input"), .identifier("Body")])
               )
             )
           ])
@@ -634,7 +634,7 @@ extension Lex {
       ReturnStmtSyntax(
         leadingTrivia: .newline,
         expression: FunctionCallExprSyntax(
-          callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
+          callee: MemberAccessExprSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("Input")])
         ) {
           LabeledExprSyntax(
             leadingTrivia: .newline,
@@ -727,11 +727,11 @@ extension Lex {
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
             value: FunctionCallExprSyntax(
-              callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Query")])
+              callee: MemberAccessExprSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("Input"), .identifier("Query")])
             ) {
               for (i, (key, _)) in (def.parameters?.sortedProperties ?? []).enumerated() {
                 LabeledExprSyntax(
-                  label: .identifier(key),
+                  label: .lexIdentifier(key),
                   colon: .colonToken(),
                   expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query\(i)")))
                 )
@@ -748,7 +748,7 @@ extension Lex {
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
             value: FunctionCallExprSyntax(
-              callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input"), .identifier("Headers")])
+              callee: MemberAccessExprSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("Input"), .identifier("Headers")])
             ) {
               LabeledExprSyntax(
                 label: .identifier("accept"),
@@ -772,7 +772,7 @@ extension Lex {
       ReturnStmtSyntax(
         returnKeyword: .keyword(.return, leadingTrivia: .newline),
         expression: FunctionCallExprSyntax(
-          callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
+          callee: MemberAccessExprSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("Input")])
         ) {
           LabeledExprSyntax(
             label: .identifier("query", leadingTrivia: .newline),

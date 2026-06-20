@@ -44,18 +44,14 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
     ) {
       for cts in tss {
         let id = cts.defName == "main" ? cts.id : #"\#(cts.id)#\#(cts.defName)"#
-        let tn: TypeSyntaxProtocol =
+        let tn: TypeSyntax =
           cts.prefix == ts.prefix
-          ? IdentifierTypeSyntax(name: .identifier(cts.typeName.escapedSwiftKeyword))
-          : MemberTypeSyntax(
-            baseType: IdentifierTypeSyntax(name: .identifier(Lex.structNameFor(prefix: cts.prefix))),
-            period: .periodToken(),
-            name: .identifier(cts.typeName.escapedSwiftKeyword)
-          )
+          ? Lex.typeSyntax(cts.typeName)
+          : Lex.typeSyntax("\(Lex.structNameFor(prefix: cts.prefix)).\(cts.typeName)")
 
         EnumCaseDeclSyntax {
           EnumCaseElementSyntax(
-            name: .identifier(Lex.caseNameFromId(id: id, prefix: ts.prefix)),
+            name: .lexIdentifier(Lex.caseNameFromId(id: id, prefix: ts.prefix)),
             parameterClause: EnumCaseParameterClauseSyntax(
               parameters: [EnumCaseParameterSyntax(type: tn)]
             )
@@ -155,7 +151,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
                 TryExprSyntax(
                   expression: FunctionCallExprSyntax(
                     callee: MemberAccessExprSyntax(
-                      name: .identifier(Lex.caseNameFromId(id: id, prefix: ts.prefix))
+                      name: .lexIdentifier(Lex.caseNameFromId(id: id, prefix: ts.prefix))
                     )
                   ) {
                     LabeledExprSyntax(
@@ -224,7 +220,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
                   .init(
                     pattern: ExpressionPatternSyntax(
                       expression: FunctionCallExprSyntax(
-                        callee: MemberAccessExprSyntax(name: .identifier(Lex.caseNameFromId(id: id, prefix: ts.prefix)))
+                        callee: MemberAccessExprSyntax(name: .lexIdentifier(Lex.caseNameFromId(id: id, prefix: ts.prefix)))
                       ) {
                         LabeledExprSyntax(
                           expression: PatternExprSyntax(

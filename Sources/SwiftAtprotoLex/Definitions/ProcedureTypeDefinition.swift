@@ -70,7 +70,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             leftParen: .leftParenToken(),
             parameters: EnumCaseParameterListSyntax([
               EnumCaseParameterSyntax(
-                type: IdentifierTypeSyntax(name: .identifier(token))
+                type: Lex.typeSyntax(token)
               )
             ]),
             rightParen: .rightParenToken()
@@ -107,7 +107,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return nil
   }
 
-  func requestBody(fname: String, defMap: ExtDefMap, prefix: String) -> IdentifierTypeSyntax {
+  func requestBody(fname: String, defMap: ExtDefMap, prefix: String) -> TypeSyntax {
     if let input {
       switch input.encoding {
       case .json, .jsonl:
@@ -123,17 +123,17 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           }
           return outname
         }()
-        return IdentifierTypeSyntax(name: .identifier(token))
+        return Lex.typeSyntax(token)
       case .text:
-        return IdentifierTypeSyntax(name: .identifier("String"))
+        return Lex.typeSyntax("String")
       case .cbor, .car, .any, .mp4:
-        return IdentifierTypeSyntax(name: .identifier("Data"))
+        return Lex.typeSyntax("Data")
       }
     }
-    return IdentifierTypeSyntax(name: .identifier("Bool"))
+    return Lex.typeSyntax("Bool")
   }
 
-  func responseBody(fname: String, defMap: ExtDefMap, prefix: String) -> IdentifierTypeSyntax {
+  func responseBody(fname: String, defMap: ExtDefMap, prefix: String) -> TypeSyntax {
     if let output {
       switch output.encoding {
       case .json, .jsonl:
@@ -149,14 +149,14 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           }
           return outname
         }()
-        return IdentifierTypeSyntax(name: .identifier(token))
+        return Lex.typeSyntax(token)
       case .text:
-        return IdentifierTypeSyntax(name: .identifier("String"))
+        return Lex.typeSyntax("String")
       case .cbor, .car, .any, .mp4:
-        return IdentifierTypeSyntax(name: .identifier("Data"))
+        return Lex.typeSyntax("Data")
       }
     }
-    return IdentifierTypeSyntax(name: .identifier("EmptyResponse"))
+    return Lex.typeSyntax("EmptyResponse")
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement _: Bool) -> [FunctionParameterSyntax] {
@@ -212,7 +212,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       modifiers: [
         declModifierSyntax
       ],
-      name: .identifier(ts.typeName),
+      name: .lexIdentifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCProcedure")))
       }
@@ -272,7 +272,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                   arguments: GenericArgumentListSyntax([
                                     GenericArgumentSyntax.create(
                                       argument: MemberTypeSyntax(
-                                        baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                                        baseType: TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName))),
                                         period: .periodToken(),
                                         name: .identifier("AcceptableContentType")
                                       ))
@@ -307,7 +307,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                               genericArgumentClause: GenericArgumentClauseSyntax {
                                 GenericArgumentSyntax.create(
                                   argument: MemberTypeSyntax(
-                                    baseType: IdentifierTypeSyntax(name: .identifier(ts.typeName)),
+                                    baseType: IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName)),
                                     period: .periodToken(),
                                     name: .identifier("AcceptableContentType")
                                   )
@@ -355,7 +355,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                         MemberTypeSyntax(
                           baseType: TypeSyntax(
                             MemberTypeSyntax(
-                              baseType: IdentifierTypeSyntax(name: .identifier(ts.typeName)),
+                              baseType: IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName)),
                               period: .periodToken(),
                               name: .identifier("Input")
                             )),
@@ -387,7 +387,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   ident: "body",
                   type: MemberTypeSyntax(
                     baseType: MemberTypeSyntax(
-                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName))),
                       name: .identifier("Input")
                     ),
                     name: .identifier("Body")
@@ -560,7 +560,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                           MemberTypeSyntax(
                                             baseType: TypeSyntax(
                                               MemberTypeSyntax(
-                                                baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                                                baseType: TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName))),
                                                 period: .periodToken(),
                                                 name: .identifier("Output")
                                               )),
@@ -594,7 +594,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                             MemberTypeSyntax(
                                               baseType: TypeSyntax(
                                                 MemberTypeSyntax(
-                                                  baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                                                  baseType: TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName))),
                                                   period: .periodToken(),
                                                   name: .identifier("Output")
                                                 )),
@@ -645,7 +645,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                     MemberTypeSyntax(
                                       baseType: TypeSyntax(
                                         MemberTypeSyntax(
-                                          baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                                          baseType: TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName))),
                                           period: .periodToken(),
                                           name: .identifier("Output")
                                         )),
@@ -675,7 +675,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                 MemberTypeSyntax(
                                   baseType: TypeSyntax(
                                     MemberTypeSyntax(
-                                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .identifier(ts.typeName))),
+                                      baseType: TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(ts.typeName))),
                                       period: .periodToken(),
                                       name: .identifier("Output")
                                     )),

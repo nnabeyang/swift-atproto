@@ -415,9 +415,9 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                           if let properties = def.parameters?.sortedProperties {
                             for (name, _) in properties {
                               LabeledExprSyntax(
-                                label: .identifier(name),
+                                label: .lexIdentifier(name),
                                 colon: .colonToken(),
-                                expression: DeclReferenceExprSyntax(baseName: .identifier(name))
+                                expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(name))
                               )
                             }
                           }
@@ -436,11 +436,11 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     let type: TypeSyntax
     if case .string(let def) = property, def.enum != nil || def.knownValues != nil {
       let tn = "\(name)_\(key.titleCased())"
-      type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(!dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tn)" : tn)))
+      type = Lex.typeSyntax(!dropPrefix ? "\(Lex.structNameFor(prefix: prefix)).\(tn)" : tn)
     } else {
       let ts = TypeSchema(id: id, prefix: prefix, defName: key, type: property)
       let tn = Self.typeNameForField(name: name, k: key, v: ts, defMap: defMap, dropPrefix: dropPrefix)
-      type = TypeSyntax(IdentifierTypeSyntax(name: .identifier(tn)))
+      type = Lex.typeSyntax(tn)
     }
     if isRequired {
       return type
