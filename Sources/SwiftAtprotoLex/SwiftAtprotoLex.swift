@@ -180,7 +180,7 @@ func writeSchemaCode(
       }
     }
   }
-  let clientSrc: String = clientTree.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
+  let clientSrc: String = clientTree.formatted(using: BasicFormat(indentationWidth: .spaces(2))).with(\.trailingTrivia, .newline).description
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }

@@ -53,7 +53,7 @@ extension Lex {
         genXRPCExtension(leadingTrivia: .newlines(2), for: methodTypes)
         genUnversalServerExtension(leadingTrivia: .newlines(2), for: methodTypes, defMap: defMap)
       },
-      trailingTrivia: .newlines(2))
+      trailingTrivia: .newline)
     return src.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
   }
 
