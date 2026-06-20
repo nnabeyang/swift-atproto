@@ -415,9 +415,9 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                           if let properties = def.parameters?.sortedProperties {
                             for (name, _) in properties {
                               LabeledExprSyntax(
-                                label: .identifier(name),
+                                label: .lexIdentifier(name),
                                 colon: .colonToken(),
-                                expression: DeclReferenceExprSyntax(baseName: .identifier(name))
+                                expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(name))
                               )
                             }
                           }

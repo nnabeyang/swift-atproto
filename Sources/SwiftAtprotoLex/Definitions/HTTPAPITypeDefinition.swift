@@ -35,7 +35,7 @@ extension HTTPAPITypeDefinition {
         }
         EnumCaseDeclSyntax(leadingTrivia: docTrivia) {
           EnumCaseElementSyntax(
-            name: .identifier(error.name.camelCased()),
+            name: .lexIdentifier(error.name.camelCased()),
             parameterClause: EnumCaseParameterClauseSyntax(
               parameters: [
                 EnumCaseParameterSyntax(type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String"))))
@@ -94,7 +94,7 @@ extension HTTPAPITypeDefinition {
                 FunctionCallExprSyntax(
                   callee: MemberAccessExprSyntax(
                     period: .periodToken(),
-                    declName: DeclReferenceExprSyntax(baseName: .identifier(error.name.camelCased()))
+                    declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(error.name.camelCased()))
                   )
                 ) {
                   LabeledExprSyntax(
@@ -179,7 +179,7 @@ extension HTTPAPITypeDefinition {
                                 pattern: ExpressionPatternSyntax(
                                   expression: MemberAccessExprSyntax(
                                     period: .periodToken(),
-                                    declName: DeclReferenceExprSyntax(baseName: .identifier(error.name.camelCased()))
+                                    declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(error.name.camelCased()))
                                   )
                                 )
                               )
@@ -258,7 +258,7 @@ extension HTTPAPITypeDefinition {
                                       expression: FunctionCallExprSyntax(
                                         callee: MemberAccessExprSyntax(
                                           period: .periodToken(),
-                                          declName: DeclReferenceExprSyntax(baseName: .identifier(error.name.camelCased()))
+                                          declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(error.name.camelCased()))
                                         )
                                       ) {
                                         LabeledExprSyntax(

@@ -64,7 +64,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       }
       queries.append(
         PatternBindingSyntax(
-          pattern: IdentifierPatternSyntax(identifier: .identifier(name)),
+          pattern: IdentifierPatternSyntax(identifier: .lexIdentifier(name)),
           typeAnnotation: TypeAnnotationSyntax(
             colon: .colonToken(),
             type: type
@@ -149,7 +149,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       }
       arguments.append(
         .init(
-          firstName: .identifier(name),
+          firstName: .lexIdentifier(name),
           type: isRequired
             ? type
             : TypeSyntax(OptionalTypeSyntax(wrappedType: type)), defaultValue: defaultValue))
@@ -195,7 +195,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       modifiers: [
         declModifierSyntax
       ],
-      name: .identifier(ts.typeName),
+      name: .lexIdentifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQuery")))
       }
@@ -283,10 +283,10 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
               MemberAccessExprSyntax(
                 base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
                 period: .periodToken(),
-                declName: DeclReferenceExprSyntax(baseName: .identifier(key))
+                declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
               )
               AssignmentExprSyntax(equal: .equalToken())
-              DeclReferenceExprSyntax(baseName: .identifier(key))
+              DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
             }
           }
         }

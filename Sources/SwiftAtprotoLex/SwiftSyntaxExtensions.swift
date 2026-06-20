@@ -2,9 +2,15 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
+extension TokenSyntax {
+  static func lexIdentifier(_ name: String) -> TokenSyntax {
+    .identifier(name.escapedSwiftKeyword)
+  }
+}
+
 extension String {
-  var identifierSegments: [TokenSyntax] {
-    split(separator: ".", omittingEmptySubsequences: false).map { .identifier(String($0)) }
+  var lexIdentifierSegments: [TokenSyntax] {
+    split(separator: ".", omittingEmptySubsequences: false).map { .lexIdentifier(String($0)) }
   }
 }
 
@@ -13,17 +19,17 @@ extension Lex {
     if name.hasPrefix("["), name.hasSuffix("]") {
       return TypeSyntax(ArrayTypeSyntax(element: typeSyntax(String(name.dropFirst().dropLast()))))
     }
-    let segments = name.identifierSegments
+    let segments = name.lexIdentifierSegments
     if segments.count <= 1 {
-      return TypeSyntax(IdentifierTypeSyntax(name: .identifier(name)))
+      return TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(name)))
     }
     return TypeSyntax(MemberTypeSyntax(parts: segments))
   }
 
   static func refExpr(_ name: String) -> ExprSyntax {
-    let segments = name.identifierSegments
+    let segments = name.lexIdentifierSegments
     if segments.count <= 1 {
-      return ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(name)))
+      return ExprSyntax(DeclReferenceExprSyntax(baseName: .lexIdentifier(name)))
     }
     return ExprSyntax(MemberAccessExprSyntax(parts: segments))
   }

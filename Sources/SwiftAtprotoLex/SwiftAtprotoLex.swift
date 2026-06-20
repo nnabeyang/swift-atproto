@@ -199,7 +199,7 @@ class EnumDeclSyntaxNode {
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
       ],
-      name: .identifier(name)
+      name: .lexIdentifier(name)
     ) {
       for childKey in children.keys.sorted() {
         children[childKey]!.generateEnums()
@@ -391,7 +391,7 @@ enum Lex {
                     DictionaryElementSyntax(
                       key: StringLiteralExprSyntax(openingQuote: .stringQuoteToken(leadingTrivia: .newline), content: recordType.id),
                       colon: .colonToken(),
-                      value: MemberAccessExprSyntax(parts: Lex.enumIdentifiersFor(prefix: recordType.prefix) + [.identifier(name), .keyword(.self)]),
+                      value: MemberAccessExprSyntax(parts: Lex.enumIdentifiersFor(prefix: recordType.prefix) + [.lexIdentifier(name), .keyword(.self)]),
                       trailingComma: .commaToken()
                     )
                   }
@@ -636,7 +636,7 @@ enum Lex {
   }
 
   static func enumIdentifiersFor(prefix: String) -> [TokenSyntax] {
-    prefix.split(separator: ".").map({ .identifier(String($0).capitalized) })
+    prefix.split(separator: ".").map({ .lexIdentifier(String($0).capitalized) })
   }
 
   static func caseNameFromId(id: String, prefix: String) -> String {

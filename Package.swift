@@ -100,6 +100,13 @@ let package = Package(
       dependencies: ["SwiftAtproto"]
     ),
     .testTarget(
+      name: "SwiftAtprotoLexTests",
+      dependencies: [
+        "SwiftAtprotoLex",
+        .product(name: "SwiftSyntax", package: "swift-syntax"),
+      ]
+    ),
+    .testTarget(
       name: "MacrosTests",
       dependencies: [
         "Macros",

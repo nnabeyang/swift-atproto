@@ -55,7 +55,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
           declModifierSyntax,
           DeclModifierSyntax(name: .keyword(.indirect)),
         ],
-        name: .identifier(name),
+        name: .lexIdentifier(name),
         inheritanceClause: InheritanceClauseSyntax(typeNames: ["String", "Codable", "Hashable"])
       ) {
         for value in cases {
@@ -228,7 +228,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
         declModifierSyntax,
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
-      name: .identifier(name),
+      name: .lexIdentifier(name),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ["RawRepresentable", "Codable", "Hashable", "Sendable"])
     ) {
       for value in knownValues {
@@ -341,7 +341,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
                                       pattern: ExpressionPatternSyntax(
                                         expression: MemberAccessExprSyntax(
                                           period: .periodToken(),
-                                          declName: DeclReferenceExprSyntax(baseName: .identifier(value.camelCased()))
+                                          declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(value.camelCased()))
                                         ))
                                     )
                                   ],
