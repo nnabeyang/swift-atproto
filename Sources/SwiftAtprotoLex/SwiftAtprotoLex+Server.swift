@@ -1,4 +1,5 @@
 import Foundation
+import SwiftBasicFormat
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
@@ -23,13 +24,10 @@ extension Lex {
       leadingTrivia: fileHeader,
       statementsBuilder: {
         ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "SwiftAtproto")]
+          path: [ImportPathComponentSyntax(name: "Foundation")]
         )
         ImportDeclSyntax(
           path: [ImportPathComponentSyntax(name: "HTTPTypes")]
-        )
-        ImportDeclSyntax(
-          path: [ImportPathComponentSyntax(name: "Foundation")]
         )
         ImportDeclSyntax(
           attributes: AttributeListSyntax {
@@ -45,15 +43,18 @@ extension Lex {
           },
           path: [
             ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
-          ],
+          ]
+        )
+        ImportDeclSyntax(
+          path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
           trailingTrivia: .newlines(2)
         )
         genXRPCAPIProtocol(for: methodTypes)
-        genXRPCExtension(for: methodTypes)
-        genUnversalServerExtension(for: methodTypes, defMap: defMap)
+        genXRPCExtension(leadingTrivia: .newlines(2), for: methodTypes)
+        genUnversalServerExtension(leadingTrivia: .newlines(2), for: methodTypes, defMap: defMap)
       },
-      trailingTrivia: .newlines(2))
-    return src.formatted().description
+      trailingTrivia: .newline)
+    return src.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
   }
 
   private static func genXRPCAPIProtocol(leadingTrivia _: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> ProtocolDeclSyntax {
@@ -65,14 +66,15 @@ extension Lex {
       name: .identifier("XRPCAPIProtocol"),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable"])
     ) {
-      for (key, _, scheme, _) in methodTypes {
-        genXRPCFunctionDeclSyntax(key: key, scheme: scheme)
+      for (i, (key, _, scheme, _)) in methodTypes.enumerated() {
+        genXRPCFunctionDeclSyntax(leadingTrivia: i == 0 ? .newline : .newlines(2), key: key, scheme: scheme)
       }
     }
   }
 
   private static func genXRPCExtension(leadingTrivia: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> ExtensionDeclSyntax {
     ExtensionDeclSyntax(
+      leadingTrivia: leadingTrivia,
       extendedType: IdentifierTypeSyntax(name: .identifier("XRPCAPIProtocol"))
     ) {
       for (key, prefix, _, _) in methodTypes {
@@ -85,7 +87,6 @@ extension Lex {
   private static func makeXRPCMethodStub(leadingTrivia: Trivia? = nil, key: String, prefix: String) -> FunctionDeclSyntax {
     let prefixIdent: [TokenSyntax] = Lex.structNameFor(prefix: prefix).split(separator: ".").map({ .identifier(String($0)) })
     return FunctionDeclSyntax(
-      leadingTrivia: .spaces(2),
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
       name: .identifier("\(Lex.enumNameFor(prefix: prefix))\(key)"),
       signature: FunctionSignatureSyntax(
@@ -122,16 +123,15 @@ extension Lex {
             callee: MemberAccessExprSyntax(declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))))
         )
       }
-      .with(\.leadingTrivia, .spaces(4))
     }
-    .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: [.spaces(2)]))
+    .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: .newline))
     .with(\.trailingTrivia, .newlines(2))
   }
 
   private static func genXRPCFunctionDeclSyntax(leadingTrivia: Trivia? = nil, key: String, scheme: TypeSchema) -> FunctionDeclSyntax {
     let prefix = Lex.structNameFor(prefix: scheme.prefix)
     return FunctionDeclSyntax(
-      leadingTrivia: [.newlines(1), .spaces(2)],
+      leadingTrivia: leadingTrivia ?? .newline,
       name: .identifier("\(Lex.enumNameFor(prefix: prefix))\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax(
@@ -177,7 +177,7 @@ extension Lex {
   private static func genXRPCFunctionDeclSyntaxQuery(leadingTrivia: Trivia? = nil, key: String, scheme: TypeSchema) -> FunctionDeclSyntax {
     let prefix = Lex.structNameFor(prefix: scheme.prefix)
     return FunctionDeclSyntax(
-      leadingTrivia: [.newlines(1), .spaces(2)],
+      leadingTrivia: .newline,
       name: .identifier("\(Lex.enumNameFor(prefix: prefix))\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax(
@@ -228,35 +228,35 @@ extension Lex {
         callee: MemberAccessExprSyntax(parts: [.identifier("transport"), .identifier("register")])
       ) {
         LabeledExprSyntax(
-          leadingTrivia: [.newlines(1), .spaces(6)],
-          expression: ClosureExprSyntax(rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])) {
+          leadingTrivia: .newline,
+          expression: ClosureExprSyntax(rightBrace: .rightBraceToken(leadingTrivia: .newline)) {
             TryExprSyntax(
-              leadingTrivia: [.newlines(1), .spaces(8)],
+              leadingTrivia: .newline,
               expression: AwaitExprSyntax(
                 expression: FunctionCallExprSyntax(
                   callee: MemberAccessExprSyntax(parts: [.identifier("server"), .identifier("\(Lex.enumNameFor(prefix: prefix))\(type)")])
                 ) {
                   for (i, label) in ["request", "body", "metadata"].enumerated() {
                     LabeledExprSyntax(
-                      label: .identifier(label, leadingTrivia: [.newlines(1), .spaces(10)]),
+                      label: .identifier(label, leadingTrivia: .newline),
                       colon: .colonToken(),
                       expression: DeclReferenceExprSyntax(baseName: .dollarIdentifier("$\(i)")),
                     )
                   }
                 }
-                .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(8)]))
+                .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
               )
             )
           }
-          .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(6)]))
+          .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
         )
         LabeledExprSyntax(
-          label: .identifier("method", leadingTrivia: [.newlines(1), .spaces(6)]),
+          label: .identifier("method", leadingTrivia: .newline),
           colon: .colonToken(),
           expression: MemberAccessExprSyntax(declName: DeclReferenceExprSyntax(baseName: .identifier(method)))
         )
         LabeledExprSyntax(
-          label: .identifier("path", leadingTrivia: [.newlines(1), .spaces(6)]),
+          label: .identifier("path", leadingTrivia: .newline),
           colon: .colonToken(),
           expression: FunctionCallExprSyntax(
             callee: MemberAccessExprSyntax(parts: [.identifier("server"), .identifier("apiPathComponentsWithServerPrefix")])
@@ -275,13 +275,12 @@ extension Lex {
           }
         )
       }
-      .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(4)]))
+      .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
     )
   }
 
   private static func genRegisterHandlers(leadingTrivia: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> FunctionDeclSyntax {
     FunctionDeclSyntax(
-      leadingTrivia: .spaces(2),
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
       ],
@@ -289,10 +288,10 @@ extension Lex {
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax(
           leftParen: .leftParenToken(),
-          rightParen: .rightParenToken(leadingTrivia: [.newlines(1), .spaces(2)])
+          rightParen: .rightParenToken(leadingTrivia: .newline)
         ) {
           FunctionParameterSyntax(
-            leadingTrivia: [.newlines(1), .spaces(4)],
+            leadingTrivia: .newline,
             firstName: .identifier("on"),
             secondName: .identifier("transport"),
             colon: .colonToken(),
@@ -303,7 +302,7 @@ extension Lex {
               ))
           )
           FunctionParameterSyntax(
-            leadingTrivia: [.newlines(1), .spaces(4)],
+            leadingTrivia: .newline,
             firstName: .identifier("serverURL"),
             colon: .colonToken(),
             type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("URL"))),
@@ -313,7 +312,7 @@ extension Lex {
             )
           )
           FunctionParameterSyntax(
-            leadingTrivia: [.newlines(1), .spaces(4)],
+            leadingTrivia: .newline,
             firstName: .identifier("configuration"),
             colon: .colonToken(),
             type: IdentifierTypeSyntax(name: .identifier("Configuration")),
@@ -325,7 +324,7 @@ extension Lex {
             )
           )
           FunctionParameterSyntax(
-            leadingTrivia: [.newlines(1), .spaces(4)],
+            leadingTrivia: .newline,
             firstName: .identifier("middlewares"),
             colon: .colonToken(),
             type: ArrayTypeSyntax(
@@ -344,7 +343,7 @@ extension Lex {
       )
     ) {
       VariableDeclSyntax(
-        bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(4)])
+        bindingSpecifier: .keyword(.let, leadingTrivia: .newline)
       ) {
         PatternBindingSyntax(
           pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("server"))),
@@ -354,27 +353,27 @@ extension Lex {
               callee: DeclReferenceExprSyntax(baseName: .identifier("UniversalServer"))
             ) {
               LabeledExprSyntax(
-                label: .identifier("serverURL", leadingTrivia: [.newlines(1), .spaces(6)]),
+                label: .identifier("serverURL", leadingTrivia: .newline),
                 colon: .colonToken(),
                 expression: DeclReferenceExprSyntax(baseName: .identifier("serverURL")),
               )
               LabeledExprSyntax(
-                label: .identifier("handler", leadingTrivia: [.newlines(1), .spaces(6)]),
+                label: .identifier("handler", leadingTrivia: .newline),
                 colon: .colonToken(),
                 expression: DeclReferenceExprSyntax(baseName: .keyword(.self)),
               )
               LabeledExprSyntax(
-                label: .identifier("configuration", leadingTrivia: [.newlines(1), .spaces(6)]),
+                label: .identifier("configuration", leadingTrivia: .newline),
                 colon: .colonToken(),
                 expression: DeclReferenceExprSyntax(baseName: .identifier("configuration"))
               )
               LabeledExprSyntax(
-                label: .identifier("middlewares", leadingTrivia: [.newlines(1), .spaces(6)]),
+                label: .identifier("middlewares", leadingTrivia: .newline),
                 colon: .colonToken(),
                 expression: DeclReferenceExprSyntax(baseName: .identifier("middlewares"))
               )
             }
-            .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(4)]))
+            .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
           )
         )
       }
@@ -389,10 +388,10 @@ extension Lex {
           default:
             fatalError("unreachable")
           }
-        makeHandlerRegistration(leadingTrivia: .spaces(4), prefix: prefix, type: type, method: method)
+        makeHandlerRegistration(prefix: prefix, type: type, method: method)
       }
     }
-    .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: [.spaces(2)]))
+    .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: .newline))
   }
 
   private static func genUnversalServerExtension(
@@ -400,6 +399,7 @@ extension Lex {
     defMap: ExtDefMap
   ) -> ExtensionDeclSyntax {
     ExtensionDeclSyntax(
+      leadingTrivia: leadingTrivia,
       extendedType: IdentifierTypeSyntax(name: .identifier("UniversalServer")),
       genericWhereClause: GenericWhereClauseSyntax(
         requirements: GenericRequirementListSyntax([
@@ -421,17 +421,16 @@ extension Lex {
 
   private static func makeHandlerMethod(leadingTrivia: Trivia? = nil, key: String, prefix: String, schema: TypeSchema, def: any HTTPAPITypeDefinition, defMap: ExtDefMap) -> FunctionDeclSyntax {
     FunctionDeclSyntax(
-      leadingTrivia: .spaces(2),
       name: .identifier("\(Lex.enumNameFor(prefix: prefix))\(key)"),
       signature: FunctionSignatureSyntax(
         parameterClause: FunctionParameterClauseSyntax {
           FunctionParameterSyntax(
-            firstName: .identifier("request", leadingTrivia: [.newlines(1), .spaces(4)]),
+            firstName: .identifier("request", leadingTrivia: .newline),
             colon: .colonToken(),
             type: MemberTypeSyntax(parts: [.identifier("HTTPTypes"), .identifier("HTTPRequest")])
           )
           FunctionParameterSyntax(
-            firstName: .identifier("body", leadingTrivia: [.newlines(1), .spaces(4)]),
+            firstName: .identifier("body", leadingTrivia: .newline),
             colon: .colonToken(),
             type: OptionalTypeSyntax(
               wrappedType: MemberTypeSyntax(
@@ -443,7 +442,7 @@ extension Lex {
             )
           )
           FunctionParameterSyntax(
-            firstName: .identifier("metadata", leadingTrivia: [.newlines(1), .spaces(4)]),
+            firstName: .identifier("metadata", leadingTrivia: .newline),
             colon: .colonToken(),
             type: MemberTypeSyntax(
               baseType: IdentifierTypeSyntax(name: .identifier("OpenAPIRuntime")),
@@ -482,62 +481,62 @@ extension Lex {
       )
     ) {
       TryExprSyntax(
-        leadingTrivia: [.newlines(1), .spaces(6)],
+        leadingTrivia: .newline,
         expression: AwaitExprSyntax(
           expression: FunctionCallExprSyntax(
             callee: DeclReferenceExprSyntax(baseName: .identifier("handle"))
           ) {
             LabeledExprSyntax(
-              label: .identifier("request", leadingTrivia: [.newlines(1), .spaces(8)]),
+              label: .identifier("request", leadingTrivia: .newline),
               colon: .colonToken(),
               expression: DeclReferenceExprSyntax(baseName: .identifier("request")),
             )
             LabeledExprSyntax(
-              label: .identifier("requestBody", leadingTrivia: [.newlines(1), .spaces(8)]),
+              label: .identifier("requestBody", leadingTrivia: .newline),
               colon: .colonToken(),
               expression: DeclReferenceExprSyntax(baseName: .identifier("body"))
             )
             LabeledExprSyntax(
-              label: .identifier("metadata", leadingTrivia: [.newlines(1), .spaces(8)]),
+              label: .identifier("metadata", leadingTrivia: .newline),
               colon: .colonToken(),
               expression: DeclReferenceExprSyntax(baseName: .identifier("metadata"))
             )
             LabeledExprSyntax(
-              label: .identifier("forOperation", leadingTrivia: [.newlines(1), .spaces(8)]),
+              label: .identifier("forOperation", leadingTrivia: .newline),
               colon: .colonToken(),
               expression: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("id")])
             )
             LabeledExprSyntax(
-              label: .identifier("using", leadingTrivia: [.newlines(1), .spaces(8)]),
+              label: .identifier("using", leadingTrivia: .newline),
               colon: .colonToken(),
               expression: ClosureExprSyntax {
                 FunctionCallExprSyntax(
                   callee: MemberAccessExprSyntax(
-                    leadingTrivia: [.newlines(1), .spaces(10)],
+                    leadingTrivia: .newline,
                     parts: [.identifier("APIHandler"), .identifier("\(Lex.enumNameFor(prefix: prefix))\(key)")]
                   )
                 ) {
                   LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .dollarIdentifier("$0")))
                 }
               }
-              .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)]))
+              .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
             )
             LabeledExprSyntax(
-              label: .identifier("deserializer", leadingTrivia: [.newlines(1), .spaces(8)]),
+              label: .identifier("deserializer", leadingTrivia: .newline),
               colon: .colonToken(),
               expression: makeDeserializerExpr(key: key, prefix: prefix, schema: schema, def: def, defMap: defMap)
             )
             LabeledExprSyntax(
-              label: .identifier("serializer", leadingTrivia: [.newlines(1), .spaces(8)]),
+              label: .identifier("serializer", leadingTrivia: .newline),
               colon: .colonToken(),
               expression: makeSerializerExpr()
             )
           }
-          .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(6)]))
+          .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
         )
       )
     }
-    .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(2)]))
+    .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: .newline))
   }
 
   /// `deserializer`
@@ -560,7 +559,7 @@ extension Lex {
       ClosureShorthandParameterSyntax(name: .identifier("metadata"))
     }) {
       VariableDeclSyntax(
-        leadingTrivia: [.newlines(1), .spaces(10)],
+        leadingTrivia: .newline,
         bindingSpecifier: .keyword(.let)
       ) {
         PatternBindingSyntax(
@@ -597,7 +596,7 @@ extension Lex {
       }
       if hasInput {
         VariableDeclSyntax(
-          leadingTrivia: [.newlines(1), .spaces(10)],
+          leadingTrivia: .newline,
           bindingSpecifier: .keyword(.let),
           bindings: PatternBindingListSyntax([
             PatternBindingSyntax(
@@ -618,7 +617,7 @@ extension Lex {
           ])
         )
         VariableDeclSyntax(
-          bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)]),
+          bindingSpecifier: .keyword(.let, leadingTrivia: .newline),
           bindings: PatternBindingListSyntax([
             PatternBindingSyntax(
               pattern: IdentifierPatternSyntax(identifier: .identifier("body")),
@@ -633,29 +632,29 @@ extension Lex {
         genInputBodySwitch(key: key, schema: schema, def: def, prefix: prefix, defMap: defMap)
       }
       ReturnStmtSyntax(
-        leadingTrivia: [.newlines(1), .spaces(10)],
+        leadingTrivia: .newline,
         expression: FunctionCallExprSyntax(
           callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
         ) {
           LabeledExprSyntax(
-            leadingTrivia: [.newlines(1), .spaces(12)],
+            leadingTrivia: .newline,
             label: .identifier("headers"),
             colon: .colonToken(),
             expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("headers"))),
           )
           if hasInput {
             LabeledExprSyntax(
-              leadingTrivia: [.newlines(1), .spaces(12)],
+              leadingTrivia: .newline,
               label: .identifier("body"),
               colon: .colonToken(),
               expression: DeclReferenceExprSyntax(baseName: .identifier("body"))
             )
           }
         }
-        .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+        .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
       )
     }
-    .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)]))
+    .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
   }
 
   private static func makeDeserializerExpr(key: String, prefix: String, schema: TypeSchema, def: QueryTypeDefinition, defMap: ExtDefMap) -> ClosureExprSyntax {
@@ -666,7 +665,7 @@ extension Lex {
     }) {
       for (i, (key, isRequired, type)) in def.params(ts: schema, fname: key, defMap: defMap, prefix: prefix).enumerated() {
         VariableDeclSyntax(
-          leadingTrivia: [.newlines(1), .spaces(10)],
+          leadingTrivia: .newline,
           bindingSpecifier: .keyword(.let)
         ) {
           PatternBindingSyntax(
@@ -681,12 +680,12 @@ extension Lex {
                   ])
                 ) {
                   LabeledExprSyntax(
-                    label: .identifier("in", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    label: .identifier("in", leadingTrivia: .newline),
                     colon: .colonToken(),
                     expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("soar_query")])
                   )
                   LabeledExprSyntax(
-                    label: .identifier("style", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    label: .identifier("style", leadingTrivia: .newline),
                     colon: .colonToken(),
                     expression: MemberAccessExprSyntax(
                       period: .periodToken(),
@@ -694,17 +693,17 @@ extension Lex {
                     )
                   )
                   LabeledExprSyntax(
-                    label: .identifier("explode", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    label: .identifier("explode", leadingTrivia: .newline),
                     colon: .colonToken(),
                     expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.true)))
                   )
                   LabeledExprSyntax(
-                    label: .identifier("name", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    label: .identifier("name", leadingTrivia: .newline),
                     colon: .colonToken(),
                     expression: StringLiteralExprSyntax(content: key)
                   )
                   LabeledExprSyntax(
-                    label: .identifier("as", leadingTrivia: [.newlines(1), .spaces(12)]),
+                    label: .identifier("as", leadingTrivia: .newline),
                     colon: .colonToken(),
                     expression: ExprSyntax(
                       MemberAccessExprSyntax(
@@ -714,14 +713,14 @@ extension Lex {
                       ))
                   )
                 }
-                .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+                .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
               )
             )
           )
         }
       }
       VariableDeclSyntax(
-        bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)])
+        bindingSpecifier: .keyword(.let, leadingTrivia: .newline)
       ) {
         PatternBindingSyntax(
           pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("query"))),
@@ -742,7 +741,7 @@ extension Lex {
         )
       }
       VariableDeclSyntax(
-        bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)])
+        bindingSpecifier: .keyword(.let, leadingTrivia: .newline)
       ) {
         PatternBindingSyntax(
           pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("headers"))),
@@ -771,23 +770,23 @@ extension Lex {
         )
       }
       ReturnStmtSyntax(
-        returnKeyword: .keyword(.return, leadingTrivia: [.newlines(1), .spaces(10)]),
+        returnKeyword: .keyword(.return, leadingTrivia: .newline),
         expression: FunctionCallExprSyntax(
           callee: MemberAccessExprSyntax(parts: [.identifier(prefix), .identifier(key), .identifier("Input")])
         ) {
           LabeledExprSyntax(
-            label: .identifier("query", leadingTrivia: [.newlines(1), .spaces(12)]),
+            label: .identifier("query", leadingTrivia: .newline),
             colon: .colonToken(trailingTrivia: .space),
             expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query"))),
             trailingComma: .commaToken()
           )
           LabeledExprSyntax(
-            label: .identifier("headers", leadingTrivia: [.newlines(1), .spaces(12)]),
+            label: .identifier("headers", leadingTrivia: .newline),
             colon: .colonToken(trailingTrivia: .space),
             expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("headers")))
           )
         }
-        .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+        .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
       )
     }
   }
@@ -798,27 +797,28 @@ extension Lex {
       ClosureShorthandParameterSyntax(name: .identifier("request"))
     }) {
       SwitchExprSyntax(
-        leadingTrivia: [.newlines(1), .spaces(10)],
+        leadingTrivia: .newline,
         subject: DeclReferenceExprSyntax(baseName: .identifier("output")),
       ) {
         SwitchCaseSyntax(
           label: SwitchCaseSyntax.Label(
             SwitchCaseLabelSyntax(
-              leadingTrivia: [.newlines(1), .spaces(10)]) {
-                SwitchCaseItemSyntax(
-                  pattern: ExpressionPatternSyntax(
-                    expression: FunctionCallExprSyntax(
-                      callee: MemberAccessExprSyntax(declName: DeclReferenceExprSyntax(baseName: .identifier("ok")))
-                    ) {
-                      LabeledExprSyntax(
-                        expression: PatternExprSyntax(
-                          pattern: ValueBindingPatternSyntax(
-                            bindingSpecifier: .keyword(.let),
-                            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("value")))
-                          )))
-                    }
-                  ))
-              }
+              leadingTrivia: .newline
+            ) {
+              SwitchCaseItemSyntax(
+                pattern: ExpressionPatternSyntax(
+                  expression: FunctionCallExprSyntax(
+                    callee: MemberAccessExprSyntax(declName: DeclReferenceExprSyntax(baseName: .identifier("ok")))
+                  ) {
+                    LabeledExprSyntax(
+                      expression: PatternExprSyntax(
+                        pattern: ValueBindingPatternSyntax(
+                          bindingSpecifier: .keyword(.let),
+                          pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("value")))
+                        )))
+                  }
+                ))
+            }
           )
         ) {
           FunctionCallExprSyntax(
@@ -826,9 +826,9 @@ extension Lex {
           ) {
             LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("value"))))
           }
-          .with(\.leadingTrivia, [.newlines(1), .spaces(12)])
+          .with(\.leadingTrivia, .newline)
           VariableDeclSyntax(
-            leadingTrivia: [.newlines(1), .spaces(12)],
+            leadingTrivia: .newline,
             bindingSpecifier: .keyword(.var),
             bindings: [
               PatternBindingSyntax(
@@ -849,7 +849,7 @@ extension Lex {
             ]
           )
           FunctionCallExprSyntax(
-            callee: DeclReferenceExprSyntax(baseName: .identifier("suppressMutabilityWarning", leadingTrivia: [.newlines(1), .spaces(10)]))
+            callee: DeclReferenceExprSyntax(baseName: .identifier("suppressMutabilityWarning", leadingTrivia: .newline))
           ) {
             LabeledExprSyntax(
               expression: InOutExprSyntax(
@@ -858,7 +858,7 @@ extension Lex {
               ))
           }
           VariableDeclSyntax(
-            bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(12)]),
+            bindingSpecifier: .keyword(.let, leadingTrivia: .newline),
             bindings: PatternBindingListSyntax([
               PatternBindingSyntax(
                 pattern: IdentifierPatternSyntax(identifier: .identifier("body")),
@@ -875,34 +875,35 @@ extension Lex {
           )
           ExpressionStmtSyntax(
             expression: SwitchExprSyntax(
-              leadingTrivia: [.newlines(1), .spaces(12)],
+              leadingTrivia: .newline,
               subject: MemberAccessExprSyntax(parts: [.identifier("value"), .identifier("body")])
             ) {
               SwitchCaseSyntax(
                 label: SwitchCaseSyntax.Label(
                   SwitchCaseLabelSyntax(
-                    leadingTrivia: [.newlines(1), .spaces(12)]) {
-                      SwitchCaseItemSyntax(
-                        pattern: ExpressionPatternSyntax(
-                          expression: FunctionCallExprSyntax(
-                            callee: MemberAccessExprSyntax(
-                              period: .periodToken(),
-                              declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
-                            )
-                          ) {
-                            LabeledExprSyntax(
-                              expression: PatternExprSyntax(
-                                pattern: ValueBindingPatternSyntax(
-                                  bindingSpecifier: .keyword(.let),
-                                  pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("value")))
-                                )))
-                          }
-                        ))
-                    }
+                    leadingTrivia: .newline
+                  ) {
+                    SwitchCaseItemSyntax(
+                      pattern: ExpressionPatternSyntax(
+                        expression: FunctionCallExprSyntax(
+                          callee: MemberAccessExprSyntax(
+                            period: .periodToken(),
+                            declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
+                          )
+                        ) {
+                          LabeledExprSyntax(
+                            expression: PatternExprSyntax(
+                              pattern: ValueBindingPatternSyntax(
+                                bindingSpecifier: .keyword(.let),
+                                pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("value")))
+                              )))
+                        }
+                      ))
+                  }
                 )
               ) {
                 TryExprSyntax(
-                  leadingTrivia: [.newlines(1), .spaces(14)],
+                  leadingTrivia: .newline,
                   expression: FunctionCallExprSyntax(
                     callee: MemberAccessExprSyntax(parts: [
                       .identifier("converter"),
@@ -910,20 +911,20 @@ extension Lex {
                     ])
                   ) {
                     LabeledExprSyntax(
-                      leadingTrivia: [.newlines(1), .spaces(16)],
+                      leadingTrivia: .newline,
                       expression: StringLiteralExprSyntax(content: "application/json")
                     )
                     LabeledExprSyntax(
-                      label: .identifier("in", leadingTrivia: [.newlines(1), .spaces(16)]),
+                      label: .identifier("in", leadingTrivia: .newline),
                       colon: .colonToken(),
                       expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("headerFields")])
                     )
                   }
-                  .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(14)]))
+                  .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
                 )
                 SequenceExprSyntax {
                   DeclReferenceExprSyntax(
-                    leadingTrivia: [.newlines(1), .spaces(14)],
+                    leadingTrivia: .newline,
                     baseName: .identifier("body"))
                   AssignmentExprSyntax(equal: .equalToken())
                   TryExprSyntax(
@@ -935,11 +936,11 @@ extension Lex {
                       )
                     ) {
                       LabeledExprSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(16)],
+                        leadingTrivia: .newline,
                         expression: DeclReferenceExprSyntax(baseName: .identifier("value")),
                       )
                       LabeledExprSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(16)],
+                        leadingTrivia: .newline,
                         label: .identifier("headerFields"),
                         colon: .colonToken(),
                         expression: InOutExprSyntax(
@@ -948,21 +949,21 @@ extension Lex {
                         )
                       )
                       LabeledExprSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(16)],
+                        leadingTrivia: .newline,
                         label: .identifier("contentType"),
                         colon: .colonToken(),
                         expression: StringLiteralExprSyntax(content: "application/json; charset=utf-8")
                       )
                     }
-                    .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(14)]))
+                    .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
                   )
                 }
               }
             }
-            .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(12)]))
+            .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
           )
           ReturnStmtSyntax(
-            leadingTrivia: [.newlines(1), .spaces(12)],
+            leadingTrivia: .newline,
             expression: ExprSyntax(
               TupleExprSyntax(
                 leftParen: .leftParenToken(),
@@ -980,31 +981,32 @@ extension Lex {
         SwitchCaseSyntax(
           label: SwitchCaseSyntax.Label(
             SwitchCaseLabelSyntax(
-              leadingTrivia: [.newlines(1), .spaces(10)]) {
-                SwitchCaseItemSyntax(
-                  pattern: ExpressionPatternSyntax(
-                    expression: FunctionCallExprSyntax(
-                      callee: MemberAccessExprSyntax(
-                        period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .identifier("undocumented"))
-                      )
-                    ) {
-                      LabeledExprSyntax(
-                        expression: PatternExprSyntax(
-                          pattern: PatternSyntax(
-                            ValueBindingPatternSyntax(
-                              bindingSpecifier: .keyword(.let),
-                              pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("statusCode")))
-                            )))
-                      )
-                      LabeledExprSyntax(expression: ExprSyntax(DiscardAssignmentExprSyntax(wildcard: .wildcardToken())))
-                    }
-                  ))
-              }
+              leadingTrivia: .newline
+            ) {
+              SwitchCaseItemSyntax(
+                pattern: ExpressionPatternSyntax(
+                  expression: FunctionCallExprSyntax(
+                    callee: MemberAccessExprSyntax(
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .identifier("undocumented"))
+                    )
+                  ) {
+                    LabeledExprSyntax(
+                      expression: PatternExprSyntax(
+                        pattern: PatternSyntax(
+                          ValueBindingPatternSyntax(
+                            bindingSpecifier: .keyword(.let),
+                            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("statusCode")))
+                          )))
+                    )
+                    LabeledExprSyntax(expression: ExprSyntax(DiscardAssignmentExprSyntax(wildcard: .wildcardToken())))
+                  }
+                ))
+            }
           )
         ) {
           ReturnStmtSyntax(
-            leadingTrivia: [.newlines(1), .spaces(12)],
+            leadingTrivia: .newline,
             expression: TupleExprSyntax {
               LabeledExprSyntax(
                 expression: FunctionCallExprSyntax(
@@ -1026,14 +1028,14 @@ extension Lex {
           )
         }
       }
-      .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+      .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
     }
-    .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(8)]))
+    .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
   }
 
   private static func genChosenContentType(leadingTrivia: Trivia? = nil, key: String, def: ProcedureTypeDefinition, prefix: String) -> VariableDeclSyntax {
     VariableDeclSyntax(
-      bindingSpecifier: .keyword(.let, leadingTrivia: [.newlines(1), .spaces(10)]),
+      bindingSpecifier: .keyword(.let, leadingTrivia: .newline),
       bindings: [
         PatternBindingSyntax(
           pattern: IdentifierPatternSyntax(identifier: .identifier("chosenContentType")),
@@ -1047,13 +1049,13 @@ extension Lex {
                 )
               ) {
                 LabeledExprSyntax(
-                  leadingTrivia: [.newlines(1), .spaces(12)],
+                  leadingTrivia: .newline,
                   label: .identifier("received"),
                   colon: .colonToken(),
                   expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("contentType"))),
                 )
                 LabeledExprSyntax(
-                  leadingTrivia: [.newlines(1), .spaces(12)],
+                  leadingTrivia: .newline,
                   label: .identifier("options"),
                   colon: .colonToken(),
                   expression: ArrayExprSyntax {
@@ -1063,7 +1065,7 @@ extension Lex {
                   }
                 )
               }
-              .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(10)]))
+              .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
             )
           )
         )
@@ -1073,24 +1075,25 @@ extension Lex {
 
   private static func genInputBodySwitch(leadingTrivia: Trivia? = nil, key: String, schema: TypeSchema, def: ProcedureTypeDefinition, prefix: String, defMap: ExtDefMap) -> SwitchExprSyntax {
     SwitchExprSyntax(
-      leadingTrivia: [.newlines(1), .spaces(10)],
+      leadingTrivia: .newline,
       subject: DeclReferenceExprSyntax(baseName: .identifier("chosenContentType")),
-      rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(10)])
+      rightBrace: .rightBraceToken(leadingTrivia: .newline)
     ) {
       SwitchCaseSyntax(
         label: SwitchCaseSyntax.Label(
           SwitchCaseLabelSyntax(
-            leadingTrivia: [.newlines(1), .spaces(10)]) {
-              SwitchCaseItemSyntax(
-                pattern: ExpressionPatternSyntax(
-                  expression: StringLiteralExprSyntax(content: def.input?.encoding.rawValue ?? "application/json")
-                ))
-            }
+            leadingTrivia: .newline
+          ) {
+            SwitchCaseItemSyntax(
+              pattern: ExpressionPatternSyntax(
+                expression: StringLiteralExprSyntax(content: def.input?.encoding.rawValue ?? "application/json")
+              ))
+          }
         )
       ) {
         SequenceExprSyntax {
           let asType = def.inputType(fname: key, defMap: defMap, prefix: prefix, binaryTypeName: "HTTPBody")
-          DeclReferenceExprSyntax(baseName: .identifier("body", leadingTrivia: [.newlines(1), .spaces(12)]))
+          DeclReferenceExprSyntax(baseName: .identifier("body", leadingTrivia: .newline))
           AssignmentExprSyntax(equal: .equalToken())
           TryExprSyntax(
             expression: def.isBinary ? makeGetRequiredRequestBodyAsBinary() : makeGetRequiredRequestBodyAsJSON(asType: asType)
@@ -1100,12 +1103,12 @@ extension Lex {
       SwitchCaseSyntax(
         label: SwitchCaseSyntax.Label(
           SwitchDefaultLabelSyntax(
-            leadingTrivia: [.newlines(1), .spaces(10)],
+            leadingTrivia: .newline,
             colon: .colonToken()
           ))
       ) {
         FunctionCallExprSyntax(
-          callee: DeclReferenceExprSyntax(baseName: .identifier("preconditionFailure", leadingTrivia: [.newlines(1), .spaces(12)]))
+          callee: DeclReferenceExprSyntax(baseName: .identifier("preconditionFailure", leadingTrivia: .newline))
         ) {
           LabeledExprSyntax(
             expression: StringLiteralExprSyntax(
@@ -1137,29 +1140,29 @@ extension Lex {
         expression: MemberAccessExprSyntax(base: asType, declName: DeclReferenceExprSyntax(baseName: .keyword(.self)))
       )
       LabeledExprSyntax(
-        label: .identifier("from", leadingTrivia: [.newlines(1), .spaces(14)]),
+        label: .identifier("from", leadingTrivia: .newline),
         colon: .colonToken(),
         expression: DeclReferenceExprSyntax(baseName: .identifier("requestBody"))
       )
       LabeledExprSyntax(
-        label: .identifier("transforming", leadingTrivia: [.newlines(1), .spaces(14)]),
+        label: .identifier("transforming", leadingTrivia: .newline),
         colon: .colonToken(),
         expression: ClosureExprSyntax(signaturesBuilder: {
           ClosureShorthandParameterSyntax(name: .identifier("value"))
         }) {
           FunctionCallExprSyntax(
             callee: MemberAccessExprSyntax(
-              leadingTrivia: [.newlines(1), .spaces(16)],
+              leadingTrivia: .newline,
               declName: DeclReferenceExprSyntax(baseName: .identifier(transformEnumCase))
             )
           ) {
             LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("value")))
           }
         }
-        .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(14)]))
+        .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
       )
     }
-    .with(\.rightParen, .rightParenToken(leadingTrivia: [.newlines(1), .spaces(12)]))
+    .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
     let expression = isAwait ? ExprSyntax(AwaitExprSyntax(expression: functionCall)) : ExprSyntax(functionCall)
     return expression.with(\.leadingTrivia, leadingTrivia ?? [])
   }

@@ -222,19 +222,19 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
               label: .case(
                 .init(caseItems: [
                   .init(
-                    pattern: ValueBindingPatternSyntax(
-                      bindingSpecifier: .keyword(.let),
-                      pattern: ExpressionPatternSyntax(
-                        expression: FunctionCallExprSyntax(
-                          callee: MemberAccessExprSyntax(name: .identifier(Lex.caseNameFromId(id: id, prefix: ts.prefix)))
-                        ) {
-                          .init(
-                            expression: PatternExprSyntax(
+                    pattern: ExpressionPatternSyntax(
+                      expression: FunctionCallExprSyntax(
+                        callee: MemberAccessExprSyntax(name: .identifier(Lex.caseNameFromId(id: id, prefix: ts.prefix)))
+                      ) {
+                        LabeledExprSyntax(
+                          expression: PatternExprSyntax(
+                            pattern: ValueBindingPatternSyntax(
+                              bindingSpecifier: .keyword(.let),
                               pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
                             )
                           )
-                        }
-                      )
+                        )
+                      }
                     ))
                 ])
               )
@@ -290,19 +290,19 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
             label: .case(
               .init(caseItems: [
                 .init(
-                  pattern: ValueBindingPatternSyntax(
-                    bindingSpecifier: .keyword(.let),
-                    pattern: ExpressionPatternSyntax(
-                      expression: FunctionCallExprSyntax(
-                        callee: MemberAccessExprSyntax(name: .identifier("_other"))
-                      ) {
-                        .init(
-                          expression: PatternExprSyntax(
+                  pattern: ExpressionPatternSyntax(
+                    expression: FunctionCallExprSyntax(
+                      callee: MemberAccessExprSyntax(name: .identifier("_other"))
+                    ) {
+                      LabeledExprSyntax(
+                        expression: PatternExprSyntax(
+                          pattern: ValueBindingPatternSyntax(
+                            bindingSpecifier: .keyword(.let),
                             pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
                           )
                         )
-                      }
-                    )
+                      )
+                    }
                   ))
               ])
             )

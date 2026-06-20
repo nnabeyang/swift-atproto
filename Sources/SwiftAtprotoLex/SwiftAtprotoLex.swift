@@ -1,4 +1,5 @@
 import Foundation
+import SwiftBasicFormat
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
@@ -93,8 +94,8 @@ func writeSchemaCode(
               })
               let methodTypes = allTypes.filter { $0.value.isMethod }
               let types = Lex.genTypes(prefix: prefix, otherTypes: allTypes, methods: methodTypes, defMap: defMap, generate: generate)
-              let methods = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .spaces(2), prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate, protocolRequirement: false)
-              let requirements = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .spaces(2), prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate, protocolRequirement: true)
+              let methods = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .newline, prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate, protocolRequirement: false)
+              let requirements = Lex.genMethods(leadingTrivia: allTypes.isEmpty ? nil : .newline, prefix: prefix, methods: methodTypes, defMap: defMap, generate: generate, protocolRequirement: true)
               return (types, methods, requirements, j)
             }
           }
@@ -111,6 +112,7 @@ func writeSchemaCode(
         return (
           DeclSyntax(
             ExtensionDeclSyntax(
+              leadingTrivia: .newlines(2),
               extendedType: TypeSyntax(MemberTypeSyntax(parts: Lex.enumIdentifiersFor(prefix: prefix)))
             ) { types }),
           methods,
@@ -131,13 +133,9 @@ func writeSchemaCode(
     return (combine(blocks), combine(methods), combine(requirements))
   }
   let prefixes = schemasArray.map(\.0)
-  let clientSrc: String = SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
+  let clientTree = SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
     ImportDeclSyntax(
       path: [ImportPathComponentSyntax(name: "Foundation")]
-    )
-    ImportDeclSyntax(
-      path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
-      trailingTrivia: generate.contains(.server) ? nil : .newlines(2)
     )
     if generate.contains(.server) {
       ImportDeclSyntax(
@@ -154,17 +152,20 @@ func writeSchemaCode(
         },
         path: [
           ImportPathComponentSyntax(name: .identifier("OpenAPIRuntime"))
-        ],
-        trailingTrivia: .newlines(2)
+        ]
       )
     }
-    for node in EnumDeclSyntaxNode.buildTree(from: prefixes) {
-      node.generateEnums()
+    ImportDeclSyntax(
+      path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
+      trailingTrivia: .newlines(2)
+    )
+    for (i, node) in EnumDeclSyntaxNode.buildTree(from: prefixes).enumerated() {
+      node.generateEnums(leadingTrivia: i == 0 ? nil : .newlines(2))
     }
     blocks
     if !methods.isEmpty {
       ProtocolDeclSyntax(
-        leadingTrivia: nil,
+        leadingTrivia: .newlines(2),
         modifiers: [
           DeclModifierSyntax(name: .keyword(.public))
         ],
@@ -173,11 +174,12 @@ func writeSchemaCode(
       ) {
         requirements
       }
-      ExtensionDeclSyntax(extendedType: TypeSyntax(stringLiteral: "XRPCCallable")) {
+      ExtensionDeclSyntax(leadingTrivia: .newlines(2), extendedType: TypeSyntax(stringLiteral: "XRPCCallable")) {
         methods
       }
     }
-  }.formatted().description
+  }
+  let clientSrc: String = clientTree.formatted(using: BasicFormat(indentationWidth: .spaces(2))).with(\.trailingTrivia, .newline).description
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
@@ -190,8 +192,10 @@ class EnumDeclSyntaxNode {
     self.name = name
   }
 
-  func generateEnums() -> EnumDeclSyntax {
-    EnumDeclSyntax(
+  func generateEnums(leadingTrivia: Trivia? = nil, depth: Int = 0) -> EnumDeclSyntax {
+    let lt: Trivia? = depth > 0 ? .newline : leadingTrivia
+    return EnumDeclSyntax(
+      leadingTrivia: lt,
       modifiers: [
         DeclModifierSyntax(name: .keyword(.public))
       ],
@@ -313,7 +317,7 @@ enum Lex {
         name: .identifier("UnknownATPValue"),
         inheritanceClause: InheritanceClauseSyntax(typeNames: ["UnknownATPValueProtocol"])
       ) {
-        EnumCaseDeclSyntax(leadingTrivia: [.newlines(1), .spaces(2)]) {
+        EnumCaseDeclSyntax(leadingTrivia: .newline) {
           EnumCaseElementSyntax(
             name: .identifier("record"),
             parameterClause: EnumCaseParameterClauseSyntax(
@@ -328,7 +332,7 @@ enum Lex {
             )
           )
         }
-        EnumCaseDeclSyntax(leadingTrivia: [.newlines(1), .spaces(2)]) {
+        EnumCaseDeclSyntax(leadingTrivia: .newline) {
           EnumCaseElementSyntax(
             name: .identifier("any"),
             parameterClause: EnumCaseParameterClauseSyntax(
@@ -354,7 +358,7 @@ enum Lex {
           )
         }
         VariableDeclSyntax(
-          leadingTrivia: [.newlines(2), .spaces(2)],
+          leadingTrivia: [.newlines(2)],
           modifiers: [
             DeclModifierSyntax(name: .keyword(.public)),
             DeclModifierSyntax(name: .keyword(.static)),
@@ -382,10 +386,10 @@ enum Lex {
               ),
               initializer: InitializerClauseSyntax(
                 equal: .equalToken(),
-                value: DictionaryExprSyntax(rightSquare: .rightSquareToken(leadingTrivia: [.newlines(1), .spaces(2)])) {
+                value: DictionaryExprSyntax(rightSquare: .rightSquareToken(leadingTrivia: .newline)) {
                   for (name, recordType) in recordTypes.sorted(by: { $0.value.id < $1.value.id }) {
                     DictionaryElementSyntax(
-                      key: StringLiteralExprSyntax(openingQuote: .stringQuoteToken(leadingTrivia: [.newlines(1), .spaces(4)]), content: recordType.id),
+                      key: StringLiteralExprSyntax(openingQuote: .stringQuoteToken(leadingTrivia: .newline), content: recordType.id),
                       colon: .colonToken(),
                       value: MemberAccessExprSyntax(parts: Lex.enumIdentifiersFor(prefix: recordType.prefix) + [.identifier(name), .keyword(.self)]),
                       trailingComma: .commaToken()
@@ -397,7 +401,7 @@ enum Lex {
           ]
         )
         VariableDeclSyntax(
-          leadingTrivia: [.newlines(2), .spaces(2)],
+          leadingTrivia: [.newlines(2)],
           modifiers: [
             DeclModifierSyntax(name: .keyword(.public))
           ],
@@ -415,34 +419,35 @@ enum Lex {
                   CodeBlockItemListSyntax {
                     ExpressionStmtSyntax(
                       expression: SwitchExprSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(4)],
+                        leadingTrivia: .newline,
                         subject: DeclReferenceExprSyntax(baseName: .keyword(.self))
                       ) {
                         SwitchCaseSyntax(
                           label: SwitchCaseSyntax.Label(
                             SwitchCaseLabelSyntax(
-                              leadingTrivia: [.newlines(1), .spaces(4)]) {
-                                SwitchCaseItemSyntax(
-                                  pattern: ExpressionPatternSyntax(
-                                    expression: FunctionCallExprSyntax(
-                                      callee: MemberAccessExprSyntax(
-                                        period: .periodToken(),
-                                        declName: DeclReferenceExprSyntax(baseName: .identifier("record"))
-                                      )
-                                    ) {
-                                      LabeledExprSyntax(
-                                        expression: PatternExprSyntax(
-                                          pattern: ValueBindingPatternSyntax(
-                                            bindingSpecifier: .keyword(.let),
-                                            pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
-                                          )))
-                                    }
-                                  ))
-                              }
+                              leadingTrivia: .newline
+                            ) {
+                              SwitchCaseItemSyntax(
+                                pattern: ExpressionPatternSyntax(
+                                  expression: FunctionCallExprSyntax(
+                                    callee: MemberAccessExprSyntax(
+                                      period: .periodToken(),
+                                      declName: DeclReferenceExprSyntax(baseName: .identifier("record"))
+                                    )
+                                  ) {
+                                    LabeledExprSyntax(
+                                      expression: PatternExprSyntax(
+                                        pattern: ValueBindingPatternSyntax(
+                                          bindingSpecifier: .keyword(.let),
+                                          pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
+                                        )))
+                                  }
+                                ))
+                            }
                           )
                         ) {
                           ReturnStmtSyntax(
-                            leadingTrivia: [.newlines(1), .spaces(6)],
+                            leadingTrivia: .newline,
                             expression: MemberAccessExprSyntax(
                               base: FunctionCallExprSyntax(
                                 callee: MemberAccessExprSyntax(
@@ -465,7 +470,7 @@ enum Lex {
                         SwitchCaseSyntax(
                           label: SwitchCaseSyntax.Label(
                             SwitchCaseLabelSyntax(
-                              leadingTrivia: [.newlines(1), .spaces(4)],
+                              leadingTrivia: .newline,
                               caseItems: [
                                 SwitchCaseItemSyntax(
                                   pattern: ExpressionPatternSyntax(
@@ -478,22 +483,22 @@ enum Lex {
                             ))
                         ) {
                           ReturnStmtSyntax(
-                            leadingTrivia: [.newlines(1), .spaces(6)],
+                            leadingTrivia: .newline,
                             expression: NilLiteralExprSyntax()
                           )
                         }
                       }
                       .with(
-                        \.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)])
+                        \.rightBrace, .rightBraceToken(leadingTrivia: .newline)
                       ))
                   }),
-                rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(2)])
+                rightBrace: .rightBraceToken(leadingTrivia: .newline)
               )
             )
           ]
         )
         VariableDeclSyntax(
-          leadingTrivia: [.newlines(2), .spaces(2)],
+          leadingTrivia: [.newlines(2)],
           modifiers: [
             DeclModifierSyntax(name: .keyword(.public))
           ],
@@ -525,67 +530,69 @@ enum Lex {
                   CodeBlockItemListSyntax {
                     ExpressionStmtSyntax(
                       expression: SwitchExprSyntax(
-                        leadingTrivia: [.newlines(1), .spaces(4)],
+                        leadingTrivia: .newline,
                         subject: DeclReferenceExprSyntax(baseName: .keyword(.self))
                       ) {
                         SwitchCaseSyntax(
                           label: SwitchCaseSyntax.Label(
                             SwitchCaseLabelSyntax(
-                              leadingTrivia: [.newlines(1), .spaces(4)]) {
-                                SwitchCaseItemSyntax(
-                                  pattern: ExpressionPatternSyntax(
-                                    expression: FunctionCallExprSyntax(
-                                      callee: MemberAccessExprSyntax(
-                                        period: .periodToken(),
-                                        declName: DeclReferenceExprSyntax(baseName: .identifier("record"))
-                                      )
-                                    ) {
-                                      LabeledExprSyntax(
-                                        expression: PatternExprSyntax(
-                                          pattern: ValueBindingPatternSyntax(
-                                            bindingSpecifier: .keyword(.let),
-                                            pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
-                                          )))
-                                    }
-                                  ))
-                              }
+                              leadingTrivia: .newline
+                            ) {
+                              SwitchCaseItemSyntax(
+                                pattern: ExpressionPatternSyntax(
+                                  expression: FunctionCallExprSyntax(
+                                    callee: MemberAccessExprSyntax(
+                                      period: .periodToken(),
+                                      declName: DeclReferenceExprSyntax(baseName: .identifier("record"))
+                                    )
+                                  ) {
+                                    LabeledExprSyntax(
+                                      expression: PatternExprSyntax(
+                                        pattern: ValueBindingPatternSyntax(
+                                          bindingSpecifier: .keyword(.let),
+                                          pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
+                                        )))
+                                  }
+                                ))
+                            }
                           )
                         ) {
-                          DeclReferenceExprSyntax(baseName: .identifier("record", leadingTrivia: [.newlines(1), .spaces(6)]))
+                          DeclReferenceExprSyntax(baseName: .identifier("record", leadingTrivia: .newline))
                         }
                         SwitchCaseSyntax(
                           label: SwitchCaseSyntax.Label(
                             SwitchCaseLabelSyntax(
-                              leadingTrivia: [.newlines(1), .spaces(4)]) {
-                                SwitchCaseItemSyntax(
-                                  pattern: ExpressionPatternSyntax(
-                                    expression: FunctionCallExprSyntax(
-                                      callee: MemberAccessExprSyntax(
-                                        period: .periodToken(),
-                                        declName: DeclReferenceExprSyntax(baseName: .identifier("any"))
-                                      )
-                                    ) {
-                                      LabeledExprSyntax(
-                                        expression: PatternExprSyntax(
-                                          pattern: ValueBindingPatternSyntax(
-                                            bindingSpecifier: .keyword(.let),
-                                            pattern: IdentifierPatternSyntax(identifier: .identifier("object"))
-                                          )))
-                                    }
-                                  ))
-                              }
+                              leadingTrivia: .newline
+                            ) {
+                              SwitchCaseItemSyntax(
+                                pattern: ExpressionPatternSyntax(
+                                  expression: FunctionCallExprSyntax(
+                                    callee: MemberAccessExprSyntax(
+                                      period: .periodToken(),
+                                      declName: DeclReferenceExprSyntax(baseName: .identifier("any"))
+                                    )
+                                  ) {
+                                    LabeledExprSyntax(
+                                      expression: PatternExprSyntax(
+                                        pattern: ValueBindingPatternSyntax(
+                                          bindingSpecifier: .keyword(.let),
+                                          pattern: IdentifierPatternSyntax(identifier: .identifier("object"))
+                                        )))
+                                  }
+                                ))
+                            }
                           )
                         ) {
                           CodeBlockItemSyntax(
                             item: CodeBlockItemSyntax.Item(
-                              DeclReferenceExprSyntax(baseName: .identifier("object", leadingTrivia: [.newlines(1), .spaces(6)]))
+                              DeclReferenceExprSyntax(baseName: .identifier("object", leadingTrivia: .newline))
                             ))
                         }
                       }
-                      .with(\.rightBrace, .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(4)]))
+                      .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
                     )
                   }),
-                rightBrace: .rightBraceToken(leadingTrivia: [.newlines(1), .spaces(2)])
+                rightBrace: .rightBraceToken(leadingTrivia: .newline)
               )
             )
           ]
@@ -593,7 +600,7 @@ enum Lex {
       }
     }
     .with(\.trailingTrivia, .newline)
-    return src.formatted().description
+    return src.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
   }
 
   static func buildExtDefMap(schemasMap: [String: [Schema]]) -> ExtDefMap {

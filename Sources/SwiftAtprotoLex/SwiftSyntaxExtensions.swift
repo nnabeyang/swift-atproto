@@ -113,10 +113,10 @@ package func memberInitializer(leadingTrivia: Trivia? = nil, members: [(String, 
     leadingTrivia: leadingTrivia,
     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
     signature: FunctionSignatureSyntax(
-      parameterClause: FunctionParameterClauseSyntax(rightParen: .rightParenToken(leadingTrivia: [.newlines(1), .spaces(4)])) {
+      parameterClause: FunctionParameterClauseSyntax(rightParen: .rightParenToken(leadingTrivia: .newline)) {
         for (firstName, member) in members {
           FunctionParameterSyntax(
-            leadingTrivia: [.newlines(1), .spaces(6)],
+            leadingTrivia: .newline,
             firstName: .identifier(firstName),
             colon: .colonToken(),
             type: member
@@ -128,7 +128,7 @@ package func memberInitializer(leadingTrivia: Trivia? = nil, members: [(String, 
     for (firstName, _) in members {
       SequenceExprSyntax {
         MemberAccessExprSyntax(
-          leadingTrivia: [.newlines(1), .spaces(6)],
+          leadingTrivia: .newline,
           base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
           period: .periodToken(),
           declName: DeclReferenceExprSyntax(baseName: .identifier(firstName))

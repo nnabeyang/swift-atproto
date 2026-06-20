@@ -341,7 +341,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         ? nil
         : .init {
           TryExprSyntax(
-            leadingTrivia: [.newlines(1), .spaces(2)],
+            leadingTrivia: .newline,
             expression: ExprSyntax(
               AwaitExprSyntax(
                 awaitKeyword: .keyword(.await),
@@ -390,7 +390,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         ? nil
         : .init {
           TryExprSyntax(
-            leadingTrivia: [.newlines(1), .spaces(2)],
+            leadingTrivia: .newline,
             expression: ExprSyntax(
               AwaitExprSyntax(
                 awaitKeyword: .keyword(.await),

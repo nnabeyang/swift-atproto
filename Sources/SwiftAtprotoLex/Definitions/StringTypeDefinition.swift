@@ -366,19 +366,22 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
                                 caseItems: [
                                   SwitchCaseItemSyntax(
                                     pattern: PatternSyntax(
-                                      ValueBindingPatternSyntax(
-                                        bindingSpecifier: .keyword(.let),
-                                        pattern: PatternSyntax(
-                                          ExpressionPatternSyntax(
-                                            expression: FunctionCallExprSyntax(
-                                              callee: MemberAccessExprSyntax(
-                                                period: .periodToken(),
-                                                declName: DeclReferenceExprSyntax(baseName: .identifier("_other"))
+                                      ExpressionPatternSyntax(
+                                        expression: FunctionCallExprSyntax(
+                                          callee: MemberAccessExprSyntax(
+                                            period: .periodToken(),
+                                            declName: DeclReferenceExprSyntax(baseName: .identifier("_other"))
+                                          )
+                                        ) {
+                                          LabeledExprSyntax(
+                                            expression: PatternExprSyntax(
+                                              pattern: ValueBindingPatternSyntax(
+                                                bindingSpecifier: .keyword(.let),
+                                                pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
                                               )
-                                            ) {
-                                              LabeledExprSyntax(expression: PatternExprSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("value"))))
-                                            }
-                                          ))
+                                            )
+                                          )
+                                        }
                                       )))
                                 ],
                                 colon: .colonToken()
