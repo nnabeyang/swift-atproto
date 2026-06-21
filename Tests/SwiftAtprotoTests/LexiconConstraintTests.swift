@@ -16,6 +16,9 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
     guard text.utf8.count <= 3000 else {
       throw LexiconConstraintError.stringTooLong("text", limit: 3000)
     }
+    guard text.count <= 300 else {
+      throw LexiconConstraintError.tooManyGraphemes("text", limit: 300)
+    }
     return Self(text: text)
   }
 
@@ -76,6 +79,18 @@ final class LexiconConstraintTests: XCTestCase {
   func testValidValuesSucceed() throws {
     let record = try ConstrainedRecord.make(text: "hello")
     XCTAssertEqual(record.text, "hello")
+  }
+
+  func testTooManyGraphemesThrows() throws {
+    // stays under the UTF-8 byte limit while exceeding the grapheme limit
+    let manyGraphemes = String(repeating: "a", count: 301)
+    XCTAssertThrowsError(try ConstrainedRecord.make(text: manyGraphemes)) { error in
+      guard case LexiconConstraintError.tooManyGraphemes(let field, let limit) = error else {
+        return XCTFail("expected tooManyGraphemes, got \(error)")
+      }
+      XCTAssertEqual(field, "text")
+      XCTAssertEqual(limit, 300)
+    }
   }
 
   func testStringTooLongThrows() throws {
