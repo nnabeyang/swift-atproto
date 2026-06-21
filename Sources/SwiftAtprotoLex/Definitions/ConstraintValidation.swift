@@ -12,6 +12,8 @@ extension FieldTypeDefinition {
       def.minLength != nil || def.maxLength != nil
     case .bytes(let def):
       def.minLength != nil || def.maxLength != nil
+    case .blob(let def):
+      def.maxSize != nil
     default:
       false
     }
@@ -259,6 +261,28 @@ extension FieldTypeDefinition {
             errorCase: "bytesTooShort",
             field: field,
             argLabel: "minimum"
+          ))
+      }
+      return items
+    case .blob(let def):
+      var items = [CodeBlockItemSyntax]()
+      if let n = def.maxSize {
+        items.append(
+          constraintGuardItem(
+            lhs: FunctionCallExprSyntax(
+              callee: DeclReferenceExprSyntax(baseName: .identifier("Int"))
+            ) {
+              LabeledExprSyntax(
+                expression: MemberAccessExprSyntax(
+                  parts: [.lexIdentifier(ref), .identifier("size")]
+                )
+              )
+            },
+            op: "<=",
+            rhs: n,
+            errorCase: "blobTooLarge",
+            field: field,
+            argLabel: "limit"
           ))
       }
       return items

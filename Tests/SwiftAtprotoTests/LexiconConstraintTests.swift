@@ -103,13 +103,26 @@ final class LexiconConstraintTests: XCTestCase {
     XCTAssertEqual(record.limit, 50)
   }
 
-  func testArrayTooLongThrows() throws {
-    let tags = (0..<9).map { "tag\($0)" }
-    XCTAssertThrowsError(try ConstrainedRecord.make(text: "ok", tags: tags)) { error in
-      guard case LexiconConstraintError.arrayTooLong("tags", let limit) = error else {
-        return XCTFail("expected arrayTooLong, got \(error)")
+  func testStringTooLongThrows() throws {
+    let tooLong = String(repeating: "a", count: 3001)
+    XCTAssertThrowsError(try ConstrainedRecord.make(text: tooLong)) { error in
+      guard case LexiconConstraintError.stringTooLong(let field, let limit) = error else {
+        return XCTFail("expected stringTooLong, got \(error)")
       }
-      XCTAssertEqual(limit, 8)
+      XCTAssertEqual(field, "text")
+      XCTAssertEqual(limit, 3000)
+    }
+  }
+
+  func testTooManyGraphemesThrows() throws {
+    // stays under the UTF-8 byte limit while exceeding the grapheme limit
+    let manyGraphemes = String(repeating: "a", count: 301)
+    XCTAssertThrowsError(try ConstrainedRecord.make(text: manyGraphemes)) { error in
+      guard case LexiconConstraintError.tooManyGraphemes(let field, let limit) = error else {
+        return XCTFail("expected tooManyGraphemes, got \(error)")
+      }
+      XCTAssertEqual(field, "text")
+      XCTAssertEqual(limit, 300)
     }
   }
 
@@ -128,26 +141,13 @@ final class LexiconConstraintTests: XCTestCase {
     }
   }
 
-  func testTooManyGraphemesThrows() throws {
-    // stays under the UTF-8 byte limit while exceeding the grapheme limit
-    let manyGraphemes = String(repeating: "a", count: 301)
-    XCTAssertThrowsError(try ConstrainedRecord.make(text: manyGraphemes)) { error in
-      guard case LexiconConstraintError.tooManyGraphemes(let field, let limit) = error else {
-        return XCTFail("expected tooManyGraphemes, got \(error)")
+  func testArrayTooLongThrows() throws {
+    let tags = (0..<9).map { "tag\($0)" }
+    XCTAssertThrowsError(try ConstrainedRecord.make(text: "ok", tags: tags)) { error in
+      guard case LexiconConstraintError.arrayTooLong("tags", let limit) = error else {
+        return XCTFail("expected arrayTooLong, got \(error)")
       }
-      XCTAssertEqual(field, "text")
-      XCTAssertEqual(limit, 300)
-    }
-  }
-
-  func testStringTooLongThrows() throws {
-    let tooLong = String(repeating: "a", count: 3001)
-    XCTAssertThrowsError(try ConstrainedRecord.make(text: tooLong)) { error in
-      guard case LexiconConstraintError.stringTooLong(let field, let limit) = error else {
-        return XCTFail("expected stringTooLong, got \(error)")
-      }
-      XCTAssertEqual(field, "text")
-      XCTAssertEqual(limit, 3000)
+      XCTAssertEqual(limit, 8)
     }
   }
 
