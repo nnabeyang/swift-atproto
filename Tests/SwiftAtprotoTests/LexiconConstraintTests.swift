@@ -25,6 +25,9 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
       guard limit >= 1 else {
         throw LexiconConstraintError.integerBelowMinimum("limit", minimum: 1)
       }
+      guard limit <= 100 else {
+        throw LexiconConstraintError.integerAboveMaximum("limit", maximum: 100)
+      }
     }
     return Self(text: text, limit: limit)
   }
@@ -97,6 +100,12 @@ final class LexiconConstraintTests: XCTestCase {
         return XCTFail("expected integerBelowMinimum, got \(error)")
       }
       XCTAssertEqual(minimum, 1)
+    }
+    XCTAssertThrowsError(try ConstrainedRecord.make(text: "ok", limit: 101)) { error in
+      guard case LexiconConstraintError.integerAboveMaximum("limit", let maximum) = error else {
+        return XCTFail("expected integerAboveMaximum, got \(error)")
+      }
+      XCTAssertEqual(maximum, 100)
     }
   }
 

@@ -7,7 +7,7 @@ extension FieldTypeDefinition {
     case .string(let def) where def.enum == nil:
       def.maxLength != nil || def.minLength != nil || def.maxGraphemes != nil || def.minGraphemes != nil
     case .integer(let def):
-      def.minimum != nil
+      def.minimum != nil || def.maximum != nil
     default:
       false
     }
@@ -194,6 +194,17 @@ extension FieldTypeDefinition {
             errorCase: "integerBelowMinimum",
             field: field,
             argLabel: "minimum"
+          ))
+      }
+      if let n = def.maximum {
+        items.append(
+          constraintGuardItem(
+            lhs: DeclReferenceExprSyntax(baseName: .lexIdentifier(ref)),
+            op: "<=",
+            rhs: n,
+            errorCase: "integerAboveMaximum",
+            field: field,
+            argLabel: "maximum"
           ))
       }
       return items
