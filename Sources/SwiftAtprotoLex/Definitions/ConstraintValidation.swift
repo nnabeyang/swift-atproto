@@ -5,7 +5,7 @@ extension FieldTypeDefinition {
   var hasConstraints: Bool {
     switch self {
     case .string(let def) where def.enum == nil:
-      def.maxLength != nil || def.minLength != nil || def.maxGraphemes != nil
+      def.maxLength != nil || def.minLength != nil || def.maxGraphemes != nil || def.minGraphemes != nil
     default:
       false
     }
@@ -118,6 +118,17 @@ extension FieldTypeDefinition {
             argLabel: "limit"
           ))
       }
+      if let n = def.minGraphemes {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(parts: [.identifier(ref), .identifier("count")]),
+            op: ">=",
+            rhs: n,
+            errorCase: "tooFewGraphemes",
+            field: field,
+            argLabel: "minimum"
+          ))
+      }
       return items
     case .string(let def) where def.enum == nil && def.knownValues != nil:
       var items = [CodeBlockItemSyntax]()
@@ -155,6 +166,18 @@ extension FieldTypeDefinition {
             errorCase: "tooManyGraphemes",
             field: field,
             argLabel: "limit"
+          ))
+      }
+      if let n = def.minGraphemes {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(
+              parts: [.identifier(ref), .identifier("rawValue"), .identifier("count")]),
+            op: ">=",
+            rhs: n,
+            errorCase: "tooFewGraphemes",
+            field: field,
+            argLabel: "minimum"
           ))
       }
       return items
