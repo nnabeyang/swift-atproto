@@ -5,7 +5,7 @@ extension FieldTypeDefinition {
   var hasConstraints: Bool {
     switch self {
     case .string(let def) where def.enum == nil:
-      def.maxLength != nil
+      def.maxLength != nil || def.minLength != nil
     default:
       false
     }
@@ -96,6 +96,17 @@ extension FieldTypeDefinition {
             argLabel: "limit"
           ))
       }
+      if let n = def.minLength {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(parts: [.identifier(ref), .identifier("utf8"), .identifier("count")]),
+            op: ">=",
+            rhs: n,
+            errorCase: "stringTooShort",
+            field: field,
+            argLabel: "minimum"
+          ))
+      }
       return items
     case .string(let def) where def.enum == nil && def.knownValues != nil:
       var items = [CodeBlockItemSyntax]()
@@ -109,6 +120,18 @@ extension FieldTypeDefinition {
             errorCase: "stringTooLong",
             field: field,
             argLabel: "limit"
+          ))
+      }
+      if let n = def.minLength {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(
+              parts: [.identifier(ref), .identifier("rawValue"), .identifier("utf8"), .identifier("count")]),
+            op: ">=",
+            rhs: n,
+            errorCase: "stringTooShort",
+            field: field,
+            argLabel: "minimum"
           ))
       }
       return items
