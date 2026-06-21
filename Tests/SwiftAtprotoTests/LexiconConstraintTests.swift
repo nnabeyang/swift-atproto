@@ -6,15 +6,17 @@ import XCTest
 private struct ConstrainedRecord: Codable, Hashable, Sendable {
   let text: String
   let limit: Int?
+  let tags: [String]?
   let _unknownValues: [String: AnyCodable]
 
-  public init(text: String, limit: Int? = nil) {
+  public init(text: String, limit: Int? = nil, tags: [String]? = nil) {
     self.text = text
     self.limit = limit
+    self.tags = tags
     self._unknownValues = [:]
   }
 
-  public static func make(text: String, limit: Int? = nil) throws -> Self {
+  public static func make(text: String, limit: Int? = nil, tags: [String]? = nil) throws -> Self {
     guard text.utf8.count <= 3000 else {
       throw LexiconConstraintError.stringTooLong("text", limit: 3000)
     }
@@ -29,20 +31,27 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
         throw LexiconConstraintError.integerAboveMaximum("limit", maximum: 100)
       }
     }
-    return Self(text: text, limit: limit)
+    if let tags {
+      guard tags.count <= 8 else {
+        throw LexiconConstraintError.arrayTooLong("tags", limit: 8)
+      }
+    }
+    return Self(text: text, limit: limit, tags: tags)
   }
 
   enum CodingKeys: String, CodingKey {
     case text
     case limit
+    case tags
   }
 
   init(from decoder: any Decoder) throws {
     let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
     let text = try keyedContainer.decode(String.self, forKey: .text)
     let limit = try keyedContainer.decodeIfPresent(Int.self, forKey: .limit)
+    let tags = try keyedContainer.decodeIfPresent([String].self, forKey: .tags)
     do {
-      self = try Self.make(text: text, limit: limit)
+      self = try Self.make(text: text, limit: limit, tags: tags)
     } catch let error as LexiconConstraintError {
       throw DecodingError.dataCorrupted(
         .init(codingPath: decoder.codingPath, debugDescription: "\(error)", underlyingError: error))
@@ -89,9 +98,19 @@ private struct KnownValuesRecord: Sendable {
 
 final class LexiconConstraintTests: XCTestCase {
   func testValidValuesSucceed() throws {
-    let record = try ConstrainedRecord.make(text: "hello", limit: 50)
+    let record = try ConstrainedRecord.make(text: "hello", limit: 50, tags: ["a", "b"])
     XCTAssertEqual(record.text, "hello")
     XCTAssertEqual(record.limit, 50)
+  }
+
+  func testArrayTooLongThrows() throws {
+    let tags = (0..<9).map { "tag\($0)" }
+    XCTAssertThrowsError(try ConstrainedRecord.make(text: "ok", tags: tags)) { error in
+      guard case LexiconConstraintError.arrayTooLong("tags", let limit) = error else {
+        return XCTFail("expected arrayTooLong, got \(error)")
+      }
+      XCTAssertEqual(limit, 8)
+    }
   }
 
   func testIntegerOutOfRangeThrows() throws {
