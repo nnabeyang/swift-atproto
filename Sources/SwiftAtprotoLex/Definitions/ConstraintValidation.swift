@@ -4,6 +4,8 @@ import SwiftSyntaxBuilder
 extension FieldTypeDefinition {
   var hasConstraints: Bool {
     switch self {
+    case .string(let def) where def.enum == nil:
+      def.maxLength != nil
     default:
       false
     }
@@ -81,6 +83,35 @@ extension FieldTypeDefinition {
 
   private func constraintGuardStmts(ref: String, field: String) -> [CodeBlockItemSyntax] {
     switch self {
+    case .string(let def) where def.enum == nil && def.knownValues == nil:
+      var items = [CodeBlockItemSyntax]()
+      if let n = def.maxLength {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(parts: [.identifier(ref), .identifier("utf8"), .identifier("count")]),
+            op: "<=",
+            rhs: n,
+            errorCase: "stringTooLong",
+            field: field,
+            argLabel: "limit"
+          ))
+      }
+      return items
+    case .string(let def) where def.enum == nil && def.knownValues != nil:
+      var items = [CodeBlockItemSyntax]()
+      if let n = def.maxLength {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(
+              parts: [.identifier(ref), .identifier("rawValue"), .identifier("utf8"), .identifier("count")]),
+            op: "<=",
+            rhs: n,
+            errorCase: "stringTooLong",
+            field: field,
+            argLabel: "limit"
+          ))
+      }
+      return items
     default:
       return []
     }
