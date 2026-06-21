@@ -9,7 +9,7 @@ extension FieldTypeDefinition {
     case .integer(let def):
       def.minimum != nil || def.maximum != nil
     case .array(let def):
-      def.maxLength != nil
+      def.minLength != nil || def.maxLength != nil
     default:
       false
     }
@@ -221,6 +221,17 @@ extension FieldTypeDefinition {
             errorCase: "arrayTooLong",
             field: field,
             argLabel: "limit"
+          ))
+      }
+      if let n = def.minLength {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(parts: [.identifier(ref), .identifier("count")]),
+            op: ">=",
+            rhs: n,
+            errorCase: "arrayTooShort",
+            field: field,
+            argLabel: "minimum"
           ))
       }
       return items
