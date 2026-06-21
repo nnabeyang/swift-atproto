@@ -5,32 +5,41 @@ import XCTest
 
 private struct ConstrainedRecord: Codable, Hashable, Sendable {
   let text: String
+  let limit: Int?
   let _unknownValues: [String: AnyCodable]
 
-  public init(text: String) {
+  public init(text: String, limit: Int? = nil) {
     self.text = text
+    self.limit = limit
     self._unknownValues = [:]
   }
 
-  public static func make(text: String) throws -> Self {
+  public static func make(text: String, limit: Int? = nil) throws -> Self {
     guard text.utf8.count <= 3000 else {
       throw LexiconConstraintError.stringTooLong("text", limit: 3000)
     }
     guard text.count <= 300 else {
       throw LexiconConstraintError.tooManyGraphemes("text", limit: 300)
     }
-    return Self(text: text)
+    if let limit {
+      guard limit >= 1 else {
+        throw LexiconConstraintError.integerBelowMinimum("limit", minimum: 1)
+      }
+    }
+    return Self(text: text, limit: limit)
   }
 
   enum CodingKeys: String, CodingKey {
     case text
+    case limit
   }
 
   init(from decoder: any Decoder) throws {
     let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
     let text = try keyedContainer.decode(String.self, forKey: .text)
+    let limit = try keyedContainer.decodeIfPresent(Int.self, forKey: .limit)
     do {
-      self = try Self.make(text: text)
+      self = try Self.make(text: text, limit: limit)
     } catch let error as LexiconConstraintError {
       throw DecodingError.dataCorrupted(
         .init(codingPath: decoder.codingPath, debugDescription: "\(error)", underlyingError: error))
@@ -77,8 +86,18 @@ private struct KnownValuesRecord: Sendable {
 
 final class LexiconConstraintTests: XCTestCase {
   func testValidValuesSucceed() throws {
-    let record = try ConstrainedRecord.make(text: "hello")
+    let record = try ConstrainedRecord.make(text: "hello", limit: 50)
     XCTAssertEqual(record.text, "hello")
+    XCTAssertEqual(record.limit, 50)
+  }
+
+  func testIntegerOutOfRangeThrows() throws {
+    XCTAssertThrowsError(try ConstrainedRecord.make(text: "ok", limit: 0)) { error in
+      guard case LexiconConstraintError.integerBelowMinimum("limit", let minimum) = error else {
+        return XCTFail("expected integerBelowMinimum, got \(error)")
+      }
+      XCTAssertEqual(minimum, 1)
+    }
   }
 
   func testTooManyGraphemesThrows() throws {

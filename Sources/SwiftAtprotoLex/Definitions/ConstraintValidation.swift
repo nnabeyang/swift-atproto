@@ -6,6 +6,8 @@ extension FieldTypeDefinition {
     switch self {
     case .string(let def) where def.enum == nil:
       def.maxLength != nil || def.minLength != nil || def.maxGraphemes != nil || def.minGraphemes != nil
+    case .integer(let def):
+      def.minimum != nil
     default:
       false
     }
@@ -176,6 +178,20 @@ extension FieldTypeDefinition {
             op: ">=",
             rhs: n,
             errorCase: "tooFewGraphemes",
+            field: field,
+            argLabel: "minimum"
+          ))
+      }
+      return items
+    case .integer(let def):
+      var items = [CodeBlockItemSyntax]()
+      if let n = def.minimum {
+        items.append(
+          constraintGuardItem(
+            lhs: DeclReferenceExprSyntax(baseName: .lexIdentifier(ref)),
+            op: ">=",
+            rhs: n,
+            errorCase: "integerBelowMinimum",
             field: field,
             argLabel: "minimum"
           ))
