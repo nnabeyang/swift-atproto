@@ -270,13 +270,16 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             bindings: [query]
           )
         }
+        let requiredParams = Set(parameters?.required ?? [])
+        let paramsHaveConstraints = (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
         InitializerDeclSyntax(
           leadingTrivia: [.newlines(2)],
           modifiers: [DeclModifierSyntax(name: .keyword(.public))],
           signature: FunctionSignatureSyntax(
             parameterClause: FunctionParameterClauseSyntax {
               rpcArguments(ts: ts, fname: name, defMap: defMap, prefix: prefix, protocolRequirement: false)
-            })
+            }
+          )
         ) {
           for (key, _) in parameters?.sortedProperties ?? [] {
             SequenceExprSyntax(leadingTrivia: .newline) {
@@ -288,6 +291,51 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
               AssignmentExprSyntax(equal: .equalToken())
               DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
             }
+          }
+        }
+        if paramsHaveConstraints {
+          FunctionDeclSyntax(
+            leadingTrivia: .newlines(2),
+            modifiers: [
+              DeclModifierSyntax(name: .keyword(.public)),
+              DeclModifierSyntax(name: .keyword(.static)),
+            ],
+            name: .identifier("make"),
+            signature: FunctionSignatureSyntax(
+              parameterClause: FunctionParameterClauseSyntax {
+                rpcArguments(ts: ts, fname: name, defMap: defMap, prefix: prefix, protocolRequirement: false)
+              },
+              effectSpecifiers: FunctionEffectSpecifiersSyntax(
+                throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+              ),
+              returnClause: ReturnClauseSyntax(
+                type: TypeSyntax(IdentifierTypeSyntax(name: .keyword(.Self)))
+              )
+            )
+          ) {
+            for (key, property) in parameters?.sortedProperties ?? [] {
+              for item in property.constraintGuardItems(for: key, optional: !requiredParams.contains(key)) {
+                item.with(\.leadingTrivia, .newline)
+              }
+            }
+            ReturnStmtSyntax(
+              leadingTrivia: .newline,
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .keyword(.Self)),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+                )
+              ) {
+                for (key, _) in parameters?.sortedProperties ?? [] {
+                  LabeledExprSyntax(
+                    label: .lexIdentifier(key),
+                    colon: .colonToken(),
+                    expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+                  )
+                }
+              }
+            )
           }
         }
         VariableDeclSyntax(

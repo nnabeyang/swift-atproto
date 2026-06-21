@@ -60,6 +60,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     for key in nullable ?? [] {
       required[key] = false
     }
+    let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
     return StructDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [declModifierSyntax],
@@ -144,52 +145,11 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           )
         ]
       )
-      InitializerDeclSyntax(
-        leadingTrivia: .newlines(2),
-        modifiers: [
-          DeclModifierSyntax(name: .keyword(.public))
-        ],
-        signature: FunctionSignatureSyntax(
-          parameterClause: FunctionParameterClauseSyntax {
-            for (key, property) in sortedProperties {
-              let isRequired = required[key] ?? false
-              let defaultValue: InitializerClauseSyntax? =
-                isRequired
-                ? nil
-                : InitializerClauseSyntax(
-                  equal: .equalToken(),
-                  value: NilLiteralExprSyntax()
-                )
-              let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: true)
-              FunctionParameterSyntax(firstName: .lexIdentifier(key), type: type, defaultValue: defaultValue)
-            }
-          }
-        )
-      ) {
-        for (key, _) in sortedProperties {
-          SequenceExprSyntax {
-            MemberAccessExprSyntax(
-              base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
-              period: .periodToken(),
-              declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
-            )
-            AssignmentExprSyntax(equal: .equalToken())
-            DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
-          }
-        }
-        SequenceExprSyntax {
-          MemberAccessExprSyntax(
-            base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
-            period: .periodToken(),
-            declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
-          )
-          AssignmentExprSyntax(equal: .equalToken())
-          DictionaryExprSyntax(
-            leftSquare: .leftSquareToken(),
-            content: DictionaryExprSyntax.Content(.colonToken()),
-            rightSquare: .rightSquareToken()
-          )
-        }
+      memberwiseInitDecl(ts: ts, name: name, defMap: defMap, required: required)
+        .with(\.leadingTrivia, .newlines(2))
+      if hasConstraints {
+        staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
+          .with(\.leadingTrivia, .newlines(2))
       }
       if !enumCaseIsEmpty {
         EnumDeclSyntax(
@@ -213,19 +173,101 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           }
         }
       }
-      decodableInitializerDeclSyntax(leadingTrivia: .newlines(2)) {
-        if !enumCaseIsEmpty {
+      if hasConstraints {
+        constraintDecodableInitDecl(ts: ts, name: name, defMap: defMap, required: required)
+          .with(\.leadingTrivia, .newlines(2))
+      } else {
+        decodableInitializerDeclSyntax(leadingTrivia: .newlines(2)) {
+          if !enumCaseIsEmpty {
+            VariableDeclSyntax(
+              bindingSpecifier: .keyword(.let),
+              bindings: PatternBindingListSyntax([
+                PatternBindingSyntax(
+                  pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("keyedContainer"))),
+                  initializer: InitializerClauseSyntax(
+                    equal: .equalToken(),
+                    value: TryExprSyntax(
+                      expression: FunctionCallExprSyntax(
+                        callee: MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("decoder"))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
+                        )
+                      ) {
+                        LabeledExprSyntax(
+                          label: .identifier("keyedBy"),
+                          colon: .colonToken(),
+                          expression: ExprSyntax(
+                            MemberAccessExprSyntax(
+                              base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
+                              period: .periodToken(),
+                              declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                            ))
+                        )
+                      }
+                    )
+                  )
+                )
+              ])
+            )
+          }
+          for (key, property) in sortedProperties {
+            let isRequired = required[key] ?? false
+            let tname: String = {
+              if case .string(let def) = property, def.enum != nil || def.knownValues != nil {
+                let tname = "\(name)_\(key.titleCased())"
+                return "\(Lex.structNameFor(prefix: ts.prefix)).\(tname)"
+              } else {
+                let cts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: key, type: property)
+                return TypeSchema.typeNameForField(name: name, k: key, v: cts, defMap: defMap, dropPrefix: true)
+              }
+            }()
+            SequenceExprSyntax {
+              MemberAccessExprSyntax(
+                base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
+                period: .periodToken(),
+                declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+              )
+              AssignmentExprSyntax(equal: .equalToken())
+              TryExprSyntax(
+                expression: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(
+                    base: DeclReferenceExprSyntax(baseName: .identifier("keyedContainer")),
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier(isRequired ? "decode" : "decodeIfPresent"))
+                  )
+                ) {
+                  LabeledExprSyntax(
+                    expression: MemberAccessExprSyntax(
+                      base: Lex.refExpr(tname),
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                    ),
+                    trailingComma: .commaToken()
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("forKey"),
+                    colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+                    )
+                  )
+                }
+              )
+            }
+          }
           VariableDeclSyntax(
             bindingSpecifier: .keyword(.let),
-            bindings: PatternBindingListSyntax([
+            bindings: [
               PatternBindingSyntax(
-                pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("keyedContainer"))),
+                pattern: IdentifierPatternSyntax(identifier: .identifier("unknownContainer")),
                 initializer: InitializerClauseSyntax(
                   equal: .equalToken(),
                   value: TryExprSyntax(
                     expression: FunctionCallExprSyntax(
                       callee: MemberAccessExprSyntax(
-                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("decoder"))),
+                        base: DeclReferenceExprSyntax(baseName: .identifier("decoder")),
                         period: .periodToken(),
                         declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
                       )
@@ -235,7 +277,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                         colon: .colonToken(),
                         expression: ExprSyntax(
                           MemberAccessExprSyntax(
-                            base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
+                            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
                             period: .periodToken(),
                             declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                           ))
@@ -244,183 +286,106 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                   )
                 )
               )
-            ])
+            ]
           )
-        }
-        for (key, property) in sortedProperties {
-          let isRequired = required[key] ?? false
-          let tname: String = {
-            if case .string(let def) = property, def.enum != nil || def.knownValues != nil {
-              let tname = "\(name)_\(key.titleCased())"
-              return "\(Lex.structNameFor(prefix: ts.prefix)).\(tname)"
-            } else {
-              let cts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: key, type: property)
-              return TypeSchema.typeNameForField(name: name, k: key, v: cts, defMap: defMap, dropPrefix: true)
+          VariableDeclSyntax(
+            bindingSpecifier: .keyword(.var),
+            bindings: [
+              PatternBindingSyntax(
+                pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
+                initializer: InitializerClauseSyntax(
+                  equal: .equalToken(),
+                  value: FunctionCallExprSyntax(
+                    callee: DictionaryExprSyntax(
+                      leftSquare: .leftSquareToken(),
+                      content: DictionaryExprSyntax.Content(
+                        DictionaryElementListSyntax([
+                          DictionaryElementSyntax(
+                            key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
+                            colon: .colonToken(),
+                            value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                          )
+                        ])),
+                      rightSquare: .rightSquareToken()
+                    ))
+                )
+              )
+            ]
+          )
+          ForStmtSyntax(
+            pattern: IdentifierPatternSyntax(identifier: .identifier("key")),
+            sequence: MemberAccessExprSyntax(
+              base: DeclReferenceExprSyntax(baseName: .identifier("unknownContainer")),
+              period: .periodToken(),
+              declName: DeclReferenceExprSyntax(baseName: .identifier("allKeys"))
+            )
+          ) {
+            if !sortedKeys.isEmpty || ts.isRecord {
+              GuardStmtSyntax(
+                conditions: ConditionElementListSyntax {
+                  SequenceExprSyntax {
+                    FunctionCallExprSyntax(
+                      callee: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys"))
+                    ) {
+                      LabeledExprSyntax(
+                        label: .identifier("rawValue"),
+                        colon: .colonToken(),
+                        expression: MemberAccessExprSyntax(
+                          base: DeclReferenceExprSyntax(baseName: .identifier("key")),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
+                        )
+                      )
+                    }
+                    BinaryOperatorExprSyntax(operator: .binaryOperator("=="))
+                    NilLiteralExprSyntax()
+                  }
+                }
+              ) {
+                ContinueStmtSyntax(continueKeyword: .keyword(.continue))
+              }
             }
-          }()
+            SequenceExprSyntax {
+              SubscriptCallExprSyntax(
+                calledExpression: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
+              ) {
+                LabeledExprSyntax(
+                  expression: MemberAccessExprSyntax(
+                    base: DeclReferenceExprSyntax(baseName: .identifier("key")),
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
+                  ))
+              }
+              AssignmentExprSyntax(equal: .equalToken())
+              TryExprSyntax(
+                expression: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(parts: [.identifier("unknownContainer"), .identifier("decode")])
+                ) {
+                  LabeledExprSyntax(
+                    expression: MemberAccessExprSyntax(
+                      base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                    )
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("forKey"),
+                    colon: .colonToken(),
+                    expression: DeclReferenceExprSyntax(baseName: .identifier("key"))
+                  )
+                }
+              )
+            }
+          }
           SequenceExprSyntax {
             MemberAccessExprSyntax(
-              base: ExprSyntax(DeclReferenceExprSyntax(baseName: .keyword(.self))),
+              base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
               period: .periodToken(),
-              declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+              declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
             )
             AssignmentExprSyntax(equal: .equalToken())
-            TryExprSyntax(
-              expression: FunctionCallExprSyntax(
-                callee: MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .identifier("keyedContainer")),
-                  period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: .identifier(isRequired ? "decode" : "decodeIfPresent"))
-                )
-              ) {
-                LabeledExprSyntax(
-                  expression: MemberAccessExprSyntax(
-                    base: Lex.refExpr(tname),
-                    period: .periodToken(),
-                    declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                  ),
-                  trailingComma: .commaToken()
-                )
-                LabeledExprSyntax(
-                  label: .identifier("forKey"),
-                  colon: .colonToken(),
-                  expression: MemberAccessExprSyntax(
-                    period: .periodToken(),
-                    declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
-                  )
-                )
-              }
-            )
+            DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
           }
-        }
-        VariableDeclSyntax(
-          bindingSpecifier: .keyword(.let),
-          bindings: [
-            PatternBindingSyntax(
-              pattern: IdentifierPatternSyntax(identifier: .identifier("unknownContainer")),
-              initializer: InitializerClauseSyntax(
-                equal: .equalToken(),
-                value: TryExprSyntax(
-                  expression: FunctionCallExprSyntax(
-                    callee: MemberAccessExprSyntax(
-                      base: DeclReferenceExprSyntax(baseName: .identifier("decoder")),
-                      period: .periodToken(),
-                      declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
-                    )
-                  ) {
-                    LabeledExprSyntax(
-                      label: .identifier("keyedBy"),
-                      colon: .colonToken(),
-                      expression: ExprSyntax(
-                        MemberAccessExprSyntax(
-                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
-                          period: .periodToken(),
-                          declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                        ))
-                    )
-                  }
-                )
-              )
-            )
-          ]
-        )
-        VariableDeclSyntax(
-          bindingSpecifier: .keyword(.var),
-          bindings: [
-            PatternBindingSyntax(
-              pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
-              initializer: InitializerClauseSyntax(
-                equal: .equalToken(),
-                value: FunctionCallExprSyntax(
-                  callee: DictionaryExprSyntax(
-                    leftSquare: .leftSquareToken(),
-                    content: DictionaryExprSyntax.Content(
-                      DictionaryElementListSyntax([
-                        DictionaryElementSyntax(
-                          key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
-                          colon: .colonToken(),
-                          value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
-                        )
-                      ])),
-                    rightSquare: .rightSquareToken()
-                  ))
-              )
-            )
-          ]
-        )
-        ForStmtSyntax(
-          pattern: IdentifierPatternSyntax(identifier: .identifier("key")),
-          sequence: MemberAccessExprSyntax(
-            base: DeclReferenceExprSyntax(baseName: .identifier("unknownContainer")),
-            period: .periodToken(),
-            declName: DeclReferenceExprSyntax(baseName: .identifier("allKeys"))
-          )
-        ) {
-          if !sortedKeys.isEmpty || ts.isRecord {
-            GuardStmtSyntax(
-              conditions: ConditionElementListSyntax {
-                SequenceExprSyntax {
-                  FunctionCallExprSyntax(
-                    callee: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys"))
-                  ) {
-                    LabeledExprSyntax(
-                      label: .identifier("rawValue"),
-                      colon: .colonToken(),
-                      expression: MemberAccessExprSyntax(
-                        base: DeclReferenceExprSyntax(baseName: .identifier("key")),
-                        period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
-                      )
-                    )
-                  }
-                  BinaryOperatorExprSyntax(operator: .binaryOperator("=="))
-                  NilLiteralExprSyntax()
-                }
-              }
-            ) {
-              ContinueStmtSyntax(continueKeyword: .keyword(.continue))
-            }
-          }
-          SequenceExprSyntax {
-            SubscriptCallExprSyntax(
-              calledExpression: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
-            ) {
-              LabeledExprSyntax(
-                expression: MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .identifier("key")),
-                  period: .periodToken(),
-                  declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
-                ))
-            }
-            AssignmentExprSyntax(equal: .equalToken())
-            TryExprSyntax(
-              expression: FunctionCallExprSyntax(
-                callee: MemberAccessExprSyntax(parts: [.identifier("unknownContainer"), .identifier("decode")])
-              ) {
-                LabeledExprSyntax(
-                  expression: MemberAccessExprSyntax(
-                    base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
-                    period: .periodToken(),
-                    declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                  )
-                )
-                LabeledExprSyntax(
-                  label: .identifier("forKey"),
-                  colon: .colonToken(),
-                  expression: DeclReferenceExprSyntax(baseName: .identifier("key"))
-                )
-              }
-            )
-          }
-        }
-        SequenceExprSyntax {
-          MemberAccessExprSyntax(
-            base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
-            period: .periodToken(),
-            declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
-          )
-          AssignmentExprSyntax(equal: .equalToken())
-          DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
         }
       }
       encodableFunctionDeclSyntax(leadingTrivia: .newlines(2)) {
@@ -499,6 +464,408 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           }
         )
       }
+    }
+  }
+
+  private func decodeTypeName(ts: TypeSchema, name: String, key: String, property: FieldTypeDefinition, defMap: ExtDefMap) -> String {
+    if case .string(let def) = property, def.enum != nil || def.knownValues != nil {
+      let tname = "\(name)_\(key.titleCased())"
+      return "\(Lex.structNameFor(prefix: ts.prefix)).\(tname)"
+    } else {
+      let cts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: key, type: property)
+      return TypeSchema.typeNameForField(name: name, k: key, v: cts, defMap: defMap, dropPrefix: true)
+    }
+  }
+
+  private func memberwiseInitDecl(ts: TypeSchema, name: String, defMap: ExtDefMap, required: [String: Bool]) -> InitializerDeclSyntax {
+    InitializerDeclSyntax(
+      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax {
+          for (key, property) in sortedProperties {
+            let isRequired = required[key] ?? false
+            let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: true)
+            let defaultValue: InitializerClauseSyntax? =
+              isRequired
+              ? nil
+              : InitializerClauseSyntax(equal: .equalToken(), value: NilLiteralExprSyntax())
+            FunctionParameterSyntax(firstName: .lexIdentifier(key), type: type, defaultValue: defaultValue)
+          }
+        }
+      )
+    ) {
+      for (key, _) in sortedProperties {
+        SequenceExprSyntax {
+          MemberAccessExprSyntax(
+            base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
+            period: .periodToken(),
+            declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+          )
+          AssignmentExprSyntax(equal: .equalToken())
+          DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+        }
+      }
+      SequenceExprSyntax {
+        MemberAccessExprSyntax(
+          base: DeclReferenceExprSyntax(baseName: .keyword(.self)),
+          period: .periodToken(),
+          declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
+        )
+        AssignmentExprSyntax(equal: .equalToken())
+        DictionaryExprSyntax(
+          leftSquare: .leftSquareToken(),
+          content: DictionaryExprSyntax.Content(.colonToken()),
+          rightSquare: .rightSquareToken()
+        )
+      }
+    }
+  }
+
+  private func staticMakeDecl(ts: TypeSchema, name: String, defMap: ExtDefMap, required: [String: Bool]) -> FunctionDeclSyntax {
+    FunctionDeclSyntax(
+      modifiers: [
+        DeclModifierSyntax(name: .keyword(.public)),
+        DeclModifierSyntax(name: .keyword(.static)),
+      ],
+      name: .identifier("make"),
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax {
+          for (key, property) in sortedProperties {
+            let isRequired = required[key] ?? false
+            let type = ts.typeIdentifier(name: name, property: property, defMap: defMap, key: key, isRequired: isRequired, dropPrefix: true)
+            let defaultValue: InitializerClauseSyntax? =
+              isRequired
+              ? nil
+              : InitializerClauseSyntax(equal: .equalToken(), value: NilLiteralExprSyntax())
+            FunctionParameterSyntax(firstName: .lexIdentifier(key), type: type, defaultValue: defaultValue)
+          }
+        },
+        effectSpecifiers: FunctionEffectSpecifiersSyntax(
+          throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+        ),
+        returnClause: ReturnClauseSyntax(
+          type: TypeSyntax(IdentifierTypeSyntax(name: .keyword(.Self)))
+        )
+      )
+    ) {
+      for (key, property) in sortedProperties {
+        let isRequired = required[key] ?? false
+        for item in property.constraintGuardItems(for: key, optional: !isRequired) {
+          item
+        }
+      }
+      ReturnStmtSyntax(
+        expression: FunctionCallExprSyntax(
+          callee: MemberAccessExprSyntax(
+            base: DeclReferenceExprSyntax(baseName: .keyword(.Self)),
+            period: .periodToken(),
+            declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+          )
+        ) {
+          for (key, _) in sortedProperties {
+            LabeledExprSyntax(
+              label: .lexIdentifier(key),
+              colon: .colonToken(),
+              expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+            )
+          }
+        }
+      )
+    }
+  }
+
+  private func constraintDecodableInitDecl(ts: TypeSchema, name: String, defMap: ExtDefMap, required: [String: Bool]) -> InitializerDeclSyntax {
+    decodableInitializerDeclSyntax {
+      VariableDeclSyntax(
+        bindingSpecifier: .keyword(.let),
+        bindings: PatternBindingListSyntax([
+          PatternBindingSyntax(
+            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("keyedContainer"))),
+            initializer: InitializerClauseSyntax(
+              equal: .equalToken(),
+              value: TryExprSyntax(
+                expression: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(
+                    base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("decoder"))),
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
+                  )
+                ) {
+                  LabeledExprSyntax(
+                    label: .identifier("keyedBy"),
+                    colon: .colonToken(),
+                    expression: ExprSyntax(
+                      MemberAccessExprSyntax(
+                        base: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys")),
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                      ))
+                  )
+                }
+              )
+            )
+          )
+        ])
+      )
+      for (key, property) in sortedProperties {
+        let isRequired = required[key] ?? false
+        let tname = decodeTypeName(ts: ts, name: name, key: key, property: property, defMap: defMap)
+        VariableDeclSyntax(
+          bindingSpecifier: .keyword(.let),
+          bindings: PatternBindingListSyntax([
+            PatternBindingSyntax(
+              pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .lexIdentifier(key))),
+              initializer: InitializerClauseSyntax(
+                equal: .equalToken(),
+                value: TryExprSyntax(
+                  expression: FunctionCallExprSyntax(
+                    callee: MemberAccessExprSyntax(
+                      base: DeclReferenceExprSyntax(baseName: .identifier("keyedContainer")),
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .identifier(isRequired ? "decode" : "decodeIfPresent"))
+                    )
+                  ) {
+                    LabeledExprSyntax(
+                      expression: MemberAccessExprSyntax(
+                        base: Lex.refExpr(tname),
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                      ),
+                      trailingComma: .commaToken()
+                    )
+                    LabeledExprSyntax(
+                      label: .identifier("forKey"),
+                      colon: .colonToken(),
+                      expression: MemberAccessExprSyntax(
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+                      )
+                    )
+                  }
+                )
+              )
+            )
+          ])
+        )
+      }
+      VariableDeclSyntax(
+        bindingSpecifier: .keyword(.let),
+        bindings: [
+          PatternBindingSyntax(
+            pattern: IdentifierPatternSyntax(identifier: .identifier("unknownContainer")),
+            initializer: InitializerClauseSyntax(
+              equal: .equalToken(),
+              value: TryExprSyntax(
+                expression: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(
+                    base: DeclReferenceExprSyntax(baseName: .identifier("decoder")),
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier("container"))
+                  )
+                ) {
+                  LabeledExprSyntax(
+                    label: .identifier("keyedBy"),
+                    colon: .colonToken(),
+                    expression: ExprSyntax(
+                      MemberAccessExprSyntax(
+                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                      ))
+                  )
+                }
+              )
+            )
+          )
+        ]
+      )
+      VariableDeclSyntax(
+        bindingSpecifier: .keyword(.var),
+        bindings: [
+          PatternBindingSyntax(
+            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("_unknownValues"))),
+            initializer: InitializerClauseSyntax(
+              equal: .equalToken(),
+              value: FunctionCallExprSyntax(
+                callee: DictionaryExprSyntax(
+                  leftSquare: .leftSquareToken(),
+                  content: DictionaryExprSyntax.Content(
+                    DictionaryElementListSyntax([
+                      DictionaryElementSyntax(
+                        key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
+                        colon: .colonToken(),
+                        value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                      )
+                    ])),
+                  rightSquare: .rightSquareToken()
+                ))
+            )
+          )
+        ]
+      )
+      ForStmtSyntax(
+        pattern: IdentifierPatternSyntax(identifier: .identifier("key")),
+        sequence: MemberAccessExprSyntax(
+          base: DeclReferenceExprSyntax(baseName: .identifier("unknownContainer")),
+          period: .periodToken(),
+          declName: DeclReferenceExprSyntax(baseName: .identifier("allKeys"))
+        )
+      ) {
+        GuardStmtSyntax(
+          conditions: ConditionElementListSyntax {
+            SequenceExprSyntax {
+              FunctionCallExprSyntax(
+                callee: DeclReferenceExprSyntax(baseName: .identifier("CodingKeys"))
+              ) {
+                LabeledExprSyntax(
+                  label: .identifier("rawValue"),
+                  colon: .colonToken(),
+                  expression: MemberAccessExprSyntax(
+                    base: DeclReferenceExprSyntax(baseName: .identifier("key")),
+                    period: .periodToken(),
+                    declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
+                  )
+                )
+              }
+              BinaryOperatorExprSyntax(operator: .binaryOperator("=="))
+              NilLiteralExprSyntax()
+            }
+          }
+        ) {
+          ContinueStmtSyntax(continueKeyword: .keyword(.continue))
+        }
+        SequenceExprSyntax {
+          SubscriptCallExprSyntax(
+            calledExpression: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
+          ) {
+            LabeledExprSyntax(
+              expression: MemberAccessExprSyntax(
+                base: DeclReferenceExprSyntax(baseName: .identifier("key")),
+                period: .periodToken(),
+                declName: DeclReferenceExprSyntax(baseName: .identifier("stringValue"))
+              ))
+          }
+          AssignmentExprSyntax(equal: .equalToken())
+          TryExprSyntax(
+            expression: FunctionCallExprSyntax(
+              callee: MemberAccessExprSyntax(parts: [.identifier("unknownContainer"), .identifier("decode")])
+            ) {
+              LabeledExprSyntax(
+                expression: MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                )
+              )
+              LabeledExprSyntax(
+                label: .identifier("forKey"),
+                colon: .colonToken(),
+                expression: DeclReferenceExprSyntax(baseName: .identifier("key"))
+              )
+            }
+          )
+        }
+      }
+      DoStmtSyntax(
+        body: CodeBlockSyntax {
+          SequenceExprSyntax {
+            DeclReferenceExprSyntax(baseName: .keyword(.self))
+            AssignmentExprSyntax(equal: .equalToken())
+            TryExprSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .keyword(.Self)),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: .identifier("make"))
+                )
+              ) {
+                for (key, _) in sortedProperties {
+                  LabeledExprSyntax(
+                    label: .lexIdentifier(key),
+                    colon: .colonToken(),
+                    expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+                  )
+                }
+              }
+            )
+          }
+        },
+        catchClauses: CatchClauseListSyntax {
+          CatchClauseSyntax(
+            catchItems: CatchItemListSyntax {
+              CatchItemSyntax(
+                pattern: PatternSyntax(
+                  ValueBindingPatternSyntax(
+                    bindingSpecifier: .keyword(.let),
+                    pattern: PatternSyntax(
+                      ExpressionPatternSyntax(
+                        expression: SequenceExprSyntax {
+                          PatternExprSyntax(
+                            pattern: IdentifierPatternSyntax(identifier: .identifier("error"))
+                          )
+                          UnresolvedAsExprSyntax()
+                          TypeExprSyntax(type: IdentifierTypeSyntax(name: .identifier("LexiconConstraintError")))
+                        }
+                      )
+                    )
+                  )
+                )
+              )
+            }
+          ) {
+            ThrowStmtSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(
+                  base: DeclReferenceExprSyntax(baseName: .identifier("DecodingError")),
+                  period: .periodToken(),
+                  declName: DeclReferenceExprSyntax(baseName: .identifier("dataCorrupted"))
+                )
+              ) {
+                LabeledExprSyntax(
+                  expression: FunctionCallExprSyntax(
+                    callee: MemberAccessExprSyntax(
+                      period: .periodToken(),
+                      declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+                    )
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("codingPath"),
+                      colon: .colonToken(),
+                      expression: MemberAccessExprSyntax(
+                        base: DeclReferenceExprSyntax(baseName: .identifier("decoder")),
+                        period: .periodToken(),
+                        declName: DeclReferenceExprSyntax(baseName: .identifier("codingPath"))
+                      )
+                    )
+                    LabeledExprSyntax(
+                      label: .identifier("debugDescription"),
+                      colon: .colonToken(),
+                      expression: StringLiteralExprSyntax(
+                        openingQuote: .stringQuoteToken(),
+                        segments: StringLiteralSegmentListSyntax {
+                          ExpressionSegmentSyntax(
+                            expressions: LabeledExprListSyntax {
+                              LabeledExprSyntax(
+                                expression: DeclReferenceExprSyntax(baseName: .identifier("error"))
+                              )
+                            }
+                          )
+                        },
+                        closingQuote: .stringQuoteToken()
+                      )
+                    )
+                    LabeledExprSyntax(
+                      label: .identifier("underlyingError"),
+                      colon: .colonToken(),
+                      expression: DeclReferenceExprSyntax(baseName: .identifier("error"))
+                    )
+                  }
+                )
+              }
+            )
+          }
+        }
+      )
     }
   }
 }

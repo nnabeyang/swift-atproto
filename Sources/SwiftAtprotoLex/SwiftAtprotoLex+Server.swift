@@ -726,17 +726,35 @@ extension Lex {
           pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("query"))),
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
-            value: FunctionCallExprSyntax(
-              callee: MemberAccessExprSyntax(parts: prefix.lexIdentifierSegments + [.lexIdentifier(key), .identifier("Input"), .identifier("Query")])
-            ) {
-              for (i, (key, _)) in (def.parameters?.sortedProperties ?? []).enumerated() {
-                LabeledExprSyntax(
-                  label: .lexIdentifier(key),
-                  colon: .colonToken(),
-                  expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query\(i)")))
+            value: {
+              let paramsHaveConstraints = (def.parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
+              let callee: ExprSyntax =
+                paramsHaveConstraints
+                ? ExprSyntax(
+                  MemberAccessExprSyntax(
+                    parts: prefix.lexIdentifierSegments + [
+                      .lexIdentifier(key), .identifier("Input"), .identifier("Query"), .identifier("make"),
+                    ]
+                  )
                 )
+                : ExprSyntax(
+                  MemberAccessExprSyntax(
+                    parts: prefix.lexIdentifierSegments + [
+                      .lexIdentifier(key), .identifier("Input"), .identifier("Query"),
+                    ]
+                  )
+                )
+              let call = FunctionCallExprSyntax(callee: callee) {
+                for (i, (key, _)) in (def.parameters?.sortedProperties ?? []).enumerated() {
+                  LabeledExprSyntax(
+                    label: .lexIdentifier(key),
+                    colon: .colonToken(),
+                    expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query\(i)")))
+                  )
+                }
               }
-            }
+              return paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+            }()
           )
         )
       }
