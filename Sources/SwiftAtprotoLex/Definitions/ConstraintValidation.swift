@@ -10,6 +10,8 @@ extension FieldTypeDefinition {
       def.minimum != nil || def.maximum != nil
     case .array(let def):
       def.minLength != nil || def.maxLength != nil
+    case .bytes(let def):
+      def.maxLength != nil
     default:
       false
     }
@@ -232,6 +234,20 @@ extension FieldTypeDefinition {
             errorCase: "arrayTooShort",
             field: field,
             argLabel: "minimum"
+          ))
+      }
+      return items
+    case .bytes(let def):
+      var items = [CodeBlockItemSyntax]()
+      if let n = def.maxLength {
+        items.append(
+          constraintGuardItem(
+            lhs: MemberAccessExprSyntax(parts: [.identifier(ref), .identifier("count")]),
+            op: "<=",
+            rhs: n,
+            errorCase: "bytesTooLong",
+            field: field,
+            argLabel: "limit"
           ))
       }
       return items
