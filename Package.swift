@@ -104,6 +104,7 @@ let package = Package(
       dependencies: [
         "SwiftAtprotoLex",
         .product(name: "SwiftSyntax", package: "swift-syntax"),
+        .product(name: "SwiftParser", package: "swift-syntax"),
       ]
     ),
     .testTarget(

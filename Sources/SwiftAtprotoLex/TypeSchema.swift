@@ -184,7 +184,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     return t
   }
 
-  func namesFromRef(ref: String, defMap: ExtDefMap, dropPrefix: Bool = true) -> (String, String) {
+  func namesFromRef(ref: String, defMap: ExtDefMap, dropPrefix: Bool = true, applyStringFormat: Bool = true) -> (String, String) {
     let ts = lookupRef(ref: ref, defMap: defMap)
     if ts.prefix == "" {
       fatalError("no prefix for referenced type: \(ts.id)")
@@ -193,6 +193,9 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       fatalError(#"no prefix for referencing type: \#(id) \#(defName)"#)
     }
     if case .string(let def) = ts.type, def.knownValues == nil, def.enum == nil {
+      if applyStringFormat, let formatType = def.format?.swiftFormatTypeName {
+        return ("INVALID", "FormatString<\(formatType)>")
+      }
       return ("INVALID", "String")
     }
     let tname: String =
@@ -241,7 +244,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     }
   }
 
-  static func typeNameForField(name: String, k: String, v: TypeSchema, defMap: ExtDefMap, dropPrefix: Bool = true) -> String {
+  static func typeNameForField(name: String, k: String, v: TypeSchema, defMap: ExtDefMap, dropPrefix: Bool = true, applyStringFormat: Bool = true) -> String {
     switch v.type {
     case .boolean:
       return "Bool"
@@ -251,6 +254,9 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       return "Data"
     case .string(let def):
       if def.isPrimitive {
+        if applyStringFormat, let formatType = def.format?.swiftFormatTypeName {
+          return "FormatString<\(formatType)>"
+        }
         return "String"
       }
       if !dropPrefix {
@@ -272,11 +278,11 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .cidLink:
       return "LexLink"
     case .ref(let def):
-      let (_, tn) = v.namesFromRef(ref: def.ref, defMap: defMap, dropPrefix: dropPrefix)
+      let (_, tn) = v.namesFromRef(ref: def.ref, defMap: defMap, dropPrefix: dropPrefix, applyStringFormat: applyStringFormat)
       return tn
     case .array(let def):
       let ts = TypeSchema(id: v.id, prefix: v.prefix, defName: "Elem", type: def.items)
-      let subt = Self.typeNameForField(name: "\(name)_\(k.titleCased())", k: "Elem", v: ts, defMap: defMap, dropPrefix: dropPrefix)
+      let subt = Self.typeNameForField(name: "\(name)_\(k.titleCased())", k: "Elem", v: ts, defMap: defMap, dropPrefix: dropPrefix, applyStringFormat: applyStringFormat)
       return "[\(subt)]"
     case .union, .object:
       if !dropPrefix {
@@ -551,6 +557,13 @@ struct StringFormat: Codable, RawRepresentable {
   static let language: Self = .init("language")
   static let tid: Self = .init("tid")
   static let recordKey: Self = .init("record-key")
+
+  var swiftFormatTypeName: String? {
+    switch rawValue {
+    case "datetime": "Date"
+    default: nil
+    }
+  }
 }
 
 struct RecordSchema {

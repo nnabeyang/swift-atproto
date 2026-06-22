@@ -91,7 +91,7 @@ extension FieldTypeDefinition {
 
   private func constraintGuardStmts(ref: String, field: String) -> [CodeBlockItemSyntax] {
     switch self {
-    case .string(let def) where def.enum == nil && def.knownValues == nil:
+    case .string(let def) where def.enum == nil && def.knownValues == nil && def.format?.swiftFormatTypeName == nil:
       var items = [CodeBlockItemSyntax]()
       if let n = def.maxLength {
         items.append(
@@ -138,7 +138,7 @@ extension FieldTypeDefinition {
           ))
       }
       return items
-    case .string(let def) where def.enum == nil && def.knownValues != nil:
+    case .string(let def) where def.enum == nil && (def.knownValues != nil || def.format?.swiftFormatTypeName != nil):
       var items = [CodeBlockItemSyntax]()
       if let n = def.maxLength {
         items.append(
