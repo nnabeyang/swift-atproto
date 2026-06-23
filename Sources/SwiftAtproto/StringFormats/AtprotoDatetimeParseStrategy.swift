@@ -5,6 +5,10 @@ public struct AtprotoDatetimeParseStrategy: ParseStrategy {
 
   public init() {}
 
+  private static let calendar = ProlepticGregorianCalendar()
+  // 0000-01-01T00:00:00Z; instants before this are rejected.
+  private static let astroZeroDate = calendar.date(from: DateComponents(year: 0, month: 1, day: 1))!
+
   public func parse(_ value: String) throws -> Date {
     func invalid() -> LexiconStringFormatError { .invalid(format: "datetime", value: value) }
 
@@ -15,53 +19,19 @@ public struct AtprotoDatetimeParseStrategy: ParseStrategy {
     var scanner = Scanner(value)
     guard let fields = scanner.scan() else { throw invalid() }
 
-    // Apply the offset arithmetically so offsets beyond ±18:00 (rejected by `TimeZone`) still parse.
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-    let components = Self.components(
-      year: fields.year, month: fields.month, day: fields.day, hour: fields.hour,
-      minute: fields.minute, second: fields.second)
-    guard let wallClock = calendar.date(from: components) else { throw invalid() }
-
-    let check = calendar.dateComponents(
-      [.era, .year, .month, .day, .hour, .minute, .second], from: wallClock)
-    guard Self.astronomicalYear(era: check.era, year: check.year) == fields.year,
-      check.month == fields.month, check.day == fields.day, check.hour == fields.hour,
-      check.minute == fields.minute, check.second == fields.second
+    // Resolve the instant in the proleptic Gregorian calendar (matching the reference
+    // implementation). Foundation's calendars apply the 1582 Julian cutover, so a custom calendar is
+    // used; `date(from:)` rejects non-existent dates such as 2024-02-30.
+    guard
+      let base = Self.calendar.date(
+        from: DateComponents(
+          year: fields.year, month: fields.month, day: fields.day,
+          hour: fields.hour, minute: fields.minute, second: fields.second))
     else { throw invalid() }
+    let instant = base.addingTimeInterval(-Double(fields.offsetSeconds) + (fields.fraction ?? 0))
+    guard instant >= Self.astroZeroDate else { throw invalid() }
 
-    let instant = wallClock.addingTimeInterval(-Double(fields.offsetSeconds))
-
-    let utc = calendar.dateComponents([.era, .year], from: instant)
-    guard Self.astronomicalYear(era: utc.era, year: utc.year) >= 0 else { throw invalid() }
-
-    if let fraction = fields.fraction { return instant.addingTimeInterval(fraction) }
     return instant
-  }
-
-  private static func components(
-    year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int
-  ) -> DateComponents {
-    var components = DateComponents()
-    if year >= 1 {
-      components.era = 1
-      components.year = year
-    } else {
-      components.era = 0
-      components.year = 1
-    }
-    components.month = month
-    components.day = day
-    components.hour = hour
-    components.minute = minute
-    components.second = second
-    components.timeZone = TimeZone(secondsFromGMT: 0)!
-    return components
-  }
-
-  private static func astronomicalYear(era: Int?, year: Int?) -> Int {
-    guard let year else { return Int.min }
-    return era == 0 ? 1 - year : year
   }
 }
 
@@ -121,7 +91,14 @@ private struct Scanner {
       }
       // 1 to 20 fraction digits.
       guard index > start, index - start <= 20 else { return nil }
-      fraction = Double("0." + String(decoding: bytes[start..<index], as: UTF8.self))
+      // Truncate to millisecond precision (the reference implementation is millisecond-precise);
+      // keeping sub-millisecond digits would let rounding in `Date.rawValue` overflow the year.
+      var millis = 0
+      for offset in 0..<3 {
+        let i = start + offset
+        millis = millis * 10 + (i < index ? Int(bytes[i] - UInt8(ascii: "0")) : 0)
+      }
+      fraction = Double(millis) / 1000
     }
 
     guard let offsetSeconds = scanOffset() else { return nil }

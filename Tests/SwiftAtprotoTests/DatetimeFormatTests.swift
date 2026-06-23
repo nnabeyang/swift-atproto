@@ -97,4 +97,79 @@ struct DatetimeFormatTests {
     let date = try Date(string: "2024-01-15T12:30:00.123456Z")
     #expect(date.rawValue == "2024-01-15T12:30:00.123Z")
   }
+
+  @Test(arguments: [
+    ("2024-01-15T12:30:00+19:00", "2024-01-14T17:30:00Z"),
+    ("2024-01-15T12:30:00-23:00", "2024-01-16T11:30:00Z"),
+    ("2024-01-15T12:30:00+01:45", "2024-01-15T10:45:00Z"),
+  ])
+  func largeOffsetsComputeCorrectInstant(_ offset: String, _ utc: String) throws {
+    #expect(try Date(string: offset) == Date(string: utc))
+  }
+
+  @Test func prolepticGregorianCalendar() throws {
+    // 1500 is a leap year in the Julian calendar but not in the proleptic Gregorian one.
+    #expect(throws: (any Error).self) { try Date(string: "1500-02-29T00:00:00Z") }
+    // 1582-10-10 does not exist in the Julian/Gregorian cutover but is valid proleptically.
+    _ = try Date(string: "1582-10-10T00:00:00Z")
+    #expect(try Date(string: "2024-02-29T00:00:00Z").timeIntervalSince1970 == 1_709_164_800)
+  }
+
+  @Test func pre1582InstantsMatchProlepticGregorian() throws {
+    #expect(try Date(string: "1000-12-31T23:00:00.000Z").timeIntervalSince1970 == -30_578_691_600)
+    #expect(try Date(string: "0000-01-01T00:00:00.000Z").timeIntervalSince1970 == -62_167_219_200)
+  }
+
+  @Test(arguments: [
+    "1000-12-31T23:00:00.000Z",
+    "0985-04-12T23:20:50.123Z",
+    "1582-10-10T00:00:00.000Z",
+    "0000-01-01T00:00:00.000Z",
+  ])
+  func rawValueIsProlepticForPre1582Dates(_ value: String) throws {
+    // rawValue must round-trip the wire date even before the Julian/Gregorian cutover.
+    #expect(try Date(string: value).rawValue == value)
+  }
+
+  @Test(arguments: [
+    // Divisible by 400 are leap; divisible by 100 but not 400 are not.
+    ("1600-02-29T00:00:00Z", true),
+    ("2000-02-29T00:00:00Z", true),
+    ("1700-02-29T00:00:00Z", false),
+    ("1900-02-29T00:00:00Z", false),
+  ])
+  func centuryLeapYears(_ value: String, _ valid: Bool) {
+    if valid {
+      #expect(throws: Never.self) { try Date(string: value) }
+    } else {
+      #expect(throws: (any Error).self) { try Date(string: value) }
+    }
+  }
+
+  @Test(arguments: [
+    "2024-01-15T12:30:00+24:00",
+    "2024-01-15T12:30:00+23:60",
+    "2024-01-15T12:30:00-24:00",
+  ])
+  func outOfRangeOffsetsThrow(_ value: String) {
+    #expect(throws: (any Error).self) { try Date(string: value) }
+  }
+
+  @Test func subMillisecondTruncates() throws {
+    // Sub-millisecond digits are dropped (ms-precise, like the reference), not rounded up.
+    #expect(try Date(string: "2024-01-15T12:30:00.1234Z").rawValue == "2024-01-15T12:30:00.123Z")
+    #expect(try Date(string: "2024-01-15T12:30:00.1236Z").rawValue == "2024-01-15T12:30:00.123Z")
+  }
+
+  @Test func maxYearSubMillisecondDoesNotOverflow() throws {
+    // Sub-millisecond truncation keeps the canonical value within year 9999 and re-parsable.
+    let date = try Date(string: "9999-12-31T23:59:59.9999Z")
+    #expect(date.rawValue == "9999-12-31T23:59:59.999Z")
+    #expect(throws: Never.self) { try Date(string: date.rawValue) }
+  }
+
+  @Test func boundarySubMillisecondDoesNotCarry() throws {
+    // .9999 must not roll over into the next day/month/year.
+    #expect(try Date(string: "2024-12-31T23:59:59.9999Z").rawValue == "2024-12-31T23:59:59.999Z")
+  }
 }

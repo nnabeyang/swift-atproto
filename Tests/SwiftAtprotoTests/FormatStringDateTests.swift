@@ -58,4 +58,17 @@ struct FormatStringDateTests {
     #expect(value.description == "2024-01-15T12:30:00+09:00")
     #expect("\(value)" == "2024-01-15T12:30:00+09:00")
   }
+
+  // `Date.rawValue` is defined as `formatted(.atprotoDatetime)`; assert the public FormatStyle
+  // accessor and the canonical formatting agree.
+  @Test(arguments: [
+    "2024-01-15T12:30:00.123Z",
+    "1000-12-31T23:00:00.000Z",
+    "0000-01-01T00:00:00.000Z",
+    "9999-12-31T23:59:59.999Z",
+  ])
+  func formatStyleMatchesRawValue(_ wire: String) throws {
+    let date = try Date(string: wire)
+    #expect(date.formatted(.atprotoDatetime) == date.rawValue)
+  }
 }
