@@ -50,7 +50,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = "\(prefix).\(fname)_\(name.titleCased())"
       } else {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
+        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false, applyStringFormat: false)
       }
       let type: TypeSyntax
       if isRequired {
@@ -87,7 +87,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = "\(prefix).\(fname)_\(name.titleCased())"
       } else {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
+        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false, applyStringFormat: false)
       }
       let type = Lex.refExpr(tn)
       queries.append((key: name, isRequired: isRequired, type: type))
@@ -132,7 +132,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = "\(prefix).\(fname)_\(name.titleCased())"
       } else {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
+        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false, applyStringFormat: false)
       }
       let type = Lex.typeSyntax(tn)
       let defaultValue: InitializerClauseSyntax?
