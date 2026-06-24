@@ -561,6 +561,7 @@ struct StringFormat: Codable, RawRepresentable {
   var swiftFormatTypeName: String? {
     switch rawValue {
     case "datetime": "Date"
+    case "cid": "LexLink"
     default: nil
     }
   }
