@@ -50,7 +50,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = "\(prefix).\(fname)_\(name.titleCased())"
       } else {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false, applyStringFormat: false)
+        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
       let type: TypeSyntax
       if isRequired {
@@ -87,7 +87,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = "\(prefix).\(fname)_\(name.titleCased())"
       } else {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false, applyStringFormat: false)
+        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
       let type = Lex.refExpr(tn)
       queries.append((key: name, isRequired: isRequired, type: type))
@@ -132,7 +132,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = "\(prefix).\(fname)_\(name.titleCased())"
       } else {
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: name, type: t)
-        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false, applyStringFormat: false)
+        tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
       let type = Lex.typeSyntax(tn)
       let defaultValue: InitializerClauseSyntax?
@@ -168,11 +168,17 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           let ts = TypeSchema(id: id, prefix: prefix, defName: name, type: t)
           let tn = TypeSchema.paramNameForField(typeSchema: ts)
           let isRequired = required[name] ?? false
+          let ref = name.escapedSwiftKeyword
           let stringLiteral =
-            if case .string(let def) = t, def.enum != nil || def.knownValues != nil {
-              isRequired ? ".\(tn)(\(name.escapedSwiftKeyword).rawValue)" : ".\(tn)(\(name.escapedSwiftKeyword)?.rawValue)"
+            if case .string(let def) = t, def.enum != nil || def.knownValues != nil || def.format?.swiftFormatTypeName != nil {
+              isRequired ? ".\(tn)(\(ref).rawValue)" : ".\(tn)(\(ref)?.rawValue)"
+            } else if case .array(let arrayDef) = t,
+              case .string(let stringDef) = arrayDef.items,
+              stringDef.format?.swiftFormatTypeName != nil
+            {
+              isRequired ? ".\(tn)(\(ref).map(\\.rawValue))" : ".\(tn)(\(ref)?.map(\\.rawValue))"
             } else {
-              ".\(tn)(\(name.escapedSwiftKeyword))"
+              ".\(tn)(\(ref))"
             }
           DictionaryElementSyntax(
             key: StringLiteralExprSyntax(content: name),
