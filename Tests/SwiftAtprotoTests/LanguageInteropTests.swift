@@ -80,4 +80,79 @@ struct LanguageInteropTests {
   func invalidThrows(_ tag: String) {
     #expect(throws: (any Error).self) { try Language(string: tag) }
   }
+
+  @Test func parsesVariantExtensionAndPrivateuse() throws {
+    let l = try Language(string: "de-CH-1901-u-co-phonebk-x-private")
+    #expect(l.rawValue == "de-CH-1901-u-co-phonebk-x-private")
+    #expect(l.components.languageCode?.rawValue == "de")
+    #expect(l.components.script == nil)
+    #expect(l.components.region?.rawValue == "CH")
+    #expect(l.components.variants.map(\.rawValue) == ["1901"])
+    #expect(l.components.extensions.count == 1)
+    #expect(l.components.extensions[0].singleton == "u")
+    #expect(l.components.extensions[0].subtags == ["co", "phonebk"])
+    #expect(l.components.privateUse == ["private"])
+    #expect(l.components.grandfathered == nil)
+  }
+
+  @Test func parsesScriptRegionExtensionAndPrivateuse() throws {
+    let l = try Language(string: "en-Latn-US-u-co-phonebk-x-twain")
+    #expect(l.components.languageCode?.rawValue == "en")
+    #expect(l.components.script?.rawValue == "Latn")
+    #expect(l.components.region?.rawValue == "US")
+    #expect(l.components.variants.isEmpty)
+    #expect(l.components.extensions.count == 1)
+    #expect(l.components.privateUse == ["twain"])
+  }
+
+  @Test func parsesPrivateuseOnly() throws {
+    let l = try Language(string: "x-pig-latin")
+    #expect(l.rawValue == "x-pig-latin")
+    #expect(l.components.languageCode == nil)
+    #expect(l.components.script == nil)
+    #expect(l.components.region == nil)
+    #expect(l.components.privateUse == ["pig", "latin"])
+    #expect(l.components.grandfathered == nil)
+  }
+
+  @Test func preservesWireCaseInRawValueAndSubtags() throws {
+    let l = try Language(string: "EN-us")
+    #expect(l.rawValue == "EN-us")
+    #expect(l.components.languageCode?.rawValue == "EN")
+    #expect(l.components.region?.rawValue == "us")
+  }
+
+  @Test func multipleExtensionsAndVariants() throws {
+    let l = try Language(string: "sl-rozaj-biske-u-co-standard-t-en-US")
+    #expect(l.components.languageCode?.rawValue == "sl")
+    #expect(l.components.variants.map(\.rawValue) == ["rozaj", "biske"])
+    #expect(l.components.extensions.count == 2)
+    #expect(l.components.extensions[0].singleton == "u")
+    #expect(l.components.extensions[0].subtags == ["co", "standard"])
+    #expect(l.components.extensions[1].singleton == "t")
+    #expect(l.components.extensions[1].subtags == ["en", "US"])
+  }
+
+  @Test func parsesExtendedLanguageSubtag() throws {
+    let l = try Language(string: "zh-cmn-Hans-CN")
+    #expect(l.rawValue == "zh-cmn-Hans-CN")
+    #expect(l.components.languageCode?.rawValue == "zh")
+    #expect(l.components.extendedLanguageSubtags.map(\.rawValue) == ["cmn"])
+    #expect(l.components.script?.rawValue == "Hans")
+    #expect(l.components.region?.rawValue == "CN")
+  }
+
+  @Test func parsesMultipleExtendedLanguageSubtags() throws {
+    let l = try Language(string: "zh-cmn-cmn-cmn")
+    #expect(l.components.languageCode?.rawValue == "zh")
+    #expect(l.components.extendedLanguageSubtags.map(\.rawValue) == ["cmn", "cmn", "cmn"])
+    #expect(l.components.script == nil)
+  }
+
+  @Test func tagWithoutExtlangHasEmptySubtags() throws {
+    let l = try Language(string: "zh-Hans-CN")
+    #expect(l.components.languageCode?.rawValue == "zh")
+    #expect(l.components.extendedLanguageSubtags.isEmpty)
+    #expect(l.components.script?.rawValue == "Hans")
+  }
 }
