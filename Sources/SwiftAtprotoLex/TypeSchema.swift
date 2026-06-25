@@ -562,6 +562,7 @@ struct StringFormat: Codable, RawRepresentable {
     switch rawValue {
     case "datetime": "Date"
     case "cid": "LexLink"
+    case "at-uri": "ATURI"
     default: nil
     }
   }
