@@ -122,6 +122,29 @@ struct LanguageInteropTests {
     #expect(l.components.region?.rawValue == "us")
   }
 
+  @Test(arguments: Language.Grandfathered.allCases)
+  func grandfatheredCanonicalFormParses(_ g: Language.Grandfathered) throws {
+    let l = try Language(string: g.rawValue)
+    #expect(l.rawValue == g.rawValue)
+    #expect(l.components.grandfathered == g)
+    #expect(l.components.languageCode == nil)
+    #expect(l.components.script == nil)
+    #expect(l.components.region == nil)
+    #expect(l.components.variants.isEmpty)
+    #expect(l.components.extensions.isEmpty)
+    #expect(l.components.privateUse.isEmpty)
+  }
+
+  @Test func grandfatheredMatchIsCaseInsensitive() throws {
+    let l = try Language(string: "I-Klingon")
+    #expect(l.rawValue == "I-Klingon")
+    #expect(l.components.grandfathered == .iKlingon)
+
+    let l2 = try Language(string: "EN-gb-OED")
+    #expect(l2.rawValue == "EN-gb-OED")
+    #expect(l2.components.grandfathered == .enGBOed)
+  }
+
   @Test func multipleExtensionsAndVariants() throws {
     let l = try Language(string: "sl-rozaj-biske-u-co-standard-t-en-US")
     #expect(l.components.languageCode?.rawValue == "sl")
