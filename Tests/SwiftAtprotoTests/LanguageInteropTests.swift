@@ -39,9 +39,45 @@ struct LanguageInteropTests {
     "zh-cmn-cmn-cmn",
   ]
 
+  static let invalidLanguages: [String] = [
+    // Empty / pure hyphens.
+    "", "-", "--", "---",
+    // Empty subtags at edges or interior.
+    "en-", "-en", "en--US", "en-US-",
+    // No ALPHA in primary language.
+    "1234", "12-US",
+    // 1-char primary language (must be 2-8 ALPHA).
+    "a", "1",
+    // Wrong separator (BCP-47 uses `-`, not `_`).
+    "en_US", "EN_us",
+    // Trailing space / leading space / spurious whitespace.
+    " en", "en ", "en US",
+    // Non-ASCII bytes (Unicode letter, emoji).
+    "ja-日本", "en-😀",
+    // Privateuse degenerate forms (`x-` with no subtag, bare `x`).
+    "x-", "x", "X",
+    // Privateuse with overlong subtag (>8 alphanum) or empty subtag.
+    "x-123456789", "x--foo",
+    // Extension singleton without subtags.
+    "en-a", "en-u", "en-u-", "en-u-x",
+    // Extlang requires a 2-3 ALPHA primary subtag; reserved/registered primaries reject it.
+    "abcd-xyz", "english-abc",
+    // Extlang grammar caps at 3 subtags.
+    "zh-cmn-cmn-cmn-cmn",
+    // Region-shape only if 2 ALPHA or 3 DIGIT; 2-digit subtag is neither region nor variant.
+    "en-12",
+    // Length cap.
+    String(repeating: "a", count: 65), "en-" + String(repeating: "a", count: 62),
+  ]
+
   @Test(arguments: validLanguages)
   func validParses(_ tag: String) throws {
     let language = try Language(string: tag)
     #expect(language.rawValue == tag)
+  }
+
+  @Test(arguments: invalidLanguages)
+  func invalidThrows(_ tag: String) {
+    #expect(throws: (any Error).self) { try Language(string: tag) }
   }
 }
