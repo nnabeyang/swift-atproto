@@ -132,4 +132,96 @@ struct URIInteropTests {
     #expect(uri.utf8.count == 8 * 1024 + 1)
     #expect(throws: (any Error).self) { try URI(string: uri) }
   }
+
+  // MARK: derived accessors
+
+  @Test func urlAccessorReturnsNilForAtURIWithDID() throws {
+    // `URL(string:)` returns nil for `at://did:plc:*` (the embedded `:` in the authority
+    // interacts with port grammar). The wire string is preserved in `rawValue`.
+    let u = try URI(string: "at://did:plc:abc")
+    #expect(u.url == nil)
+    #expect(u.rawValue == "at://did:plc:abc")
+  }
+
+  @Test func urlAccessorReturnsValueForHttpsScheme() throws {
+    // Assert non-nil + scheme match rather than full `absoluteString` equality so the test
+    // survives any URL canonicalization changes across OS versions.
+    let u = try URI(string: "https://example.com/path")
+    #expect(u.url != nil)
+    #expect(u.url?.scheme == "https")
+  }
+
+  @Test func urlAccessorReturnsNonNilForEmptyAuthority() throws {
+    // `https:///x` is RFC 3986 valid (empty authority + path-abempty) and `URL(string:)`
+    // returns a non-nil URL. The contract is wire-shape correctness — non-nil here does NOT
+    // imply the URL is loadable: `URLSession` would fail because there is no host.
+    let u = try URI(string: "https:///x")
+    #expect(u.url != nil)
+    #expect((u.url?.host ?? "").isEmpty)
+  }
+
+  @Test func urlAccessorCanonicalizesIDN() throws {
+    // IDN host is punycoded by URL canonicalization, so `.url?.absoluteString` diverges from
+    // `.rawValue`. The wire string is preserved in `.rawValue` (verbatim contract).
+    let u = try URI(string: "https://例え.テスト/foo")
+    #expect(u.rawValue == "https://例え.テスト/foo")
+    #expect(u.url != nil)
+    #expect(u.url?.absoluteString != u.rawValue)
+    #expect(u.url?.absoluteString.contains("xn--") == true)
+  }
+
+  @Test func urlAccessorAcceptsDIDColonScheme() throws {
+    // `URL(string:)` accepts `did:plc:abc` as an opaque, no-authority URI; `.url` is non-nil.
+    // Asserting non-nil (rather than full `absoluteString` equality) survives canonicalization
+    // changes in `URL`. Note: if `URL(string:)` ever rejects `did:` URIs outright, this test
+    // will fail — intentionally, since we want to be notified of that behavior change.
+    let u = try URI(string: "did:plc:abc")
+    #expect(u.url != nil)
+  }
+
+  @Test func urlAccessorAcceptsFileSchemeForms() throws {
+    // Both `path-absolute` (`file:/etc/hosts`) and empty-authority (`file:///etc/hosts`)
+    // forms yield a non-nil URL. Pin this so a future tightening of `URL(string:)` is caught.
+    let u1 = try URI(string: "file:/etc/hosts")
+    #expect(u1.url != nil)
+    let u2 = try URI(string: "file:///etc/hosts")
+    #expect(u2.url != nil)
+  }
+
+  @Test func atUriAccessorReturnsValueForValidATURI() throws {
+    let u = try URI(string: "at://did:plc:abc/com.example.foo/rkey")
+    #expect(u.atUri != nil)
+    #expect(u.atUri?.rawValue == "at://did:plc:abc/com.example.foo/rkey")
+    #expect(u.atUri?.collection == "com.example.foo")
+    #expect(u.atUri?.rkey == "rkey")
+  }
+
+  @Test func atUriAccessorReturnsValueForHandleOnlyAuthority() throws {
+    // ATURI's restricted form permits authority alone (collection/rkey optional).
+    let u = try URI(string: "at://example.com")
+    #expect(u.atUri != nil)
+    #expect(u.atUri?.authority == "example.com")
+    #expect(u.atUri?.collection == nil)
+    #expect(u.atUri?.rkey == nil)
+  }
+
+  @Test func atUriAccessorReturnsNilForNonATScheme() throws {
+    let u = try URI(string: "https://example.com")
+    #expect(u.atUri == nil)
+  }
+
+  @Test func atUriAccessorReturnsNilForAtSchemeWithoutDoubleSlash() throws {
+    // `at:/` and `at:/x` are valid `uri` (path-absolute) but the strict AT URI parser
+    // requires the `at://` prefix, so `.atUri` is nil.
+    let u1 = try URI(string: "at:/")
+    #expect(u1.atUri == nil)
+    let u2 = try URI(string: "at:/x")
+    #expect(u2.atUri == nil)
+  }
+
+  @Test func atUriAccessorReturnsNilForMalformedATURI() throws {
+    // Wire-shape valid for `uri` but not a valid restricted-form AT URI (path lacks NSID).
+    let u = try URI(string: "at://example.com/not-an-nsid")
+    #expect(u.atUri == nil)
+  }
 }
