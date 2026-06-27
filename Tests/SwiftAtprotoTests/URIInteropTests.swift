@@ -87,4 +87,49 @@ struct URIInteropTests {
     let u = try URI(string: "git+ssh://git@example.com/repo.git")
     #expect(u.scheme == "git+ssh")
   }
+
+  static let invalidURIs: [String] = [
+    // Empty / colon-only / scheme-only.
+    "", ":", "https:", "at:", "at://",
+    // Scheme missing (no colon).
+    "example.com", "/path", "/", "//host/path",
+    // Scheme starts with non-ALPHA (digit, +, -, .).
+    "1http://example.com", "+http://example.com", "-http://example.com", ".http://example.com",
+    // Scheme contains underscore (RFC 3986 §3.1 disallows).
+    "ht_tp://example.com",
+    // Whitespace anywhere in body.
+    "https://example.com/ space", "https://example.com\twith\ttab",
+    // ASCII control characters in body.
+    "https://example.com\u{0001}body", "https://example.com\nbody",
+    // CR/LF/NUL.
+    "https://example.com\r", "https://example.com\u{0000}",
+    // DEL (0x7F).
+    "https://example.com\u{007F}",
+    // Empty body after "//".
+    "https://", "wss://",
+    // Pure whitespace.
+    " ", "\t",
+  ]
+
+  @Test(arguments: invalidURIs)
+  func invalidThrows(_ uri: String) {
+    #expect(throws: (any Error).self) { try URI(string: uri) }
+  }
+
+  @Test func acceptsExactly8KiBInput() throws {
+    // scheme(5 byte "https") + ":" + body of 8186 byte → total 8 * 1024 = 8192 byte (cap).
+    let body = String(repeating: "a", count: 8 * 1024 - 6)
+    let uri = "https:" + body
+    let u = try URI(string: uri)
+    #expect(u.rawValue.utf8.count == 8 * 1024)
+    #expect(u.scheme == "https")
+  }
+
+  @Test func rejectsOver8KiBInput() {
+    // Just past the cap.
+    let body = String(repeating: "a", count: 8 * 1024 - 5)
+    let uri = "https:" + body
+    #expect(uri.utf8.count == 8 * 1024 + 1)
+    #expect(throws: (any Error).self) { try URI(string: uri) }
+  }
 }
