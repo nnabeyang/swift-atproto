@@ -17,8 +17,8 @@ import Foundation
 // type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
 // separate addition if a concrete need arises.
 //
-// The DID/Handle/NSID/record-key validators are kept private here; they may later be promoted to
-// dedicated identifier types and shared.
+// The Handle/NSID/record-key validators are kept private here for now; they may later be promoted
+// to dedicated identifier types and shared.
 public struct ATURI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -129,28 +129,10 @@ extension ATURI {
     return Parts(authority: authority, collection: collection, rkey: rkey, fragment: fragment)
   }
 
-  // MARK: - Component validators (DID / Handle / NSID / record key / JSON pointer)
+  // MARK: - Component validators (Handle / NSID / record key / JSON pointer)
 
   private static func isValidAtIdentifier(_ s: Substring) -> Bool {
-    s.hasPrefix("did:") ? isValidDID(s) : isValidHandle(s)
-  }
-
-  // /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/ with length <= 2048
-  private static func isValidDID(_ s: Substring) -> Bool {
-    let u = Array(s.utf8)
-    guard u.count <= 2048, u.starts(with: Array("did:".utf8)) else { return false }
-    var i = 4
-    let methodStart = i
-    while i < u.count, isLowerAlpha(u[i]) { i += 1 }
-    guard i > methodStart, i < u.count, u[i] == colon else { return false }
-    i += 1
-    guard i < u.count else { return false }  // identifier needs >= 1 char
-    while i < u.count {
-      guard isDIDIdentifierByte(u[i]) else { return false }
-      i += 1
-    }
-    let last = u[u.count - 1]
-    return last != colon && last != percent
+    s.hasPrefix("did:") ? DID.isValid(s) : isValidHandle(s)
   }
 
   // /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/, <= 253
@@ -205,8 +187,6 @@ extension ATURI {
 
 // MARK: - ASCII byte helpers
 
-private let colon = UInt8(ascii: ":")
-private let percent = UInt8(ascii: "%")
 private let hyphen = UInt8(ascii: "-")
 private let dot = UInt8(ascii: ".")
 private let slash = UInt8(ascii: "/")
@@ -216,6 +196,3 @@ private let recordKeyPunct = Set("_~.:-".utf8)
 private let pointerPunct = Set("._~:@!$&')(*+,;=%[]/-".utf8)
 
 private func isAllowedURIByte(_ b: UInt8) -> Bool { isAlphanumeric(b) || uriAllowedPunct.contains(b) }
-private func isDIDIdentifierByte(_ b: UInt8) -> Bool {
-  isAlphanumeric(b) || b == dot || b == UInt8(ascii: "_") || b == colon || b == percent || b == hyphen
-}
