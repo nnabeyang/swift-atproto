@@ -78,4 +78,38 @@ struct NSIDInteropTests {
     let input = "\(label64).example.foo"
     #expect(throws: (any Error).self) { try NSID(string: input) }
   }
+
+  // MARK: authority and name accessors
+
+  @Test func authorityReversesAllSegmentsExceptName() throws {
+    // com.example.foo → authority "example.com", name "foo".
+    let nsid = try NSID(string: "com.example.foo")
+    #expect(nsid.authority == "example.com")
+    #expect(nsid.name == "foo")
+  }
+
+  @Test func authorityHandlesFourLabelAuthority() throws {
+    // org.4chan.lex.getThing → authority "lex.4chan.org", name "getThing".
+    let nsid = try NSID(string: "org.4chan.lex.getThing")
+    #expect(nsid.authority == "lex.4chan.org")
+    #expect(nsid.name == "getThing")
+  }
+
+  @Test func authorityForMinimumThreeSegments() throws {
+    // a.b.c → authority "b.a", name "c".
+    let nsid = try NSID(string: "a.b.c")
+    #expect(nsid.authority == "b.a")
+    #expect(nsid.name == "c")
+  }
+
+  @Test func authorityForTypicalLexiconName() throws {
+    let nsid = try NSID(string: "com.example.feed.post")
+    #expect(nsid.authority == "feed.example.com")
+    #expect(nsid.name == "post")
+  }
+
+  @Test func namePreservesCamelCase() throws {
+    let nsid = try NSID(string: "com.example.fooBar")
+    #expect(nsid.name == "fooBar")
+  }
 }
