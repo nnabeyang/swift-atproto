@@ -564,6 +564,7 @@ struct StringFormat: Codable, RawRepresentable {
     case "cid": "LexLink"
     case "at-uri": "ATURI"
     case "language": "Language"
+    case "uri": "URI"
     default: nil
     }
   }
