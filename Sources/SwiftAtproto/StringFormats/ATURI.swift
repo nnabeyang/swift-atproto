@@ -17,8 +17,8 @@ import Foundation
 // type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
 // separate addition if a concrete need arises.
 //
-// The Handle/NSID/record-key validators are kept private here for now; they may later be promoted
-// to dedicated identifier types and shared.
+// The NSID/record-key validators are kept private here for now; they may later be promoted to
+// dedicated identifier types and shared.
 public struct ATURI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -129,25 +129,10 @@ extension ATURI {
     return Parts(authority: authority, collection: collection, rkey: rkey, fragment: fragment)
   }
 
-  // MARK: - Component validators (Handle / NSID / record key / JSON pointer)
+  // MARK: - Component validators (NSID / record key / JSON pointer)
 
   private static func isValidAtIdentifier(_ s: Substring) -> Bool {
-    s.hasPrefix("did:") ? DID.isValid(s) : isValidHandle(s)
-  }
-
-  // /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/, <= 253
-  private static func isValidHandle(_ s: Substring) -> Bool {
-    guard s.utf8.count <= 253 else { return false }
-    let labels = s.split(separator: ".", omittingEmptySubsequences: false)
-    guard labels.count >= 2 else { return false }
-    for (index, label) in labels.enumerated() {
-      let u = Array(label.utf8)
-      guard (1...63).contains(u.count) else { return false }
-      for byte in u where !(isAlphanumeric(byte) || byte == hyphen) { return false }
-      guard u.first != hyphen, u.last != hyphen else { return false }
-      if index == labels.count - 1, !isAlpha(u[0]) { return false }  // TLD starts with a letter
-    }
-    return true
+    s.hasPrefix("did:") ? DID.isValid(s) : Handle.isValid(s)
   }
 
   // NSID rules: <= 317, [a-zA-Z0-9.-], >= 3 segments (1..63, no edge hyphen),
