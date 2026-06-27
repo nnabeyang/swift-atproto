@@ -17,8 +17,8 @@ import Foundation
 // type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
 // separate addition if a concrete need arises.
 //
-// The record-key validator is kept private here for now; it may later be promoted to a dedicated
-// identifier type and shared.
+// DID / Handle / NSID / RecordKey component validators live in their dedicated identifier-type
+// files. Only the JSON Pointer fragment validator remains here.
 public struct ATURI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -124,23 +124,15 @@ extension ATURI {
     // Strict-only constraints.
     if trailingSlash { return nil }
     if hasQuery { return nil }
-    if let rkey, !isValidRecordKey(rkey) { return nil }
+    if let rkey, !RecordKey.isValid(rkey) { return nil }
 
     return Parts(authority: authority, collection: collection, rkey: rkey, fragment: fragment)
   }
 
-  // MARK: - Component validators (record key / JSON pointer)
+  // MARK: - Component validators (JSON pointer)
 
   private static func isValidAtIdentifier(_ s: Substring) -> Bool {
     s.hasPrefix("did:") ? DID.isValid(s) : Handle.isValid(s)
-  }
-
-  // /^[a-zA-Z0-9_~.:-]{1,512}$/, excluding "." and ".."
-  private static func isValidRecordKey(_ s: Substring) -> Bool {
-    let u = Array(s.utf8)
-    guard (1...512).contains(u.count) else { return false }
-    for byte in u where !(isAlphanumeric(byte) || recordKeyPunct.contains(byte)) { return false }
-    return s != "." && s != ".."
   }
 
   // JSON Pointer fragment: starts with "/", allowed pointer chars, with valid percent-encoding.
@@ -157,7 +149,6 @@ extension ATURI {
 private let slash = UInt8(ascii: "/")
 
 private let uriAllowedPunct = Set(#"._~:@!$&'()*+,;=%/\[]#?-"#.utf8)
-private let recordKeyPunct = Set("_~.:-".utf8)
 private let pointerPunct = Set("._~:@!$&')(*+,;=%[]/-".utf8)
 
 private func isAllowedURIByte(_ b: UInt8) -> Bool { isAlphanumeric(b) || uriAllowedPunct.contains(b) }
