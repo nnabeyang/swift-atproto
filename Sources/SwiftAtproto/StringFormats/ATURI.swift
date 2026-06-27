@@ -215,11 +215,6 @@ private let uriAllowedPunct = Set(#"._~:@!$&'()*+,;=%/\[]#?-"#.utf8)
 private let recordKeyPunct = Set("_~.:-".utf8)
 private let pointerPunct = Set("._~:@!$&')(*+,;=%[]/-".utf8)
 
-private func isDigit(_ b: UInt8) -> Bool { (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(b) }
-private func isLowerAlpha(_ b: UInt8) -> Bool { (UInt8(ascii: "a")...UInt8(ascii: "z")).contains(b) }
-private func isUpperAlpha(_ b: UInt8) -> Bool { (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(b) }
-private func isAlpha(_ b: UInt8) -> Bool { isLowerAlpha(b) || isUpperAlpha(b) }
-private func isAlphanumeric(_ b: UInt8) -> Bool { isAlpha(b) || isDigit(b) }
 private func isAllowedURIByte(_ b: UInt8) -> Bool { isAlphanumeric(b) || uriAllowedPunct.contains(b) }
 private func isDIDIdentifierByte(_ b: UInt8) -> Bool {
   isAlphanumeric(b) || b == dot || b == UInt8(ascii: "_") || b == colon || b == percent || b == hyphen
