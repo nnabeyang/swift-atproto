@@ -65,4 +65,37 @@ struct TIDGeneratorTests {
     let tid = TID.next(prev: nil, now: 1_000_000, clockId: 1023)
     #expect(tid.clockId == 1023)
   }
+
+  // MARK: monotonicity
+
+  @Test func consecutiveNextCallsAreMonotonicallyIncreasing() {
+    var prev: TID? = nil
+    var allRaw: [String] = []
+    for _ in 0..<1000 {
+      let tid = TID.next(prev: prev)
+      if let prev {
+        #expect(tid.timestamp > prev.timestamp)
+      }
+      allRaw.append(tid.rawValue)
+      prev = tid
+    }
+    // All-unique rawValues falls out of strict monotonicity, but assert it explicitly to
+    // catch any accidental clockId collision in same-microsecond cases.
+    #expect(Set(allRaw).count == 1000)
+  }
+
+  @Test func concurrentNextCallsProduceUniqueTIDs() async {
+    let ids = await withTaskGroup(of: TID.self, returning: [TID].self) { group in
+      for _ in 0..<1000 {
+        group.addTask { TID.next() }
+      }
+      var collected: [TID] = []
+      for await tid in group {
+        collected.append(tid)
+      }
+      return collected
+    }
+    #expect(ids.count == 1000)
+    #expect(Set(ids.map(\.rawValue)).count == 1000)
+  }
 }
