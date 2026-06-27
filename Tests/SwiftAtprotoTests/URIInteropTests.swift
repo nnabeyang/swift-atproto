@@ -137,9 +137,11 @@ struct URIInteropTests {
 
   @Test func urlAccessorReturnsNilForAtURIWithDID() throws {
     // `URL(string:)` returns nil for `at://did:plc:*` (the embedded `:` in the authority
-    // interacts with port grammar). The wire string is preserved in `rawValue`.
+    // interacts with port grammar). The wire string is preserved in `rawValue`. The result
+    // is nil in either `encodingInvalidCharacters` mode.
     let u = try URI(string: "at://did:plc:abc")
-    #expect(u.url == nil)
+    #expect(u.url() == nil)
+    #expect(u.url(encodingInvalidCharacters: false) == nil)
     #expect(u.rawValue == "at://did:plc:abc")
   }
 
@@ -147,8 +149,8 @@ struct URIInteropTests {
     // Assert non-nil + scheme match rather than full `absoluteString` equality so the test
     // survives any URL canonicalization changes across OS versions.
     let u = try URI(string: "https://example.com/path")
-    #expect(u.url != nil)
-    #expect(u.url?.scheme == "https")
+    #expect(u.url() != nil)
+    #expect(u.url()?.scheme == "https")
   }
 
   @Test func urlAccessorReturnsNonNilForEmptyAuthority() throws {
@@ -156,36 +158,40 @@ struct URIInteropTests {
     // returns a non-nil URL. The contract is wire-shape correctness — non-nil here does NOT
     // imply the URL is loadable: `URLSession` would fail because there is no host.
     let u = try URI(string: "https:///x")
-    #expect(u.url != nil)
-    #expect((u.url?.host ?? "").isEmpty)
+    #expect(u.url() != nil)
+    #expect(u.url()?.host(percentEncoded: false) == nil)
   }
 
-  @Test func urlAccessorCanonicalizesIDN() throws {
-    // IDN host is punycoded by URL canonicalization, so `.url?.absoluteString` diverges from
-    // `.rawValue`. The wire string is preserved in `.rawValue` (verbatim contract).
+  @Test func urlAccessorIDNBehaviorByEncodingMode() throws {
+    // Default (`encodingInvalidCharacters: true`): Foundation silently re-encodes IDN to
+    // punycode, so `.url()` is non-nil and `absoluteString` diverges from `rawValue`.
+    // Strict (`encodingInvalidCharacters: false`): wire-faithful — nil because the wire form
+    // would require canonicalization. The wire string is preserved in `.rawValue` either way.
     let u = try URI(string: "https://例え.テスト/foo")
     #expect(u.rawValue == "https://例え.テスト/foo")
-    #expect(u.url != nil)
-    #expect(u.url?.absoluteString != u.rawValue)
-    #expect(u.url?.absoluteString.contains("xn--") == true)
+    // Default mode: punycode-canonicalized URL.
+    #expect(u.url() != nil)
+    #expect(u.url()?.absoluteString.contains("xn--") == true)
+    // Strict mode: nil.
+    #expect(u.url(encodingInvalidCharacters: false) == nil)
   }
 
   @Test func urlAccessorAcceptsDIDColonScheme() throws {
-    // `URL(string:)` accepts `did:plc:abc` as an opaque, no-authority URI; `.url` is non-nil.
+    // `URL(string:)` accepts `did:plc:abc` as an opaque, no-authority URI; `.url()` is non-nil.
     // Asserting non-nil (rather than full `absoluteString` equality) survives canonicalization
     // changes in `URL`. Note: if `URL(string:)` ever rejects `did:` URIs outright, this test
     // will fail — intentionally, since we want to be notified of that behavior change.
     let u = try URI(string: "did:plc:abc")
-    #expect(u.url != nil)
+    #expect(u.url() != nil)
   }
 
   @Test func urlAccessorAcceptsFileSchemeForms() throws {
     // Both `path-absolute` (`file:/etc/hosts`) and empty-authority (`file:///etc/hosts`)
     // forms yield a non-nil URL. Pin this so a future tightening of `URL(string:)` is caught.
     let u1 = try URI(string: "file:/etc/hosts")
-    #expect(u1.url != nil)
+    #expect(u1.url() != nil)
     let u2 = try URI(string: "file:///etc/hosts")
-    #expect(u2.url != nil)
+    #expect(u2.url() != nil)
   }
 
   @Test func atUriAccessorReturnsValueForValidATURI() throws {

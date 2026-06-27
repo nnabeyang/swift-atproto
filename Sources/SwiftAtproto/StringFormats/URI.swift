@@ -14,10 +14,14 @@ import Foundation
 // Non-ASCII bytes in the body are accepted verbatim (per the spec's "any scheme" stance);
 // canonicalization is left to the consumer.
 //
-// `URL` is intentionally NOT used as the conformance: `URL(string:)` rejects valid atproto
-// URIs like `at://did:plc:…`, normalizes spaces to `%20`, and converts IDN to punycode — all
-// of which break wire-faithful projection. `URL` is offered as a best-effort derived accessor
-// instead.
+// `URL` is intentionally NOT used as the conformance: `URL(string:)` silently re-encodes
+// wire characters (spaces → `%20`, IDN → punycode, etc.), and even
+// `URL(string:encodingInvalidCharacters: false)` is too strict for our lenient wire
+// admission (rejects inputs the lexicon `uri` format may carry, e.g. raw non-ASCII bytes)
+// while still rejecting `at://did:plc:…` (the DID authority's embedded colon collides with
+// port grammar). `URL` is offered as a best-effort derived accessor instead, exposing the
+// `encodingInvalidCharacters:` toggle so callers choose between best-effort (silent
+// re-encoding) and strict wire-faithful (nil for inputs needing encoding).
 public struct URI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -32,13 +36,22 @@ public struct URI: LexiconStringFormat {
     scheme = parsedScheme
   }
 
-  // Best-effort `URL` projection. Returns nil for inputs `URL(string:)` cannot parse — notably
-  // any URI whose authority contains a colon followed by non-numeric bytes (port grammar
-  // violation), e.g. `at://did:plc:abc` or `at://example.com:notaport/path`. When non-nil,
-  // the URL may be canonicalized (percent-encoding, IDN punycode); compare against `rawValue`
-  // for wire fidelity. Non-nil does NOT imply the URL is semantically loadable (e.g.
-  // `https:///x` parses but has no host).
-  public var url: URL? { URL(string: rawValue) }
+  // Best-effort `URL` projection. The `encodingInvalidCharacters` parameter is forwarded to
+  // `URL(string:encodingInvalidCharacters:)`:
+  //   - `true` (default, matching Foundation's historical `URL(string:)` behavior): silently
+  //     re-encodes wire characters that need encoding (spaces → `%20`, IDN → punycode, etc.)
+  //     and converts the result to a usable URL when possible. `absoluteString` may diverge
+  //     from `rawValue`.
+  //   - `false`: returns nil for wire forms that would require any re-encoding. When
+  //     non-nil, the URL's `absoluteString` matches `rawValue` byte-for-byte (wire-faithful).
+  //
+  // Returns nil in either mode for inputs `URL` cannot parse — notably any URI whose
+  // authority contains a colon followed by non-numeric bytes (port grammar violation, e.g.
+  // `at://did:plc:abc` or `at://example.com:notaport/path`). Non-nil does NOT imply the URL
+  // is semantically loadable (e.g. `https:///x` parses but has no host).
+  public func url(encodingInvalidCharacters: Bool = true) -> URL? {
+    URL(string: rawValue, encodingInvalidCharacters: encodingInvalidCharacters)
+  }
 
   // Best-effort AT-URI projection. Non-nil only when the wire string is a valid restricted-form
   // AT URI (scheme=at, authority=DID/handle, …).

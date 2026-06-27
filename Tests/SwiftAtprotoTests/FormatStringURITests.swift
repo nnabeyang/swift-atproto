@@ -29,7 +29,7 @@ struct FormatStringURITests {
     #expect(value.rawValue == wire)
     #expect(value.typed?.scheme == "at")
     #expect(value.typed?.atUri != nil)
-    #expect(value.typed?.url == nil)
+    #expect(value.typed?.url() == nil)
   }
 
   @Test func encodeEmitsWireString() throws {
