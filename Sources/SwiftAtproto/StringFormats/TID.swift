@@ -29,6 +29,19 @@ extension TID {
     for i in 1..<13 where !tidRestChars.contains(u[i]) { return false }
     return true
   }
+
+  // Microsecond timestamp since the UNIX epoch. The top 53 bits of the 64-bit encoded value
+  // per the TID spec. Returns 0 if `rawValue` cannot be decoded (unreachable for instances
+  // produced by `init(string:)`, since the parser guarantees a valid base32-sortable form).
+  public var timestamp: UInt64 {
+    (decodeBase32Sortable(rawValue) ?? 0) >> 10
+  }
+
+  // 10-bit clock identifier (0...1023) per the TID spec. Returns 0 on a decode failure
+  // (unreachable in practice — see `timestamp`).
+  public var clockId: UInt16 {
+    UInt16((decodeBase32Sortable(rawValue) ?? 0) & 0x3FF)
+  }
 }
 
 // `[234567abcdefghij]` — first character of a TID (high bit of the timestamp is zero).

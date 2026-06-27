@@ -53,4 +53,35 @@ struct TIDInteropTests {
   func invalidThrows(_ input: String) {
     #expect(throws: (any Error).self) { try TID(string: input) }
   }
+
+  // MARK: timestamp / clockId accessors
+
+  @Test func timestampAndClockIdRoundTripThroughBase32() throws {
+    let knownTimestamp: UInt64 = 1_700_000_000_000_000  // µs since epoch
+    let knownClockId: UInt16 = 42
+    let value = (knownTimestamp << 10) | UInt64(knownClockId)
+    let tid = try TID(string: encodeBase32Sortable(value: value))
+    #expect(tid.timestamp == knownTimestamp)
+    #expect(tid.clockId == knownClockId)
+  }
+
+  @Test func clockIdAtUpperTenBitBoundary() throws {
+    // Per spec, clockId is 10 bits; 1023 is the maximum.
+    let value = (UInt64(1_700_000_000_000_000) << 10) | UInt64(1023)
+    let tid = try TID(string: encodeBase32Sortable(value: value))
+    #expect(tid.clockId == 1023)
+  }
+
+  @Test func clockIdZero() throws {
+    let value = UInt64(1_700_000_000_000_000) << 10  // clockId = 0
+    let tid = try TID(string: encodeBase32Sortable(value: value))
+    #expect(tid.clockId == 0)
+  }
+
+  @Test func allZeroTIDIsRecognized() throws {
+    // The TID spec defines "2222222222222" as the zero value.
+    let tid = try TID(string: "2222222222222")
+    #expect(tid.timestamp == 0)
+    #expect(tid.clockId == 0)
+  }
 }
