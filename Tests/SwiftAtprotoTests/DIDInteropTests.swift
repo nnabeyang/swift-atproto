@@ -70,4 +70,33 @@ struct DIDInteropTests {
     #expect(input.utf8.count == 2049)
     #expect(throws: (any Error).self) { try DID(string: input) }
   }
+
+  // MARK: method accessor
+
+  @Test func methodReturnsPlcForPlcDid() throws {
+    let did = try DID(string: "did:plc:7iza6de2dwap2sbkpav7c6c6")
+    #expect(did.method == "plc")
+  }
+
+  @Test func methodReturnsWebForWebDid() throws {
+    let did = try DID(string: "did:web:example.com")
+    #expect(did.method == "web")
+  }
+
+  @Test func methodPreservesLongMethodName() throws {
+    let did = try DID(string: "did:longmethodname:identifier")
+    #expect(did.method == "longmethodname")
+  }
+
+  @Test func methodSurvivesIdentifierWithColons() throws {
+    // Identifier may contain `:` (`did:web:example.com:path`); method is still the segment
+    // between the first two colons.
+    let did = try DID(string: "did:web:example.com:user:alice")
+    #expect(did.method == "web")
+  }
+
+  @Test func methodForSingleCharMethod() throws {
+    let did = try DID(string: "did:m:v")
+    #expect(did.method == "m")
+  }
 }
