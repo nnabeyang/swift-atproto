@@ -17,8 +17,8 @@ import Foundation
 // type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
 // separate addition if a concrete need arises.
 //
-// DID / Handle / NSID / RecordKey component validators live in their dedicated identifier-type
-// files. Only the JSON Pointer fragment validator remains here.
+// DID / Handle / NSID / RecordKey / AtIdentifier component validators live in their dedicated
+// identifier-type files. Only the JSON Pointer fragment validator remains here.
 public struct ATURI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -117,7 +117,7 @@ extension ATURI {
     guard i == end else { return nil }
 
     // Component validation (applies in both strict and lenient).
-    guard isValidAtIdentifier(authority) else { return nil }
+    guard AtIdentifier.isValid(authority) else { return nil }
     if let collection, !NSID.isValid(collection) { return nil }
     if let fragment, !isValidJSONPointer(fragment) { return nil }
 
@@ -129,11 +129,7 @@ extension ATURI {
     return Parts(authority: authority, collection: collection, rkey: rkey, fragment: fragment)
   }
 
-  // MARK: - Component validators (JSON pointer)
-
-  private static func isValidAtIdentifier(_ s: Substring) -> Bool {
-    s.hasPrefix("did:") ? DID.isValid(s) : Handle.isValid(s)
-  }
+  // MARK: - JSON Pointer fragment
 
   // JSON Pointer fragment: starts with "/", allowed pointer chars, with valid percent-encoding.
   private static func isValidJSONPointer(_ s: Substring) -> Bool {
