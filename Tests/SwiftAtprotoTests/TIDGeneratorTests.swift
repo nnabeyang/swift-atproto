@@ -32,4 +32,37 @@ struct TIDGeneratorTests {
     let tid = TID.next()
     #expect(tid.clockId < 1024)
   }
+
+  // MARK: deterministic (dependency-injected) generator
+
+  @Test func deterministicGeneratorRoundTripsInputs() {
+    let now: UInt64 = 1_700_000_000_000_000
+    let clockId: UInt16 = 42
+    let tid = TID.next(prev: nil, now: now, clockId: clockId)
+    #expect(tid.timestamp == now)
+    #expect(tid.clockId == clockId)
+  }
+
+  @Test func deterministicGeneratorBumpsWhenNowEqualsPrev() {
+    let prev = TID.next(prev: nil, now: 1_000_000, clockId: 0)
+    let tid = TID.next(prev: prev, now: 1_000_000, clockId: 0)
+    #expect(tid.timestamp == 1_000_001)
+  }
+
+  @Test func deterministicGeneratorBumpsWhenNowBeforePrev() {
+    let prev = TID.next(prev: nil, now: 2_000_000, clockId: 0)
+    let tid = TID.next(prev: prev, now: 1_500_000, clockId: 0)
+    #expect(tid.timestamp == 2_000_001)
+  }
+
+  @Test func deterministicGeneratorDoesNotBumpWhenNowAfterPrev() {
+    let prev = TID.next(prev: nil, now: 1_000_000, clockId: 0)
+    let tid = TID.next(prev: prev, now: 2_000_000, clockId: 0)
+    #expect(tid.timestamp == 2_000_000)
+  }
+
+  @Test func deterministicGeneratorAcceptsUpperTenBitClockId() {
+    let tid = TID.next(prev: nil, now: 1_000_000, clockId: 1023)
+    #expect(tid.clockId == 1023)
+  }
 }
