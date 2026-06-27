@@ -17,8 +17,8 @@ import Foundation
 // type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
 // separate addition if a concrete need arises.
 //
-// The NSID/record-key validators are kept private here for now; they may later be promoted to
-// dedicated identifier types and shared.
+// The record-key validator is kept private here for now; it may later be promoted to a dedicated
+// identifier type and shared.
 public struct ATURI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -118,7 +118,7 @@ extension ATURI {
 
     // Component validation (applies in both strict and lenient).
     guard isValidAtIdentifier(authority) else { return nil }
-    if let collection, !isValidNSID(collection) { return nil }
+    if let collection, !NSID.isValid(collection) { return nil }
     if let fragment, !isValidJSONPointer(fragment) { return nil }
 
     // Strict-only constraints.
@@ -129,28 +129,10 @@ extension ATURI {
     return Parts(authority: authority, collection: collection, rkey: rkey, fragment: fragment)
   }
 
-  // MARK: - Component validators (NSID / record key / JSON pointer)
+  // MARK: - Component validators (record key / JSON pointer)
 
   private static func isValidAtIdentifier(_ s: Substring) -> Bool {
     s.hasPrefix("did:") ? DID.isValid(s) : Handle.isValid(s)
-  }
-
-  // NSID rules: <= 317, [a-zA-Z0-9.-], >= 3 segments (1..63, no edge hyphen),
-  // first segment not leading-digit, last segment letters/digits only with no leading digit.
-  private static func isValidNSID(_ s: Substring) -> Bool {
-    let all = Array(s.utf8)
-    guard all.count <= 317 else { return false }
-    for byte in all where !(isAlphanumeric(byte) || byte == dot || byte == hyphen) { return false }
-    let segments = s.split(separator: ".", omittingEmptySubsequences: false)
-    guard segments.count >= 3 else { return false }
-    for segment in segments {
-      let u = Array(segment.utf8)
-      guard (1...63).contains(u.count) else { return false }
-      guard u.first != hyphen, u.last != hyphen else { return false }
-    }
-    if isDigit(Array(segments[0].utf8)[0]) { return false }
-    let name = Array(segments[segments.count - 1].utf8)
-    return !isDigit(name[0]) && !name.contains(hyphen)
   }
 
   // /^[a-zA-Z0-9_~.:-]{1,512}$/, excluding "." and ".."
@@ -172,8 +154,6 @@ extension ATURI {
 
 // MARK: - ASCII byte helpers
 
-private let hyphen = UInt8(ascii: "-")
-private let dot = UInt8(ascii: ".")
 private let slash = UInt8(ascii: "/")
 
 private let uriAllowedPunct = Set(#"._~:@!$&'()*+,;=%/\[]#?-"#.utf8)
