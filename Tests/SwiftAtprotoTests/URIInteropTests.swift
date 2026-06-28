@@ -198,15 +198,15 @@ struct URIInteropTests {
     let u = try URI(string: "at://did:plc:abc/com.example.foo/rkey")
     #expect(u.atUri != nil)
     #expect(u.atUri?.rawValue == "at://did:plc:abc/com.example.foo/rkey")
-    #expect(u.atUri?.collection == "com.example.foo")
-    #expect(u.atUri?.rkey == "rkey")
+    #expect(u.atUri?.collection?.rawValue == "com.example.foo")
+    #expect(u.atUri?.rkey?.rawValue == "rkey")
   }
 
   @Test func atUriAccessorReturnsValueForHandleOnlyAuthority() throws {
     // ATURI's restricted form permits authority alone (collection/rkey optional).
     let u = try URI(string: "at://example.com")
     #expect(u.atUri != nil)
-    #expect(u.atUri?.authority == "example.com")
+    #expect(u.atUri?.authority.rawValue == "example.com")
     #expect(u.atUri?.collection == nil)
     #expect(u.atUri?.rkey == nil)
   }

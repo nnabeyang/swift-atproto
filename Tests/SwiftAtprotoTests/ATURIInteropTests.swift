@@ -116,18 +116,18 @@ struct ATURIInteropTests {
 
   @Test func parsesComponents() throws {
     let full = try ATURI(string: "at://did:plc:asdf123/com.atproto.feed.post/3jui7kd54zh2y")
-    #expect(full.authority == "did:plc:asdf123")
-    #expect(full.collection == "com.atproto.feed.post")
-    #expect(full.rkey == "3jui7kd54zh2y")
+    #expect(full.authority.rawValue == "did:plc:asdf123")
+    #expect(full.collection?.rawValue == "com.atproto.feed.post")
+    #expect(full.rkey?.rawValue == "3jui7kd54zh2y")
     #expect(full.fragment == nil)
 
     let handleOnly = try ATURI(string: "at://user.bsky.social")
-    #expect(handleOnly.authority == "user.bsky.social")
+    #expect(handleOnly.authority.rawValue == "user.bsky.social")
     #expect(handleOnly.collection == nil)
     #expect(handleOnly.rkey == nil)
 
     let collectionOnly = try ATURI(string: "at://did:plc:asdf123/com.atproto.feed.post")
-    #expect(collectionOnly.collection == "com.atproto.feed.post")
+    #expect(collectionOnly.collection?.rawValue == "com.atproto.feed.post")
     #expect(collectionOnly.rkey == nil)
   }
 
@@ -138,6 +138,6 @@ struct ATURIInteropTests {
   @Test func jsonPointerFragmentIsAccepted() throws {
     let uri = try ATURI(string: "at://did:plc:asdf123/com.atproto.feed.post/record#/text")
     #expect(uri.fragment == "/text")
-    #expect(uri.rkey == "record")
+    #expect(uri.rkey?.rawValue == "record")
   }
 }
