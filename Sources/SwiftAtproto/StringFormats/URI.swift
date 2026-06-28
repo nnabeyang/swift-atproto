@@ -27,6 +27,13 @@ public struct URI: LexiconStringFormat {
   public let rawValue: String
   // The URI scheme (before the colon), preserved verbatim (no lowercase canonicalization).
   public let scheme: String
+  public let kind: Kind
+
+  public enum Kind: Sendable, Hashable {
+    case url
+    case aturl
+    case other
+  }
 
   public init(string: String) throws {
     guard let parsedScheme = URI.parse(string) else {
@@ -34,6 +41,7 @@ public struct URI: LexiconStringFormat {
     }
     rawValue = string
     scheme = parsedScheme
+    kind = URI.classify(string)
   }
 
   // Best-effort `URL` projection. The `encodingInvalidCharacters` parameter is forwarded to
@@ -59,6 +67,15 @@ public struct URI: LexiconStringFormat {
 }
 
 extension URI {
+  // `at:` is matched case-sensitively; `AT://` falls through to the URL branch.
+  private static func classify(_ s: String) -> Kind {
+    if s.hasPrefix("at:") {
+      if (try? ATURI(string: s)) != nil { return .aturl }
+    }
+    if URL(string: s) != nil { return .url }
+    return .other
+  }
+
   // 8 KiB per atproto spec.
   private static let maxLength = 8 * 1024
 
