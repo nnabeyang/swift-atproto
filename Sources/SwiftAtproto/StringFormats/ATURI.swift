@@ -32,7 +32,11 @@ public struct ATURI: LexiconStringFormat {
   public let fragment: String?
 
   public init(string: String) throws {
-    guard let parts = ATURI.parse(string) else {
+    try self.init(string: string, strict: true)
+  }
+
+  public init(string: String, strict: Bool) throws {
+    guard let parts = ATURI.parse(string, strict: strict) else {
       throw LexiconStringFormatError.invalid(format: "at-uri", value: string)
     }
     rawValue = string
@@ -54,8 +58,11 @@ extension ATURI {
     var fragment: Substring?
   }
 
-  // Strict restricted-syntax validation per the AT URI spec. Returns nil on any violation.
-  private static func parse(_ input: String) -> Parts? {
+  // Restricted-syntax validation per the AT URI spec. When `strict` is false the lenient variant
+  // is applied: trailing slash, query, and percent-encoding errors in the fragment are accepted.
+  // `rkey` is still validated through `RecordKey.isValid` in both modes — relaxing rkey is
+  // tracked in a separate issue.
+  private static func parse(_ input: String, strict: Bool = true) -> Parts? {
     guard input.utf8.count <= 8192 else { return nil }
     for byte in input.utf8 where !isAllowedURIByte(byte) { return nil }
     guard input.hasPrefix("at://") else { return nil }
@@ -122,24 +129,27 @@ extension ATURI {
     // Component validation (applies in both strict and lenient).
     guard AtIdentifier.isValid(authority) else { return nil }
     if let collection, !NSID.isValid(collection) { return nil }
-    if let fragment, !isValidJSONPointer(fragment) { return nil }
+    if let fragment, !isValidJSONPointer(fragment, strict: strict) { return nil }
+    if let rkey, !RecordKey.isValid(rkey) { return nil }
 
     // Strict-only constraints.
-    if trailingSlash { return nil }
-    if hasQuery { return nil }
-    if let rkey, !RecordKey.isValid(rkey) { return nil }
+    if strict, trailingSlash { return nil }
+    if strict, hasQuery { return nil }
 
     return Parts(authority: authority, collection: collection, rkey: rkey, fragment: fragment)
   }
 
   // MARK: - JSON Pointer fragment
 
-  // JSON Pointer fragment: starts with "/", allowed pointer chars, with valid percent-encoding.
-  private static func isValidJSONPointer(_ s: Substring) -> Bool {
+  // JSON Pointer fragment: starts with "/", allowed pointer chars; strict mode additionally
+  // requires valid percent-encoding (Swift `removingPercentEncoding` succeeds). Lenient mode
+  // accepts malformed `%xx` sequences.
+  private static func isValidJSONPointer(_ s: Substring, strict: Bool = true) -> Bool {
     let u = Array(s.utf8)
     guard u.first == slash else { return false }
     for byte in u where !(isAlphanumeric(byte) || pointerPunct.contains(byte)) { return false }
-    return String(s).removingPercentEncoding != nil
+    if strict, String(s).removingPercentEncoding == nil { return false }
+    return true
   }
 }
 
