@@ -22,12 +22,12 @@ import Foundation
 public struct ATURI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
-  // Required authority: a DID or a handle.
-  public let authority: String
+  // Required authority: a DID or a handle, dispatched via `AtIdentifier`.
+  public let authority: AtIdentifier
   // Optional collection NSID.
-  public let collection: String?
+  public let collection: NSID?
   // Optional record key (trailing path segment).
-  public let rkey: String?
+  public let rkey: RecordKey?
   // Optional JSON Pointer fragment (without the leading "#").
   public let fragment: String?
 
@@ -36,9 +36,12 @@ public struct ATURI: LexiconStringFormat {
       throw LexiconStringFormatError.invalid(format: "at-uri", value: string)
     }
     rawValue = string
-    authority = String(parts.authority)
-    collection = parts.collection.map(String.init)
-    rkey = parts.rkey.map(String.init)
+    // `ATURI.parse` runs each component through its identifier-type validator
+    // (`AtIdentifier.isValid` / `NSID.isValid` / `RecordKey.isValid`) before returning, so the
+    // typed inits below cannot throw in practice — the force-tries document that invariant.
+    authority = try! AtIdentifier(string: String(parts.authority))
+    collection = parts.collection.map { try! NSID(string: String($0)) }
+    rkey = parts.rkey.map { try! RecordKey(string: String($0)) }
     fragment = parts.fragment.map(String.init)
   }
 }
