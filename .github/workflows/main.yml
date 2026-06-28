@@ -7,7 +7,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Detect whether this change touches code/CI/formatter files.
+  # When only docs (e.g. README.md) change, downstream test jobs are skipped
+  # and `ci-required` reports success on their behalf.
+  # If you add a new top-level directory that affects build or tests,
+  # append it to the `code` filter below.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          predicate-quantifier: 'some'
+          filters: |
+            code:
+              - 'Sources/**'
+              - 'Tests/**'
+              - 'Plugins/**'
+              - 'CommandLineTool/**'
+              - 'Package.swift'
+              - 'Package.resolved'
+              - '.github/workflows/**'
+              - '.swift-format'
+              - 'format.sh'
+
   test-apple-platforms:
+    needs: changes
+    if: >-
+      needs.changes.outputs.code == 'true'
+      || github.event_name == 'push'
+      || github.event_name == 'workflow_dispatch'
     name: Test on Apple Platforms (Xcode 26.4)
     runs-on: macOS-26
     timeout-minutes: 30
@@ -34,6 +67,11 @@ jobs:
             | xcpretty
 
   test-linux:
+    needs: changes
+    if: >-
+      needs.changes.outputs.code == 'true'
+      || github.event_name == 'push'
+      || github.event_name == 'workflow_dispatch'
     name: Test on Linux (Swift ${{ matrix.swift_version }})
     runs-on: ubuntu-latest
     container:
@@ -50,3 +88,26 @@ jobs:
         uses: actions/checkout@v4
       - name: Run SwiftPM tests
         run: swift test
+
+  # Single always-running umbrella check. Set this as the only required
+  # status check in branch protection so docs-only PRs (which skip the
+  # test jobs) can still merge. Renaming this job requires updating
+  # branch protection in the GitHub UI.
+  ci-required:
+    name: CI Required
+    needs: [test-apple-platforms, test-linux]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs did not fail or cancel
+        run: |
+          apple="${{ needs.test-apple-platforms.result }}"
+          linux="${{ needs.test-linux.result }}"
+          echo "test-apple-platforms: $apple"
+          echo "test-linux: $linux"
+          for r in "$apple" "$linux"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "Required job did not pass (result=$r)"; exit 1 ;;
+            esac
+          done
