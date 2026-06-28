@@ -45,7 +45,7 @@ public struct ATURI: LexiconStringFormat {
     // typed inits below cannot throw in practice — the force-tries document that invariant.
     authority = try! AtIdentifier(string: String(parts.authority))
     collection = parts.collection.map { try! NSID(string: String($0)) }
-    rkey = parts.rkey.map { try! RecordKey(string: String($0)) }
+    rkey = parts.rkey.map { try! RecordKey(string: String($0), strict: strict) }
     fragment = parts.fragment.map(String.init)
   }
 }
@@ -59,9 +59,9 @@ extension ATURI {
   }
 
   // Restricted-syntax validation per the AT URI spec. When `strict` is false the lenient variant
-  // is applied: trailing slash, query, and percent-encoding errors in the fragment are accepted.
-  // `rkey` is still validated through `RecordKey.isValid` in both modes — relaxing rkey is
-  // tracked in a separate issue.
+  // is applied: trailing slash, query, and percent-encoding errors in the fragment are accepted,
+  // and `rkey` is admitted through `RecordKey.isValidLenient` (non-empty + no path delimiters)
+  // instead of the strict record-key grammar.
   private static func parse(_ input: String, strict: Bool = true) -> Parts? {
     guard input.utf8.count <= 8192 else { return nil }
     for byte in input.utf8 where !isAllowedURIByte(byte) { return nil }
@@ -130,7 +130,7 @@ extension ATURI {
     guard AtIdentifier.isValid(authority) else { return nil }
     if let collection, !NSID.isValid(collection) { return nil }
     if let fragment, !isValidJSONPointer(fragment, strict: strict) { return nil }
-    if let rkey, !RecordKey.isValid(rkey) { return nil }
+    if let rkey, !(strict ? RecordKey.isValid(rkey) : RecordKey.isValidLenient(rkey)) { return nil }
 
     // Strict-only constraints.
     if strict, trailingSlash { return nil }
