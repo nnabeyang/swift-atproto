@@ -84,4 +84,24 @@ struct FormatStringURITests {
     #expect(value.description == Self.wire)
     #expect("\(value)" == Self.wire)
   }
+
+  @Test func kindIsPreservedThroughFormatStringRoundTrip() throws {
+    let cases: [(wire: String, expectedKind: URI.Kind)] = [
+      ("at://example.com", .aturl),
+      ("at://did:plc:abc/com.example.foo/rkey", .aturl),
+      ("https://example.com/path", .url),
+      ("at:/", .url),
+      ("file:///etc/hosts", .url),
+    ]
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.withoutEscapingSlashes]
+    for (wire, expectedKind) in cases {
+      let data = Data("\"\(wire)\"".utf8)
+      let value = try JSONDecoder().decode(FormatString<URI>.self, from: data)
+      #expect(value.rawValue == wire)
+      #expect(value.typed?.kind == expectedKind)
+      let encoded = try encoder.encode(value)
+      #expect(String(decoding: encoded, as: UTF8.self) == "\"\(wire)\"")
+    }
+  }
 }
