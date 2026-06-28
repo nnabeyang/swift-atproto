@@ -172,10 +172,13 @@ struct ATURIInteropTests {
     }
   }
 
-  @Test func rkeyValidationStaysStrictEvenInLenientMode() {
-    // ATPROTO-43 explicitly leaves rkey relaxation out of scope (tracked in a follow-up issue);
-    // an rkey that violates RecordKey rules is still rejected in lenient mode.
+  @Test func recordKeyForbiddenValuesAreAcceptedByLenient() throws {
+    // `..` is a strict-only RecordKey violation (length / char / forbidden-value rules drop in
+    // lenient; only non-empty + no path delimiters required).
     let wire = "at://did:plc:asdf123/com.atproto.feed.post/.."
-    #expect(throws: (any Error).self) { try ATURI(string: wire, strict: false) }
+    #expect(throws: (any Error).self) { try ATURI(string: wire, strict: true) }
+    let uri = try ATURI(string: wire, strict: false)
+    #expect(uri.rawValue == wire)
+    #expect(uri.rkey?.rawValue == "..")
   }
 }
