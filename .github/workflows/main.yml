@@ -4,6 +4,19 @@ on:
   push:
     branches: ["main"]
   pull_request:
+    # Run real tests only when code, build, CI, or formatter files change.
+    # Docs-only PRs are handled by docs-stub.yml which reports identical
+    # status check names with an immediate success so required checks pass.
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Plugins/**'
+      - 'CommandLineTool/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - '.github/workflows/**'
+      - '.swift-format'
+      - 'format.sh'
   workflow_dispatch:
 
 jobs:

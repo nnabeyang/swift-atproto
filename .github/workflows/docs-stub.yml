@@ -1,0 +1,60 @@
+name: Swift Package Tests Docs Stub
+
+on:
+  pull_request:
+
+jobs:
+  # Detect whether this PR also touches code-tier files.
+  # If it does, the stub test jobs below are skipped and the real
+  # results from main.yml become the source of truth for required checks.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          predicate-quantifier: 'some'
+          filters: |
+            code:
+              - 'Sources/**'
+              - 'Tests/**'
+              - 'Plugins/**'
+              - 'CommandLineTool/**'
+              - 'Package.swift'
+              - 'Package.resolved'
+              - '.github/workflows/**'
+              - '.swift-format'
+              - 'format.sh'
+
+  # The next two jobs MUST keep their name and matrix values identical
+  # to the real ones in main.yml so that the resulting status check
+  # contexts (e.g. "Test on Linux (Swift 6.1)") match the names in the
+  # ruleset. If you rename or change the matrix here, update main.yml
+  # in the same PR.
+  test-apple-platforms:
+    needs: changes
+    if: needs.changes.outputs.code != 'true'
+    name: Test on Apple Platforms (Xcode 26.4)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [iOS, macOS]
+    steps:
+      - run: echo "docs-only stub for ${{ matrix.target }}"
+
+  test-linux:
+    needs: changes
+    if: needs.changes.outputs.code != 'true'
+    name: Test on Linux (Swift ${{ matrix.swift_version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - swift_version: "6.1"
+          - swift_version: "6.3.2"
+    steps:
+      - run: echo "docs-only stub for Swift ${{ matrix.swift_version }}"
