@@ -25,14 +25,6 @@ let package = Package(
 )
 ```
 
-### CocoaPods
-
-Add the following to your Podfile:
-
-```terminal
-pod 'SwiftAtproto'
-```
-
 ### Usage
 
 Code generation is done using the Swift Package Manager plugin.
