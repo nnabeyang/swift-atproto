@@ -17,8 +17,8 @@ import Foundation
 // type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
 // separate addition if a concrete need arises.
 //
-// The DID/Handle/NSID/record-key validators are kept private here; they may later be promoted to
-// dedicated identifier types and shared.
+// DID / Handle / NSID / RecordKey / AtIdentifier component validators live in their dedicated
+// identifier-type files. Only the JSON Pointer fragment validator remains here.
 public struct ATURI: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -117,82 +117,19 @@ extension ATURI {
     guard i == end else { return nil }
 
     // Component validation (applies in both strict and lenient).
-    guard isValidAtIdentifier(authority) else { return nil }
-    if let collection, !isValidNSID(collection) { return nil }
+    guard AtIdentifier.isValid(authority) else { return nil }
+    if let collection, !NSID.isValid(collection) { return nil }
     if let fragment, !isValidJSONPointer(fragment) { return nil }
 
     // Strict-only constraints.
     if trailingSlash { return nil }
     if hasQuery { return nil }
-    if let rkey, !isValidRecordKey(rkey) { return nil }
+    if let rkey, !RecordKey.isValid(rkey) { return nil }
 
     return Parts(authority: authority, collection: collection, rkey: rkey, fragment: fragment)
   }
 
-  // MARK: - Component validators (DID / Handle / NSID / record key / JSON pointer)
-
-  private static func isValidAtIdentifier(_ s: Substring) -> Bool {
-    s.hasPrefix("did:") ? isValidDID(s) : isValidHandle(s)
-  }
-
-  // /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/ with length <= 2048
-  private static func isValidDID(_ s: Substring) -> Bool {
-    let u = Array(s.utf8)
-    guard u.count <= 2048, u.starts(with: Array("did:".utf8)) else { return false }
-    var i = 4
-    let methodStart = i
-    while i < u.count, isLowerAlpha(u[i]) { i += 1 }
-    guard i > methodStart, i < u.count, u[i] == colon else { return false }
-    i += 1
-    guard i < u.count else { return false }  // identifier needs >= 1 char
-    while i < u.count {
-      guard isDIDIdentifierByte(u[i]) else { return false }
-      i += 1
-    }
-    let last = u[u.count - 1]
-    return last != colon && last != percent
-  }
-
-  // /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/, <= 253
-  private static func isValidHandle(_ s: Substring) -> Bool {
-    guard s.utf8.count <= 253 else { return false }
-    let labels = s.split(separator: ".", omittingEmptySubsequences: false)
-    guard labels.count >= 2 else { return false }
-    for (index, label) in labels.enumerated() {
-      let u = Array(label.utf8)
-      guard (1...63).contains(u.count) else { return false }
-      for byte in u where !(isAlphanumeric(byte) || byte == hyphen) { return false }
-      guard u.first != hyphen, u.last != hyphen else { return false }
-      if index == labels.count - 1, !isAlpha(u[0]) { return false }  // TLD starts with a letter
-    }
-    return true
-  }
-
-  // NSID rules: <= 317, [a-zA-Z0-9.-], >= 3 segments (1..63, no edge hyphen),
-  // first segment not leading-digit, last segment letters/digits only with no leading digit.
-  private static func isValidNSID(_ s: Substring) -> Bool {
-    let all = Array(s.utf8)
-    guard all.count <= 317 else { return false }
-    for byte in all where !(isAlphanumeric(byte) || byte == dot || byte == hyphen) { return false }
-    let segments = s.split(separator: ".", omittingEmptySubsequences: false)
-    guard segments.count >= 3 else { return false }
-    for segment in segments {
-      let u = Array(segment.utf8)
-      guard (1...63).contains(u.count) else { return false }
-      guard u.first != hyphen, u.last != hyphen else { return false }
-    }
-    if isDigit(Array(segments[0].utf8)[0]) { return false }
-    let name = Array(segments[segments.count - 1].utf8)
-    return !isDigit(name[0]) && !name.contains(hyphen)
-  }
-
-  // /^[a-zA-Z0-9_~.:-]{1,512}$/, excluding "." and ".."
-  private static func isValidRecordKey(_ s: Substring) -> Bool {
-    let u = Array(s.utf8)
-    guard (1...512).contains(u.count) else { return false }
-    for byte in u where !(isAlphanumeric(byte) || recordKeyPunct.contains(byte)) { return false }
-    return s != "." && s != ".."
-  }
+  // MARK: - JSON Pointer fragment
 
   // JSON Pointer fragment: starts with "/", allowed pointer chars, with valid percent-encoding.
   private static func isValidJSONPointer(_ s: Substring) -> Bool {
@@ -205,22 +142,9 @@ extension ATURI {
 
 // MARK: - ASCII byte helpers
 
-private let colon = UInt8(ascii: ":")
-private let percent = UInt8(ascii: "%")
-private let hyphen = UInt8(ascii: "-")
-private let dot = UInt8(ascii: ".")
 private let slash = UInt8(ascii: "/")
 
 private let uriAllowedPunct = Set(#"._~:@!$&'()*+,;=%/\[]#?-"#.utf8)
-private let recordKeyPunct = Set("_~.:-".utf8)
 private let pointerPunct = Set("._~:@!$&')(*+,;=%[]/-".utf8)
 
-private func isDigit(_ b: UInt8) -> Bool { (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(b) }
-private func isLowerAlpha(_ b: UInt8) -> Bool { (UInt8(ascii: "a")...UInt8(ascii: "z")).contains(b) }
-private func isUpperAlpha(_ b: UInt8) -> Bool { (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(b) }
-private func isAlpha(_ b: UInt8) -> Bool { isLowerAlpha(b) || isUpperAlpha(b) }
-private func isAlphanumeric(_ b: UInt8) -> Bool { isAlpha(b) || isDigit(b) }
 private func isAllowedURIByte(_ b: UInt8) -> Bool { isAlphanumeric(b) || uriAllowedPunct.contains(b) }
-private func isDIDIdentifierByte(_ b: UInt8) -> Bool {
-  isAlphanumeric(b) || b == dot || b == UInt8(ascii: "_") || b == colon || b == percent || b == hyphen
-}

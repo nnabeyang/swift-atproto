@@ -565,6 +565,12 @@ struct StringFormat: Codable, RawRepresentable {
     case "at-uri": "ATURI"
     case "language": "Language"
     case "uri": "URI"
+    case "did": "DID"
+    case "handle": "Handle"
+    case "nsid": "NSID"
+    case "tid": "TID"
+    case "record-key": "RecordKey"
+    case "at-identifier": "AtIdentifier"
     default: nil
     }
   }
