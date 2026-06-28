@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Test platform ${{ matrix.destination }}
+      - name: Test platform ${{ matrix.target }}
         run: |
           if [ "${{ matrix.target }}" = "iOS" ]; then
             DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=26.4.1"
