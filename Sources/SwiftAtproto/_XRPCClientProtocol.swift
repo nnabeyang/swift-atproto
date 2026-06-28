@@ -18,14 +18,6 @@ public protocol _XRPCClientProtocol: ATPClientProtocol {
 
 extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
-
-  public func call<X: XRPCQuery>(_ requestType: X.Type, input: X.Input.Query, retry _: Bool) async throws -> X.ResponseBody {
-    try await call(requestType, input: input)
-  }
-
-  public func call<X: XRPCProcedure>(_ requestType: X.Type, input: X.RequestBody? = nil, retry _: Bool) async throws -> X.ResponseBody {
-    try await call(requestType, input: input)
-  }
 }
 
 public protocol XRPCError: Error, LocalizedError, Decodable, Sendable {
