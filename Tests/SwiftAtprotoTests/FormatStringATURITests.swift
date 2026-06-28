@@ -46,6 +46,15 @@ struct FormatStringATURITests {
     #expect(record.subject.typed != nil)
   }
 
+  @Test func typedIsNilButTypedLenientIsNonNilForTrailingSlash() throws {
+    let wire = "at://did:plc:asdf123/com.atproto.feed.post/"
+    let data = Data("\"\(wire)\"".utf8)
+    let value = try JSONDecoder().decode(FormatString<ATURI>.self, from: data)
+    #expect(value.rawValue == wire)
+    #expect(value.typed == nil)
+    #expect(value.typedLenient != nil)
+  }
+
   @Test func descriptionIsRawValue() {
     let value = FormatString<ATURI>(rawValue: Self.wire)
     #expect(value.description == Self.wire)
