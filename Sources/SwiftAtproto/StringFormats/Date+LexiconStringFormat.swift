@@ -5,5 +5,9 @@ extension Date: LexiconStringFormat {
     self = try Date(string, strategy: .atprotoDatetime)
   }
 
+  public init(string: String, strict: Bool) throws {
+    self = try Date(string, strategy: strict ? .atprotoDatetime : .atprotoDatetimeLenient)
+  }
+
   public var rawValue: String { formatted(.atprotoDatetime) }
 }

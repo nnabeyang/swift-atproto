@@ -99,4 +99,37 @@ struct DatetimeInteropTests {
   func invalidExamplesThrow(_ value: String) {
     #expect(throws: (any Error).self) { try Date(string: value) }
   }
+
+  // MARK: lenient parsing
+
+  @Test func tzMissingIsRejectedByStrict() {
+    #expect(throws: (any Error).self) {
+      try Date(string: "1985-04-12T23:20:50.123", strict: true)
+    }
+  }
+
+  @Test func tzMissingIsAcceptedByLenient() throws {
+    let lenient = try Date(string: "1985-04-12T23:20:50.123", strict: false)
+    let strict = try Date(string: "1985-04-12T23:20:50.123Z", strict: true)
+    #expect(lenient == strict)
+  }
+
+  @Test func tzMissingWithoutFractionIsAcceptedByLenient() throws {
+    let lenient = try Date(string: "1985-04-12T23:20:50", strict: false)
+    let strict = try Date(string: "1985-04-12T23:20:50Z", strict: true)
+    #expect(lenient == strict)
+  }
+
+  @Test func validStrictInputIsAlsoAcceptedByLenient() throws {
+    let strict = try Date(string: "1985-04-12T23:20:50.123Z", strict: true)
+    let lenient = try Date(string: "1985-04-12T23:20:50.123Z", strict: false)
+    #expect(strict == lenient)
+  }
+
+  @Test func malformedInputIsRejectedByLenientToo() {
+    // lenient only handles TZ omission; structural errors still fail
+    #expect(throws: (any Error).self) {
+      try Date(string: "1985-04-12T25:20:50.123Z", strict: false)
+    }
+  }
 }

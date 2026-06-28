@@ -53,6 +53,14 @@ struct FormatStringDateTests {
     #expect(record.createdAt.typed != nil)
   }
 
+  @Test func typedIsNilButTypedLenientIsNonNilForTzOmittedInput() throws {
+    let data = Data("\"1985-04-12T23:20:50.123\"".utf8)
+    let value = try JSONDecoder().decode(FormatString<Date>.self, from: data)
+    #expect(value.rawValue == "1985-04-12T23:20:50.123")
+    #expect(value.typed == nil)
+    #expect(value.typedLenient != nil)
+  }
+
   @Test func descriptionIsRawValue() {
     let value = FormatString<Date>(rawValue: "2024-01-15T12:30:00+09:00")
     #expect(value.description == "2024-01-15T12:30:00+09:00")

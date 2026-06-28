@@ -3,7 +3,11 @@ import Foundation
 public struct AtprotoDatetimeParseStrategy: ParseStrategy {
   static let maxLength = 64
 
-  public init() {}
+  public let lenient: Bool
+
+  public init(lenient: Bool = false) {
+    self.lenient = lenient
+  }
 
   private static let calendar = ProlepticGregorianCalendar()
   // 0000-01-01T00:00:00Z; instants before this are rejected.
@@ -16,7 +20,8 @@ public struct AtprotoDatetimeParseStrategy: ParseStrategy {
       throw LexiconStringFormatError.tooLong(format: "datetime", limit: Self.maxLength)
     }
 
-    var scanner = Scanner(value)
+    let input = lenient ? Self.normalizeForLenient(value) : value
+    var scanner = Scanner(input)
     guard let fields = scanner.scan() else { throw invalid() }
 
     // Resolve the instant in the proleptic Gregorian calendar (matching the reference
@@ -37,6 +42,20 @@ public struct AtprotoDatetimeParseStrategy: ParseStrategy {
 
 extension ParseStrategy where Self == AtprotoDatetimeParseStrategy {
   public static var atprotoDatetime: Self { .init() }
+  public static var atprotoDatetimeLenient: Self { .init(lenient: true) }
+}
+
+extension AtprotoDatetimeParseStrategy {
+  // Lenient pre-normalization: append `Z` when the input has no timezone designator (ends in a
+  // digit). Other lenient normalizations stay opt-in for the caller.
+  fileprivate static func normalizeForLenient(_ value: String) -> String {
+    guard let last = value.last else { return value }
+    if last == "Z" || last == "z" || last == "+" || last == "-" { return value }
+    if let scalar = last.unicodeScalars.first, ("0"..."9").contains(Character(scalar)) {
+      return value + "Z"
+    }
+    return value
+  }
 }
 
 private struct Scanner {

@@ -140,4 +140,42 @@ struct ATURIInteropTests {
     #expect(uri.fragment == "/text")
     #expect(uri.rkey?.rawValue == "record")
   }
+
+  // MARK: lenient parsing (3 relaxations: trailing slash / query / fragment %)
+
+  @Test func trailingSlashIsRejectedByStrictAcceptedByLenient() throws {
+    let wire = "at://did:plc:asdf123/com.atproto.feed.post/"
+    #expect(throws: (any Error).self) { try ATURI(string: wire, strict: true) }
+    let uri = try ATURI(string: wire, strict: false)
+    #expect(uri.rawValue == wire)
+  }
+
+  @Test func queryIsRejectedByStrictAcceptedByLenient() throws {
+    let wire = "at://did:plc:asdf123?foo=bar"
+    #expect(throws: (any Error).self) { try ATURI(string: wire, strict: true) }
+    let uri = try ATURI(string: wire, strict: false)
+    #expect(uri.rawValue == wire)
+  }
+
+  @Test func malformedFragmentPercentEncodingIsRejectedByStrictAcceptedByLenient() throws {
+    // `%FF` is a syntactically allowed pointer byte sequence but produces invalid UTF-8 when
+    // percent-decoded; strict mirrors atproto by rejecting it, lenient accepts.
+    let wire = "at://did:plc:asdf123#/%FF"
+    #expect(throws: (any Error).self) { try ATURI(string: wire, strict: true) }
+    let uri = try ATURI(string: wire, strict: false)
+    #expect(uri.rawValue == wire)
+  }
+
+  @Test func defaultInitIsEquivalentToStrict() {
+    #expect(throws: (any Error).self) {
+      try ATURI(string: "at://did:plc:asdf123?foo=bar")
+    }
+  }
+
+  @Test func rkeyValidationStaysStrictEvenInLenientMode() {
+    // ATPROTO-43 explicitly leaves rkey relaxation out of scope (tracked in a follow-up issue);
+    // an rkey that violates RecordKey rules is still rejected in lenient mode.
+    let wire = "at://did:plc:asdf123/com.atproto.feed.post/.."
+    #expect(throws: (any Error).self) { try ATURI(string: wire, strict: false) }
+  }
 }

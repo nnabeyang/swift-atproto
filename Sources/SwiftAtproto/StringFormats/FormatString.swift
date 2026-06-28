@@ -16,6 +16,8 @@ public struct FormatString<T: LexiconStringFormat>: RawRepresentable, Codable, H
 
   public var typed: T? { try? T(string: rawValue) }
 
+  public var typedLenient: T? { try? T(string: rawValue, strict: false) }
+
   public init(from decoder: any Decoder) throws {
     rawValue = try String(from: decoder)
   }
