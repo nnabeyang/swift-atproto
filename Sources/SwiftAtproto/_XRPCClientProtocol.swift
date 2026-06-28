@@ -1,14 +1,5 @@
 import Foundation
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
-public enum HTTPMethod {
-  case get
-  case post
-}
-
 public protocol ATPClientProtocol: _XRPCCallable {
   var serviceEndpoint: URL { get }
   var decoder: JSONDecoder { get }
@@ -25,27 +16,8 @@ public protocol _XRPCClientProtocol: ATPClientProtocol {
   func signout()
 }
 
-extension URLSession {
-  func executeTask(for request: URLRequest) async throws -> (Data, UInt) {
-    let (data, response) = try await URLSession.shared.data(for: request)
-    guard let httpResponse = response as? HTTPURLResponse else {
-      fatalError()
-    }
-    return (data, UInt(httpResponse.statusCode))
-  }
-}
-
 extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
-
-  private static func encode(_ string: String, component: XRPCComponent) -> String {
-    switch component {
-    case .nsid:
-      string.addingPercentEncoding(withAllowedCharacters: .nsidAllowed) ?? string
-    case .parameter:
-      string.addingPercentEncoding(withAllowedCharacters: .parameterAllowed) ?? string
-    }
-  }
 
   public func call<X: XRPCQuery>(_ requestType: X.Type, input: X.Input.Query, retry _: Bool) async throws -> X.ResponseBody {
     try await call(requestType, input: input)
