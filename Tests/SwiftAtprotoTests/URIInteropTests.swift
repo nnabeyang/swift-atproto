@@ -230,4 +230,57 @@ struct URIInteropTests {
     let u = try URI(string: "at://example.com/not-an-nsid")
     #expect(u.atUri == nil)
   }
+
+  // MARK: kind classification
+
+  @Test func atHandleAuthorityClassifiesAsAturl() throws {
+    let uri = try URI(string: "at://example.com")
+    #expect(uri.kind == .aturl)
+  }
+
+  @Test func atDIDAuthorityClassifiesAsAturl() throws {
+    let uri = try URI(string: "at://did:plc:abc/com.example.foo/rkey")
+    #expect(uri.kind == .aturl)
+  }
+
+  @Test func atPathAbsoluteFallsBackToUrl() throws {
+    // `at:/` is a valid lexicon `uri` (path-absolute) but not a valid ATURI → URL fallback.
+    let uri = try URI(string: "at:/")
+    #expect(uri.kind == .url)
+  }
+
+  @Test func atPathAbsoluteWithBodyFallsBackToUrl() throws {
+    let uri = try URI(string: "at:/x")
+    #expect(uri.kind == .url)
+  }
+
+  @Test func httpsClassifiesAsUrl() throws {
+    let uri = try URI(string: "https://example.com/path")
+    #expect(uri.kind == .url)
+  }
+
+  @Test func fileClassifiesAsUrl() throws {
+    let uri = try URI(string: "file:///etc/hosts")
+    #expect(uri.kind == .url)
+  }
+
+  @Test func didOpaqueClassifiesAsUrl() throws {
+    let uri = try URI(string: "did:plc:abc")
+    #expect(uri.kind == .url)
+  }
+
+  @Test func dataClassifiesAsUrl() throws {
+    let uri = try URI(string: "data:text/plain,Hello")
+    #expect(uri.kind == .url)
+  }
+
+  @Test func bothParsersFailingClassifiesAsOther() throws {
+    // `at://example.com:notaport` is wire-shape valid (`uri` accepts the body) but:
+    //   - ATURI rejects because authority `example.com:notaport` is neither a valid DID nor a
+    //     valid handle (the `:` inside a single label breaks the handle grammar)
+    //   - URL(string:) returns nil due to port grammar (`:` must be followed by digits)
+    // → classify falls through to `.other`.
+    let uri = try URI(string: "at://example.com:notaport")
+    #expect(uri.kind == .other)
+  }
 }
