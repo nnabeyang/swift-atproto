@@ -17,20 +17,43 @@ public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOpti
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
+  // `FileManager.enumerator` does not traverse symbolic links, so it would
+  // miss local lexicon trees installed under `.lexicons/lexicons/` as symlinks.
+  // Walk the tree manually instead, resolving each entry's target while
+  // keeping the logical path rooted at `baseURL` so `prefix(baseURL:)` still
+  // works on the returned URLs.
   var fileURLs = [URL]()
-  if let enumerator = FileManager.default.enumerator(at: baseURL, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
-    for case let fileUrl as URL in enumerator {
-      do {
-        let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
-        if fileAttributes.isRegularFile!, fileUrl.pathExtension == "json" {
-          fileURLs.append(fileUrl)
-        }
-      } catch {
-        print(error, fileUrl)
-      }
+  var visited = Set<String>()
+  walkLexicons(at: baseURL, visited: &visited, into: &fileURLs)
+  return fileURLs
+}
+
+private func walkLexicons(at url: URL, visited: inout Set<String>, into result: inout [URL]) {
+  let target = url.resolvingSymlinksInPath()
+  // Detect symlink cycles (and reentry into a shared subtree) by remembering
+  // each directory's resolved physical path. Without this guard a `foo -> .`
+  // symlink would recurse until the stack overflows.
+  let visitedKey = target.standardizedFileURL.path
+  guard visited.insert(visitedKey).inserted else { return }
+  guard
+    let entries = try? FileManager.default.contentsOfDirectory(
+      at: target,
+      includingPropertiesForKeys: [.isDirectoryKey],
+      options: [.skipsHiddenFiles, .skipsPackageDescendants])
+  else { return }
+  for entry in entries {
+    let logical = url.appending(component: entry.lastPathComponent)
+    let physical = entry.resolvingSymlinksInPath()
+    var isDir: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: physical.path, isDirectory: &isDir) else {
+      continue
+    }
+    if isDir.boolValue {
+      walkLexicons(at: logical, visited: &visited, into: &result)
+    } else if logical.pathExtension == "json" {
+      result.append(logical)
     }
   }
-  return fileURLs
 }
 
 func decodeSchemasByPrefix(from fileURLs: [URL], baseURL: URL) async throws -> [String: [Schema]] {

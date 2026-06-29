@@ -120,6 +120,12 @@ let package = Package(
       name: "ATProtoCryptoTests",
       dependencies: ["ATProtoCrypto"]
     ),
+    .testTarget(
+      name: "SourceControlTests",
+      dependencies: [
+        .target(name: "SourceControl", condition: .when(platforms: [.macOS, .linux]))
+      ]
+    ),
     .plugin(
       name: "ATProtoLexiconFetcher",
       capability: .command(
