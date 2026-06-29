@@ -1,12 +1,14 @@
 import Foundation
 
 // Identifies the on-disk checkout subdirectory for a remote lexicon repository.
-// `segments` is the URL host followed by every non-empty path component, with a
-// trailing `.git` stripped from the last one. The path depth is not fixed:
+// `segments` is `<scheme>` + `<host[:port]>` (lowercased, default port stripped)
+// followed by every non-empty path component, with a trailing `.git` stripped
+// from the last one. The path depth is not fixed:
 // `https://example.com/path/to/repo.git` becomes
-// `["example.com", "path", "to", "repo"]`, producing
-// `.lexicons/checkouts/example.com/path/to/repo` once joined to the checkout
-// root.
+// `["https", "example.com", "path", "to", "repo"]`, producing
+// `.lexicons/checkouts/https/example.com/path/to/repo` once joined to the
+// checkout root. Different schemes/ports/host casings always map to distinct
+// directories so two URLs that point at different remotes never collide.
 public struct RepositoryLocation: Equatable, Sendable {
   public let segments: [String]
 
@@ -15,8 +17,23 @@ public struct RepositoryLocation: Equatable, Sendable {
   }
 
   public static func parse(from url: URL) throws -> RepositoryLocation {
-    guard let host = url.host(), !host.isEmpty else {
+    guard let scheme = url.scheme?.lowercased(), !scheme.isEmpty else {
       throw RepositoryLocationError.unsupportedURL(redactedDescription(of: url))
+    }
+    if scheme == "file" {
+      // `file://` is the local-lexicon escape hatch and never produces a
+      // checkout directory.
+      throw RepositoryLocationError.unsupportedURL(redactedDescription(of: url))
+    }
+    guard let rawHost = url.host(), !rawHost.isEmpty else {
+      throw RepositoryLocationError.unsupportedURL(redactedDescription(of: url))
+    }
+    let host = rawHost.lowercased()
+    let authority: String
+    if let port = url.port, port != defaultPort(for: scheme) {
+      authority = "\(host):\(port)"
+    } else {
+      authority = host
     }
     let pathSegments = url.pathComponents.filter { $0 != "/" && !$0.isEmpty }
     guard !pathSegments.isEmpty else {
@@ -27,7 +44,7 @@ public struct RepositoryLocation: Equatable, Sendable {
     if pathSegments.contains(where: { $0 == "." || $0 == ".." }) {
       throw RepositoryLocationError.unsupportedURL(redactedDescription(of: url))
     }
-    var result = [host]
+    var result = [scheme, authority]
     result.append(contentsOf: pathSegments.dropLast())
     var repo = pathSegments.last!
     if repo.hasSuffix(".git") {
@@ -38,6 +55,16 @@ public struct RepositoryLocation: Equatable, Sendable {
     }
     result.append(repo)
     return RepositoryLocation(segments: result)
+  }
+
+  private static func defaultPort(for scheme: String) -> Int? {
+    switch scheme {
+    case "https": return 443
+    case "http": return 80
+    case "ssh": return 22
+    case "git": return 9418
+    default: return nil
+    }
   }
 
   // Strip userinfo (token:secret@) before rendering a URL into a user-visible

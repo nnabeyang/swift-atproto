@@ -42,10 +42,11 @@ enum LexiconSource {
 }
 
 // Move a checkout from the legacy `<checkoutDir>/<repo>` location to the new
-// `<checkoutDir>/<host>/<...path...>/<repo>` layout and rewrite its `origin`
-// remote so future fetches honor the configured `remoteURL`. No-op when the
-// new path already holds a valid working copy, when something else is occupying
-// the new path, or when the legacy path is missing / isn't a real working copy.
+// `<checkoutDir>/<scheme>/<host>/<...path...>/<repo>` layout and rewrite its
+// `origin` remote so future fetches honor the configured `remoteURL`. No-op
+// when the new path already holds a valid working copy, when something else is
+// occupying the new path, or when the legacy path is missing / isn't a real
+// working copy.
 func migrateLegacyCheckout(legacyURL: URL, newURL: URL, remoteURL: URL) throws {
   if GitRepositoryProvider.workingCopyExists(at: newURL.path()) { return }
   // If the new path is already occupied by something that isn't a working copy
