@@ -41,11 +41,11 @@ jobs:
       needs.changes.outputs.code == 'true'
       || github.event_name == 'push'
       || github.event_name == 'workflow_dispatch'
-    name: Test on Apple Platforms (Xcode 26.4)
+    name: Test on Apple Platforms (Xcode 26.5)
     runs-on: macOS-26
     timeout-minutes: 30
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.4.1.app
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app
     strategy:
       matrix:
         target: [iOS, macOS]
@@ -55,7 +55,7 @@ jobs:
       - name: Test platform ${{ matrix.target }}
         run: |
           if [ "${{ matrix.target }}" = "iOS" ]; then
-            DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=26.4.1"
+            DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=26.5"
           else
             DESTINATION="platform=macOS"
           fi
