@@ -41,6 +41,34 @@ enum LexiconSource {
   case local(directoryURL: URL)
 }
 
+public enum LexiconConfigError: Error, CustomStringConvertible, Equatable {
+  case unsafeLexiconSubpath(field: String, value: String)
+
+  public var description: String {
+    switch self {
+    case .unsafeLexiconSubpath(let field, let value):
+      return
+        "Invalid lexicon \(field) \"\(value)\": must be a relative path with no `..`, `.`, or absolute prefix."
+    }
+  }
+}
+
+// Reject `..`, `.`, and absolute paths in any lexicon-supplied sub-path so a
+// malicious or typo-ed `.atproto.json` cannot escape `.lexicons/lexicons/` or
+// the dependency's source root when joined via `appending(component:)`.
+func validatedLexiconSubpath(_ raw: String, field: String) throws -> String {
+  if raw.hasPrefix("/") {
+    throw LexiconConfigError.unsafeLexiconSubpath(field: field, value: raw)
+  }
+  let segments = raw.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+  for segment in segments {
+    if segment == "." || segment == ".." {
+      throw LexiconConfigError.unsafeLexiconSubpath(field: field, value: raw)
+    }
+  }
+  return segments.joined(separator: "/")
+}
+
 // Move a checkout from the legacy `<checkoutDir>/<repo>` location to the new
 // `<checkoutDir>/<scheme>/<host>/<...path...>/<repo>` layout and rewrite its
 // `origin` remote so future fetches honor the configured `remoteURL`. No-op
@@ -155,8 +183,12 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
     }
 
     for lexicon in dependency.lexicons {
+      let safePrefix = try validatedLexiconSubpath(
+        lexicon.prefix.replacingOccurrences(of: ".", with: "/"),
+        field: "prefix")
       if let nsIds = lexicon.nsIds {
-        let srcBaseURL = srcRootURL.appending(component: lexicon.rootPath)
+        let safeRootPath = try validatedLexiconSubpath(lexicon.rootPath, field: "rootPath")
+        let srcBaseURL = srcRootURL.appending(component: safeRootPath)
         for nsId in nsIds {
           let dest = nsId.url(from: lexiconsDirectory)
           if !FileManager.default.fileExists(atPath: dest.deletingLastPathComponent().path(percentEncoded: false)) {
@@ -165,10 +197,11 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
           try install(nsId.url(from: srcBaseURL), dest)
         }
       } else {
-        let srcBaseURL = srcRootURL.appending(component: lexicon.path)
+        let safePath = try validatedLexiconSubpath(lexicon.path, field: "path")
+        let srcBaseURL = srcRootURL.appending(component: safePath)
         for name in try FileManager.default.contentsOfDirectory(atPath: srcBaseURL.path()) {
           let srcURL = srcBaseURL.appending(component: name)
-          let lexiconBaseDirectory = lexiconsDirectory.appending(component: lexicon.prefix.replacingOccurrences(of: ".", with: "/"))
+          let lexiconBaseDirectory = lexiconsDirectory.appending(component: safePrefix)
           if !FileManager.default.fileExists(atPath: lexiconBaseDirectory.path()) {
             try FileManager.default.createDirectory(at: lexiconBaseDirectory, withIntermediateDirectories: true)
           }
