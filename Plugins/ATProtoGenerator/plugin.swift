@@ -15,6 +15,7 @@ import PackagePlugin
     let outdir = pluginWorkDirectoryURL.appending(components: "GeneratedSources")
     arguments.append(contentsOf: ["--atproto-configuration", configurationFileURL.path()])
     arguments.append(contentsOf: ["--outdir", outdir.path()])
+    arguments.append(contentsOf: ["--plugin-source", "build"])
     return [
       .buildCommand(
         displayName: "Running swift-atproto-generator",

@@ -4,6 +4,13 @@ import Foundation
 #if os(macOS) || os(Linux)
   import SourceControl
   import SwiftAtprotoLex
+
+  extension PluginSource: ExpressibleByArgument {
+    public init?(argument: String) {
+      self.init(rawValue: argument)
+    }
+    public static var allValueStrings: [String] { Self.allCases.map(\.rawValue) }
+  }
 #endif
 
 @main
@@ -20,6 +27,11 @@ struct Lexgen: AsyncParsableCommand {
     var outdir: String?
     @Flag(name: .customLong("fetch-only"))
     var fetchOnly = false
+    // Internal IPC between the build plugin and the CLI. Hidden from `--help`
+    // so manual invocations default to `.command`, but still discoverable via
+    // `--help-hidden` for debugging.
+    @Option(name: .customLong("plugin-source"), help: ArgumentHelp(visibility: .hidden))
+    var pluginSource: PluginSource = .command
   #endif
 
   mutating func run() async throws {
@@ -32,7 +44,8 @@ struct Lexgen: AsyncParsableCommand {
       try await SwiftAtprotoLex.main(
         outdir: outdirURL,
         path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path(),
-        generate: config.generate
+        generate: config.generate,
+        pluginSource: pluginSource
       )
     #endif
   }

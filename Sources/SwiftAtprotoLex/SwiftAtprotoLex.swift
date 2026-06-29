@@ -7,13 +7,13 @@ import SwiftSyntaxBuilder
   import SourceControl
 #endif
 
-public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOption) async throws {
+public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOption, pluginSource: PluginSource = .command) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
   let schemasMap = try await decodeSchemasByPrefix(from: fileURLs, baseURL: url)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
-  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate)
+  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate, pluginSource: pluginSource)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -91,8 +91,10 @@ func writeSchemaCode(
   for schemasMap: [String: [Schema]],
   with defMap: ExtDefMap,
   to baseURL: URL,
-  generate: GenerateOption
+  generate: GenerateOption,
+  pluginSource: PluginSource
 ) async throws {
+  _ = pluginSource  // wired in this commit; the branching logic lands in the next.
   let schemasArray = schemasMap.sorted { $0.key < $1.key }
   let (blocks, methods, requirements) = try await withThrowingTaskGroup(of: (DeclSyntax, MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
