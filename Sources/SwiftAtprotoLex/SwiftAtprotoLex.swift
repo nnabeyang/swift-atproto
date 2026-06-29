@@ -23,12 +23,18 @@ func collectJSONFileURLs(at baseURL: URL) -> [URL] {
   // keeping the logical path rooted at `baseURL` so `prefix(baseURL:)` still
   // works on the returned URLs.
   var fileURLs = [URL]()
-  walkLexicons(at: baseURL, into: &fileURLs)
+  var visited = Set<String>()
+  walkLexicons(at: baseURL, visited: &visited, into: &fileURLs)
   return fileURLs
 }
 
-private func walkLexicons(at url: URL, into result: inout [URL]) {
+private func walkLexicons(at url: URL, visited: inout Set<String>, into result: inout [URL]) {
   let target = url.resolvingSymlinksInPath()
+  // Detect symlink cycles (and reentry into a shared subtree) by remembering
+  // each directory's resolved physical path. Without this guard a `foo -> .`
+  // symlink would recurse until the stack overflows.
+  let visitedKey = target.standardizedFileURL.path
+  guard visited.insert(visitedKey).inserted else { return }
   guard
     let entries = try? FileManager.default.contentsOfDirectory(
       at: target,
@@ -43,7 +49,7 @@ private func walkLexicons(at url: URL, into result: inout [URL]) {
       continue
     }
     if isDir.boolValue {
-      walkLexicons(at: logical, into: &result)
+      walkLexicons(at: logical, visited: &visited, into: &result)
     } else if logical.pathExtension == "json" {
       result.append(logical)
     }
