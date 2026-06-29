@@ -33,6 +33,14 @@ public func lockFileURL(packageRootURL: URL) -> URL {
   packageRootURL.appending(component: ".atproto-lock.json")
 }
 
+// Where a lexicon dependency's files come from. Remote dependencies are
+// cloned into `.lexicons/checkouts/`; local dependencies (`file://`) skip
+// git entirely and are read directly from disk.
+enum LexiconSource {
+  case remote(checkoutURL: URL)
+  case local(directoryURL: URL)
+}
+
 // Move a checkout from the legacy `<checkoutDir>/<repo>` location to the new
 // `<checkoutDir>/<host>/<...path...>/<repo>` layout and rewrite its `origin`
 // remote so future fetches honor the configured `remoteURL`. No-op when the
@@ -64,18 +72,22 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
   let lockFileURL = lockFileURL(packageRootURL: rootURL)
 
-  // Resolve every dependency to its checkout path and run the legacy-layout
-  // migration up front, before the originHash fast-path. Otherwise an unchanged
-  // configuration would let stale `<checkoutDir>/<repo>` directories live on
-  // indefinitely after this upgrade.
-  let preparedDependencies: [(LexiconDependency, URL)] = try config.dependencies.map { dependency in
+  // Resolve every dependency to its source (remote checkout or local path) and
+  // run the legacy-layout migration up front, before the originHash fast-path.
+  // Otherwise an unchanged configuration would let stale `<checkoutDir>/<repo>`
+  // directories live on indefinitely after this upgrade.
+  let preparedDependencies: [(LexiconDependency, LexiconSource)] = try config.dependencies.map {
+    dependency in
+    if dependency.location.scheme == "file" {
+      return (dependency, .local(directoryURL: URL(fileURLWithPath: dependency.location.path)))
+    }
     let location = try RepositoryLocation.parse(from: dependency.location)
     let destURL = checkoutDirectory.appending(path: location.segments.joined(separator: "/"))
     try migrateLegacyCheckout(
       legacyURL: checkoutDirectory.appending(component: location.segments.last!),
       newURL: destURL,
       remoteURL: dependency.location)
-    return (dependency, destURL)
+    return (dependency, .remote(checkoutURL: destURL))
   }
 
   let lexiconsIsExisting = FileManager.default.fileExists(atPath: lexiconsDirectory.path())
@@ -90,45 +102,69 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   }
   try FileManager.default.createDirectory(at: lexiconsDirectory, withIntermediateDirectories: true)
   var resolvedDendencies = [ResolvedLexiconDependency]()
-  for (dependency, destURL) in preparedDependencies {
-    let clone: GitRepository
-    if !GitRepositoryProvider.workingCopyExists(at: destURL.path()) {
-      try FileManager.default.createDirectory(
-        at: destURL.deletingLastPathComponent(),
-        withIntermediateDirectories: true)
-      clone = try GitRepositoryProvider.createWorkingCopy(
-        sourcePath: dependency.location.absoluteString,
-        at: destURL.path())
-    } else {
-      clone = GitRepositoryProvider.openWorkingCopy(at: destURL.path())
-      try clone.fetch()
-    }
-
+  for (dependency, source) in preparedDependencies {
+    let srcRootURL: URL
     let revision: String
-    switch dependency.state {
-    case .tag(let tag):
-      try clone.checkout(tag: tag)
-      revision = try clone.resolveRevision(tag: tag)
-    case .revision(let identifier):
-      revision = try clone.resolveRevision(identifier: identifier)
-      try clone.checkout(revision: revision)
+    switch source {
+    case .local(let directoryURL):
+      // Local dependencies skip clone/fetch and ignore `dependency.state`; the
+      // lockfile records a sentinel revision so the schema stays valid.
+      srcRootURL = directoryURL
+      revision = "local"
+    case .remote(let destURL):
+      let clone: GitRepository
+      if !GitRepositoryProvider.workingCopyExists(at: destURL.path()) {
+        try FileManager.default.createDirectory(
+          at: destURL.deletingLastPathComponent(),
+          withIntermediateDirectories: true)
+        clone = try GitRepositoryProvider.createWorkingCopy(
+          sourcePath: dependency.location.absoluteString,
+          at: destURL.path())
+      } else {
+        clone = GitRepositoryProvider.openWorkingCopy(at: destURL.path())
+        try clone.fetch()
+      }
+      switch dependency.state {
+      case .tag(let tag):
+        try clone.checkout(tag: tag)
+        revision = try clone.resolveRevision(tag: tag)
+      case .revision(let identifier):
+        revision = try clone.resolveRevision(identifier: identifier)
+        try clone.checkout(revision: revision)
+      }
+      srcRootURL = destURL
     }
     resolvedDendencies.append(.init(config: dependency, revision: revision))
 
+    // For local dependencies install lexicons as symlinks so edits to the
+    // source files are visible to the next codegen pass without re-running
+    // fetch; for remote ones the checkout is the only stable copy so we copy.
+    let install: (URL, URL) throws -> Void
+    switch source {
+    case .local:
+      install = { src, dst in
+        if FileManager.default.fileExists(atPath: dst.path()) { return }
+        try FileManager.default.createSymbolicLink(at: dst, withDestinationURL: src)
+      }
+    case .remote:
+      install = { src, dst in
+        if FileManager.default.fileExists(atPath: dst.path()) { return }
+        try FileManager.default.copyItem(at: src, to: dst)
+      }
+    }
+
     for lexicon in dependency.lexicons {
       if let nsIds = lexicon.nsIds {
-        let srcBaseURL = destURL.appending(component: lexicon.rootPath)
+        let srcBaseURL = srcRootURL.appending(component: lexicon.rootPath)
         for nsId in nsIds {
           let dest = nsId.url(from: lexiconsDirectory)
           if !FileManager.default.fileExists(atPath: dest.deletingLastPathComponent().path(percentEncoded: false)) {
             try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
           }
-          try FileManager.default.copyItem(
-            at: nsId.url(from: srcBaseURL),
-            to: dest)
+          try install(nsId.url(from: srcBaseURL), dest)
         }
       } else {
-        let srcBaseURL = destURL.appending(component: lexicon.path)
+        let srcBaseURL = srcRootURL.appending(component: lexicon.path)
         for name in try FileManager.default.contentsOfDirectory(atPath: srcBaseURL.path()) {
           let srcURL = srcBaseURL.appending(component: name)
           let lexiconBaseDirectory = lexiconsDirectory.appending(component: lexicon.prefix.replacingOccurrences(of: ".", with: "/"))
@@ -136,9 +172,7 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
             try FileManager.default.createDirectory(at: lexiconBaseDirectory, withIntermediateDirectories: true)
           }
           let lexiconDirectory = lexiconBaseDirectory.appending(component: name)
-          if !FileManager.default.fileExists(atPath: lexiconDirectory.path()) {
-            try FileManager.default.copyItem(at: srcURL, to: lexiconDirectory)
-          }
+          try install(srcURL, lexiconDirectory)
         }
       }
     }
