@@ -41,6 +41,13 @@ enum LexiconSource {
   case local(directoryURL: URL)
 }
 
+// Case-insensitive `file://` check, kept in sync with `RepositoryLocation.parse`
+// which also lowercases the scheme before comparing. Used both by the dependency
+// router and by the originHash fast-path so the two never disagree.
+func isLocalDependency(_ location: URL) -> Bool {
+  location.scheme?.lowercased() == "file"
+}
+
 public enum LexiconConfigError: Error, CustomStringConvertible, Equatable {
   case unsafeLexiconSubpath(field: String, value: String)
 
@@ -122,7 +129,7 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   // directories live on indefinitely after this upgrade.
   let preparedDependencies: [(LexiconDependency, LexiconSource)] = try config.dependencies.map {
     dependency in
-    if dependency.location.scheme == "file" {
+    if isLocalDependency(dependency.location) {
       return (dependency, .local(directoryURL: URL(fileURLWithPath: dependency.location.path)))
     }
     let location = try RepositoryLocation.parse(from: dependency.location)
@@ -134,8 +141,18 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
     return (dependency, .remote(checkoutURL: destURL))
   }
 
+  // Local dependencies are mutable — the user can edit the source tree
+  // between runs and a previous swift-atproto release may have written a
+  // lockfile that still treats them as remote. Skip the originHash fast-path
+  // whenever any dep is local so the install loop always re-runs and
+  // rewrites `revision = "local"`.
+  let hasLocalDependency = preparedDependencies.contains { _, source in
+    if case .local = source { return true }
+    return false
+  }
   let lexiconsIsExisting = FileManager.default.fileExists(atPath: lexiconsDirectory.path())
-  if lexiconsIsExisting,
+  if !hasLocalDependency,
+    lexiconsIsExisting,
     let resolvedStore = try? LexiconsStore.load(from: lockFileURL),
     originHash == resolvedStore.originHash
   {

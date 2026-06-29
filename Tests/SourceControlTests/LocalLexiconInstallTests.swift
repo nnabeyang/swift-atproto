@@ -1,5 +1,6 @@
 #if os(macOS) || os(Linux)
 
+  import Crypto
   import Foundation
   import Testing
 
@@ -169,6 +170,95 @@
       // The secret must never leak into the project's lexicons directory.
       let leaked = project.appendingPathComponent(".lexicons/lexicons/evil/secret.json")
       #expect(!FileManager.default.fileExists(atPath: leaked.path))
+    }
+
+    @Test func staleLockfileIsRefreshedForLocalDependency() throws {
+      // Simulates the upgrade path where an older swift-atproto wrote a lockfile
+      // with `revision = <user-supplied-sha>` for a file:// dep (because file://
+      // was treated as remote), then the user upgrades to the version with
+      // file:// → .local routing. The originHash matches the current config so
+      // the fast-path would normally return early and leave the stale revision
+      // in place; with the bypass, `main()` must re-run install and rewrite the
+      // revision to "local".
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/app/bsky/feed/post.json"), id: "app.bsky.feed.post")
+
+      let configBody = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{ "prefix": "app.bsky", "path": "lexicons/app/bsky" }],
+            "state": { "revision": "stale-sha" }
+          }]
+        }
+        """
+      let configURL = project.appendingPathComponent(".atproto.json")
+      try configBody.write(to: configURL, atomically: true, encoding: .utf8)
+
+      // Pre-seed the lockfile with the *same* originHash as the config above
+      // and a revision that lies (`"stale-sha"` instead of `"local"`).
+      let configData = try Data(contentsOf: configURL)
+      let originHash = SHA256.hash(data: configData).map { String(format: "%02x", $0) }.joined()
+      let staleLockfile = """
+        {
+          "originHash": "\(originHash)",
+          "generator": "0.0.0-stale",
+          "module": "Sources/Out",
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{ "prefix": "app.bsky", "path": "lexicons/app/bsky" }],
+            "state": { "revision": "stale-sha" }
+          }]
+        }
+        """
+      let lockfileURL = project.appendingPathComponent(".atproto-lock.json")
+      try staleLockfile.write(to: lockfileURL, atomically: true, encoding: .utf8)
+      // The fast-path also requires `.lexicons/lexicons/` to exist on disk.
+      try FileManager.default.createDirectory(
+        at: project.appendingPathComponent(".lexicons/lexicons", isDirectory: true),
+        withIntermediateDirectories: true)
+
+      _ = try main(configurationURL: configURL, outdir: nil)
+
+      let refreshed = try LexiconsStore.load(from: lockfileURL)
+      let localDep = refreshed.dependencies.first { $0.location.scheme?.lowercased() == "file" }
+      #expect(localDep?.state.revision == "local")
+    }
+
+    @Test func uppercaseFileSchemeIsTreatedAsLocal() throws {
+      // Mirrors `localFileSchemeInstallsSymlinks` but with a `FILE://` scheme to
+      // pin the case-insensitive contract between misc.swift and
+      // RepositoryLocation.parse (which already lowercases).
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/app/bsky/feed/post.json"), id: "app.bsky.feed.post")
+
+      let configURL = project.appendingPathComponent(".atproto.json")
+      let body = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "FILE://\(source.path)",
+            "lexicons": [{ "prefix": "app.bsky", "path": "lexicons/app/bsky" }],
+            "state": { "tag": "local" }
+          }]
+        }
+        """
+      try body.write(to: configURL, atomically: true, encoding: .utf8)
+
+      _ = try main(configurationURL: configURL, outdir: nil)
+
+      let installedDir = project.appendingPathComponent(".lexicons/lexicons/app/bsky/feed")
+      let attrs = try FileManager.default.attributesOfItem(atPath: installedDir.path)
+      #expect(attrs[.type] as? FileAttributeType == .typeSymbolicLink)
     }
   }
 
