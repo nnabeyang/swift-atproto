@@ -33,6 +33,27 @@ public func lockFileURL(packageRootURL: URL) -> URL {
   packageRootURL.appending(component: ".atproto-lock.json")
 }
 
+// Move a checkout from the legacy `<checkoutDir>/<repo>` location to the new
+// `<checkoutDir>/<host>/<...path...>/<repo>` layout and rewrite its `origin`
+// remote so future fetches honor the configured `remoteURL`. No-op when the
+// new path already holds a valid working copy, when something else is occupying
+// the new path, or when the legacy path is missing / isn't a real working copy.
+func migrateLegacyCheckout(legacyURL: URL, newURL: URL, remoteURL: URL) throws {
+  if GitRepositoryProvider.workingCopyExists(at: newURL.path()) { return }
+  // If the new path is already occupied by something that isn't a working copy
+  // (interrupted prior mv, manual stub, leftover state), don't overwrite it
+  // here — the downstream `git clone` will surface a clear error instead of us
+  // silently destroying user data.
+  if FileManager.default.fileExists(atPath: newURL.path()) { return }
+  guard GitRepositoryProvider.workingCopyExists(at: legacyURL.path()) else { return }
+  try FileManager.default.createDirectory(
+    at: newURL.deletingLastPathComponent(),
+    withIntermediateDirectories: true)
+  try FileManager.default.moveItem(at: legacyURL, to: newURL)
+  let moved = GitRepositoryProvider.openWorkingCopy(at: newURL.path())
+  _ = try moved.callGit(["remote", "set-url", "origin", remoteURL.absoluteString])
+}
+
 public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig {
   let data = try Data(contentsOf: configurationURL)
   let originHash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
@@ -42,6 +63,21 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   let checkoutDirectory = checkoutDirectoryURL(packageRootURL: rootURL)
   let lexiconsDirectory = lexiconsDirectoryURL(packageRootURL: rootURL)
   let lockFileURL = lockFileURL(packageRootURL: rootURL)
+
+  // Resolve every dependency to its checkout path and run the legacy-layout
+  // migration up front, before the originHash fast-path. Otherwise an unchanged
+  // configuration would let stale `<checkoutDir>/<repo>` directories live on
+  // indefinitely after this upgrade.
+  let preparedDependencies: [(LexiconDependency, URL)] = try config.dependencies.map { dependency in
+    let location = try RepositoryLocation.parse(from: dependency.location)
+    let destURL = checkoutDirectory.appending(path: location.segments.joined(separator: "/"))
+    try migrateLegacyCheckout(
+      legacyURL: checkoutDirectory.appending(component: location.segments.last!),
+      newURL: destURL,
+      remoteURL: dependency.location)
+    return (dependency, destURL)
+  }
+
   let lexiconsIsExisting = FileManager.default.fileExists(atPath: lexiconsDirectory.path())
   if lexiconsIsExisting,
     let resolvedStore = try? LexiconsStore.load(from: lockFileURL),
@@ -54,14 +90,12 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
   }
   try FileManager.default.createDirectory(at: lexiconsDirectory, withIntermediateDirectories: true)
   var resolvedDendencies = [ResolvedLexiconDependency]()
-  for dependency in config.dependencies {
-    var name = dependency.location.lastPathComponent
-    if name.hasSuffix(".git") {
-      name = String(name.dropLast(4))
-    }
-    let destURL = checkoutDirectory.appending(component: name)
+  for (dependency, destURL) in preparedDependencies {
     let clone: GitRepository
     if !GitRepositoryProvider.workingCopyExists(at: destURL.path()) {
+      try FileManager.default.createDirectory(
+        at: destURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true)
       clone = try GitRepositoryProvider.createWorkingCopy(
         sourcePath: dependency.location.absoluteString,
         at: destURL.path())
