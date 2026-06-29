@@ -88,7 +88,22 @@ func migrateLegacyCheckout(legacyURL: URL, newURL: URL, remoteURL: URL) throws {
     withIntermediateDirectories: true)
   try FileManager.default.moveItem(at: legacyURL, to: newURL)
   let moved = GitRepositoryProvider.openWorkingCopy(at: newURL.path())
-  _ = try moved.callGit(["remote", "set-url", "origin", remoteURL.absoluteString])
+  // Strip userinfo / query / fragment before writing the URL into `.git/config`
+  // so a `https://oauth2:ghp_xxx@…` location from `.atproto.json` never lands
+  // on disk in plaintext. The credential helper can still attach auth at fetch
+  // time via the redacted host.
+  _ = try moved.callGit(["remote", "set-url", "origin", redactedRemoteOrigin(from: remoteURL)])
+}
+
+func redactedRemoteOrigin(from url: URL) -> String {
+  guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+    return url.absoluteString
+  }
+  components.user = nil
+  components.password = nil
+  components.query = nil
+  components.fragment = nil
+  return components.string ?? url.absoluteString
 }
 
 public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig {
