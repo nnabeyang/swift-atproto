@@ -171,3 +171,86 @@ struct RpcScopeTests {
     }
   }
 }
+
+struct RepoScopeTests {
+  @Test func parsePositionalWithDefaultActions() throws {
+    let scope = try RepoScope(string: "repo:com.example.post")
+    #expect(scope.collection == ["com.example.post"])
+    #expect(scope.action == RepoScope.defaultActions)
+  }
+
+  @Test func parseQueryFormWithExplicitAction() throws {
+    let scope = try RepoScope(string: "repo:com.example.post?action=create")
+    #expect(scope.collection == ["com.example.post"])
+    #expect(scope.action == [.create])
+  }
+
+  @Test func parseAllActionsExplicitDropsBackToDefault() throws {
+    let scope = try RepoScope(
+      string: "repo:*?action=create&action=update&action=delete")
+    #expect(scope.collection == ["*"])
+    #expect(scope.action == RepoScope.defaultActions)
+  }
+
+  @Test func parseCollectionWildcardCollapses() throws {
+    let scope = try RepoScope(
+      string: "repo?collection=com.example.foo&collection=*&collection=com.example.bar")
+    #expect(scope.collection == ["*"])
+  }
+
+  @Test func parseSortsCollectionsAndActions() throws {
+    let scope = try RepoScope(
+      string: "repo?action=delete&action=create&collection=com.example.bar&collection=com.example.foo")
+    #expect(scope.collection == ["com.example.bar", "com.example.foo"])
+    #expect(scope.action == [.create, .delete])
+  }
+
+  @Test func serializeOmitsDefaultActions() throws {
+    let scope = try RepoScope(collection: ["com.example.post"])
+    #expect(scope.description == "repo:com.example.post")
+  }
+
+  @Test func serializeIncludesNonDefaultActions() throws {
+    let scope = try RepoScope(collection: ["com.example.post"], action: [.create])
+    #expect(scope.description == "repo:com.example.post?action=create")
+  }
+
+  @Test func serializeMultipleCollectionsAsQuery() throws {
+    let scope = try RepoScope(
+      collection: ["com.example.foo", "com.example.bar"], action: [.create])
+    #expect(
+      scope.description
+        == "repo?collection=com.example.bar&collection=com.example.foo&action=create")
+  }
+
+  @Test func roundTripCanonicalForms() throws {
+    let canonical = [
+      "repo:com.example.post",
+      "repo:com.example.post?action=create",
+      "repo:*?action=delete",
+      "repo?collection=com.example.bar&collection=com.example.foo&action=create",
+    ]
+    for input in canonical {
+      let scope = try RepoScope(string: input)
+      #expect(scope.description == input, "round-trip mismatch for \(input)")
+    }
+  }
+
+  @Test func unknownActionThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try RepoScope(string: "repo:com.example.post?action=wibble")
+    }
+  }
+
+  @Test func emptyPositionalThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try RepoScope(string: "repo:?action=create")
+    }
+  }
+
+  @Test func emptyCollectionValueThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try RepoScope(string: "repo?collection=&action=create")
+    }
+  }
+}
