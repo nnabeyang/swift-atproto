@@ -268,3 +268,129 @@ private struct PrebuiltScopesSession: OAuthSession {
   let audienceDid: DID
   let grantedScopes: ScopesSet
 }
+
+struct RepoScopeGuardEnforcementTests {
+  @Test func sufficientRepoScopePassesGuard() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "rpc:com.example.stub.repoWrite?aud=did:web:pds.example.com%23atproto_pds",
+      "repo:com.example.post?action=create",
+    ])
+    let client = MockClient(session: session)
+    _ = try await client.call(
+      StubRepoProcedure.self,
+      input: StubRepoInput(collection: "com.example.post", action: .create))
+  }
+
+  @Test func insufficientRepoScopeThrows() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "rpc:com.example.stub.repoWrite?aud=did:web:pds.example.com%23atproto_pds",
+    ])
+    let client = MockClient(session: session)
+    await #expect(
+      throws: OAuthScopeError.insufficientRepoScope(
+        collection: "com.example.post",
+        action: .create
+      )
+    ) {
+      _ = try await client.call(
+        StubRepoProcedure.self,
+        input: StubRepoInput(collection: "com.example.post", action: .create))
+    }
+  }
+
+  @Test func wrongActionRepoScopeThrows() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "rpc:com.example.stub.repoWrite?aud=did:web:pds.example.com%23atproto_pds",
+      "repo:com.example.post?action=update",
+    ])
+    let client = MockClient(session: session)
+    await #expect(
+      throws: OAuthScopeError.insufficientRepoScope(
+        collection: "com.example.post",
+        action: .create
+      )
+    ) {
+      _ = try await client.call(
+        StubRepoProcedure.self,
+        input: StubRepoInput(collection: "com.example.post", action: .create))
+    }
+  }
+
+  @Test func nonConformingInputSkipsRepoGuard() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "rpc:com.example.stub.procedure?aud=did:web:pds.example.com%23atproto_pds",
+    ])
+    let client = MockClient(session: session)
+    _ = try await client.call(StubProcedure.self, input: nil)
+  }
+
+  @Test func nilSessionSkipsRepoGuard() async throws {
+    let client = MockClient(session: nil)
+    _ = try await client.call(
+      StubRepoProcedure.self,
+      input: StubRepoInput(collection: "com.example.post", action: .create))
+  }
+
+  @Test func multipleRequirementsAllChecked() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "rpc:com.example.stub.repoWriteBatch?aud=did:web:pds.example.com%23atproto_pds",
+      "repo:com.example.post?action=create",
+    ])
+    let client = MockClient(session: session)
+    await #expect(
+      throws: OAuthScopeError.insufficientRepoScope(
+        collection: "com.example.other",
+        action: .create
+      )
+    ) {
+      _ = try await client.call(
+        StubRepoBatchProcedure.self,
+        input: StubRepoBatchInput(items: [
+          .init(collection: "com.example.post", action: "create"),
+          .init(collection: "com.example.other", action: "create"),
+        ]))
+    }
+  }
+}
+
+struct StubRepoInput: Codable, Sendable, Hashable, RepoWriteOperationDescribing {
+  let collection: String
+  let action: LexPermissionAction
+  var repoWriteRequirements: [RepoWriteRequirement] {
+    [RepoWriteRequirement(collection: collection, action: action)]
+  }
+}
+
+enum StubRepoProcedure: XRPCProcedure {
+  static let id = "com.example.stub.repoWrite"
+  static let contentType = "application/json"
+  typealias RequestBody = StubRepoInput
+  typealias ResponseBody = EmptyResponse
+  typealias Error = UnExpectedError
+}
+
+struct StubRepoBatchInput: Codable, Sendable, Hashable, RepoWriteOperationDescribing {
+  struct Item: Codable, Sendable, Hashable {
+    let collection: String
+    let action: String
+  }
+  let items: [Item]
+  var repoWriteRequirements: [RepoWriteRequirement] {
+    items.map {
+      RepoWriteRequirement(collection: $0.collection, action: LexPermissionAction(rawValue: $0.action))
+    }
+  }
+}
+
+enum StubRepoBatchProcedure: XRPCProcedure {
+  static let id = "com.example.stub.repoWriteBatch"
+  static let contentType = "application/json"
+  typealias RequestBody = StubRepoBatchInput
+  typealias ResponseBody = EmptyResponse
+  typealias Error = UnExpectedError
+}
