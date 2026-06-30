@@ -1,7 +1,7 @@
 import Crypto
 import Foundation
 
-public var version: String { "0.40.0" }
+public var version: String { "0.41.0" }
 
 public func getEnvSearchPaths(pathString: String) -> [URL] {
   pathString.split(separator: ":").map { URL(filePath: String($0)) }
