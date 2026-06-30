@@ -13,6 +13,7 @@ public enum OAuthScopeError: Error, Hashable, Sendable {
   case permissionAudMismatch(String)
   case nsidOutsideAuthority(parent: String, other: String)
   case unsupportedResource(String)
+  case insufficientScope(lxm: String, aud: String)
 }
 
 public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
