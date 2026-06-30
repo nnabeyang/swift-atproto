@@ -183,3 +183,82 @@ public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
     return Self.defaultActions.filter { seen.contains($0) }
   }
 }
+
+public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
+  public let nsid: String
+  public let aud: String?
+
+  public init(nsid: String, aud: String? = nil) throws {
+    guard NSID.isValid(nsid) else {
+      throw OAuthScopeError.invalidSyntax("invalid NSID '\(nsid)' in include scope")
+    }
+    self.nsid = nsid
+    self.aud = aud
+  }
+
+  public init(string: String) throws {
+    let syntax = OAuthScopeSyntax.parse(string)
+    guard syntax.prefix == "include" else {
+      throw OAuthScopeError.invalidResource(syntax.prefix)
+    }
+    if let positional = syntax.positional, positional.isEmpty {
+      throw OAuthScopeError.invalidSyntax("empty positional in include scope")
+    }
+    var nsid: String? = syntax.positional
+    var aud: String? = nil
+    var sawNsidInQuery = false
+    for param in syntax.params {
+      switch param.key {
+      case "nsid":
+        sawNsidInQuery = true
+        if nsid != nil {
+          throw OAuthScopeError.duplicateKey("nsid")
+        }
+        nsid = param.value
+      case "aud":
+        if aud != nil {
+          throw OAuthScopeError.duplicateKey("aud")
+        }
+        guard !param.value.isEmpty else {
+          throw OAuthScopeError.invalidSyntax("empty aud value in include scope")
+        }
+        aud = param.value
+      default:
+        throw OAuthScopeError.invalidSyntax("unknown key '\(param.key)' in include scope")
+      }
+    }
+    if syntax.positional != nil, sawNsidInQuery {
+      throw OAuthScopeError.invalidSyntax("include scope has both positional and nsid query")
+    }
+    guard let nsidValue = nsid else {
+      throw OAuthScopeError.missingRequired("nsid")
+    }
+    try self.init(nsid: nsidValue, aud: aud)
+  }
+
+  public var description: String {
+    var params: [OAuthScopeQueryParam] = []
+    if let aud {
+      params.append(OAuthScopeQueryParam(key: "aud", value: aud))
+    }
+    return OAuthScopeSyntax(prefix: "include", positional: nsid, params: params).description
+  }
+
+  public func isParentAuthorityOf(_ otherNsid: String) -> Bool {
+    if otherNsid == "*" { return false }
+    guard let groupPrefixEnd = nsid.lastIndex(of: ".") else {
+      return false
+    }
+    let groupPrefixEndOffset = nsid.distance(from: nsid.startIndex, to: groupPrefixEnd)
+    let otherLength = otherNsid.utf8.count
+    if groupPrefixEndOffset >= otherLength - 1 {
+      return false
+    }
+    let nsidBytes = Array(nsid.utf8)
+    let otherBytes = Array(otherNsid.utf8)
+    for i in 0...groupPrefixEndOffset where nsidBytes[i] != otherBytes[i] {
+      return false
+    }
+    return true
+  }
+}

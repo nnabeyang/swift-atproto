@@ -254,3 +254,88 @@ struct RepoScopeTests {
     }
   }
 }
+
+struct IncludeScopeTests {
+  @Test func parsePositionalNsid() throws {
+    let scope = try IncludeScope(string: "include:com.example.foo.auth")
+    #expect(scope.nsid == "com.example.foo.auth")
+    #expect(scope.aud == nil)
+  }
+
+  @Test func parseWithAud() throws {
+    let scope = try IncludeScope(
+      string: "include:com.example.foo.auth?aud=did:web:example.com%23service")
+    #expect(scope.nsid == "com.example.foo.auth")
+    #expect(scope.aud == "did:web:example.com#service")
+  }
+
+  @Test func serializeWithoutAud() throws {
+    let scope = try IncludeScope(nsid: "com.example.foo.auth")
+    #expect(scope.description == "include:com.example.foo.auth")
+  }
+
+  @Test func serializeWithAud() throws {
+    let scope = try IncludeScope(
+      nsid: "com.example.foo.auth", aud: "did:web:example.com#service")
+    #expect(scope.description == "include:com.example.foo.auth?aud=did:web:example.com%23service")
+  }
+
+  @Test func roundTripCanonicalForms() throws {
+    let canonical = [
+      "include:com.example.foo.auth",
+      "include:com.example.foo.auth?aud=*",
+      "include:com.example.foo.auth?aud=did:web:example.com%23service",
+    ]
+    for input in canonical {
+      let scope = try IncludeScope(string: input)
+      #expect(scope.description == input, "round-trip mismatch for \(input)")
+    }
+  }
+
+  @Test func invalidNsidThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try IncludeScope(nsid: "not-an-nsid")
+    }
+  }
+
+  @Test func parentAuthorityAllowsSibling() throws {
+    let scope = try IncludeScope(nsid: "com.example.foo.auth")
+    #expect(scope.isParentAuthorityOf("com.example.foo.identifier") == true)
+  }
+
+  @Test func parentAuthorityAllowsDeeperChild() throws {
+    let scope = try IncludeScope(nsid: "com.example.foo.auth")
+    #expect(scope.isParentAuthorityOf("com.example.foo.bar.baz") == true)
+  }
+
+  @Test func parentAuthorityRejectsParentSibling() throws {
+    let scope = try IncludeScope(nsid: "com.example.foo.auth")
+    #expect(scope.isParentAuthorityOf("com.example.bar") == false)
+    #expect(scope.isParentAuthorityOf("com.example.bar.something") == false)
+  }
+
+  @Test func parentAuthorityRejectsSelfPrefixWithoutChild() throws {
+    let scope = try IncludeScope(nsid: "com.example.foo.auth")
+    #expect(scope.isParentAuthorityOf("com.example.foo") == false)
+  }
+
+  @Test func parentAuthorityRejectsWildcard() throws {
+    let scope = try IncludeScope(nsid: "com.example.foo.auth")
+    #expect(scope.isParentAuthorityOf("*") == false)
+  }
+
+  @Test func emptyPositionalThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try IncludeScope(string: "include:")
+    }
+    #expect(throws: OAuthScopeError.self) {
+      try IncludeScope(string: "include:?aud=did:web:example.com")
+    }
+  }
+
+  @Test func emptyAudThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try IncludeScope(string: "include:com.example.foo.auth?aud=")
+    }
+  }
+}
