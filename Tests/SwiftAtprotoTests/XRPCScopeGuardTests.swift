@@ -186,3 +186,61 @@ private struct MockClient: @unchecked Sendable, ATPClientProtocol {
   func refreshSession() async -> Bool { false }
   func response(_: XRPCRequestComponents) async throws -> Data { Data("{}".utf8) }
 }
+
+struct EndToEndOAuthScopeGuardTests {
+  @Test func permissionSetExpandedScopesGateXrpcCalls() async throws {
+    let permissions = [
+      LexPermission(
+        resource: .rpc,
+        inheritAud: true,
+        lxm: ["com.example.stub.query"]
+      )
+    ]
+    let include = try IncludeScope(
+      nsid: "com.example.stub.scope",
+      aud: "did:web:pds.example.com#atproto_pds"
+    )
+    let expandedScopes = try include.expand(permissions)
+    let grantedScopes = try ScopesSet(["atproto"] + expandedScopes)
+    let session = PrebuiltScopesSession(
+      sessionDid: try DID(string: "did:web:user.example.com"),
+      audienceDid: try DID(string: "did:web:pds.example.com"),
+      grantedScopes: grantedScopes
+    )
+    let client = MockClient(session: session)
+
+    _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+
+    await #expect(
+      throws: OAuthScopeError.insufficientScope(
+        lxm: "com.example.stub.procedure",
+        aud: "did:web:pds.example.com#atproto_pds"
+      )
+    ) {
+      _ = try await client.call(StubProcedure.self, input: nil)
+    }
+  }
+
+  @Test func unknownGrantedScopeStringsStillAllowSession() async throws {
+    let grantedScopes = ScopesSet(rawScopes: [
+      "atproto",
+      "transition:generic",
+      "rpc:com.example.stub.query?aud=did:web:pds.example.com%23atproto_pds",
+    ])
+    let session = PrebuiltScopesSession(
+      sessionDid: try DID(string: "did:web:user.example.com"),
+      audienceDid: try DID(string: "did:web:pds.example.com"),
+      grantedScopes: grantedScopes
+    )
+    let client = MockClient(session: session)
+    _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+    #expect(grantedScopes.hasAtprotoScope)
+    #expect(grantedScopes.rawOther.contains("transition:generic"))
+  }
+}
+
+private struct PrebuiltScopesSession: OAuthSession {
+  let sessionDid: DID
+  let audienceDid: DID
+  let grantedScopes: ScopesSet
+}
