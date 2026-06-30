@@ -261,4 +261,66 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
     }
     return true
   }
+
+  public func expand<PS: LexPermissionSet>(_ permissionSet: PS.Type) throws -> [String] {
+    guard PS.id == nsid else {
+      throw OAuthScopeError.invalidSyntax(
+        "permission-set id '\(PS.id)' does not match include scope nsid '\(nsid)'")
+    }
+    return try expand(permissionSet.permissions)
+  }
+
+  public func expand(_ permissions: [LexPermission]) throws -> [String] {
+    var scopes: [String] = []
+    for permission in permissions {
+      switch permission.resource {
+      case .rpc:
+        scopes.append(try expandRpc(permission))
+      case .repo:
+        scopes.append(try expandRepo(permission))
+      default:
+        throw OAuthScopeError.unsupportedResource(permission.resource.rawValue)
+      }
+    }
+    return scopes
+  }
+
+  private func expandRpc(_ permission: LexPermission) throws -> String {
+    let resolvedAud: String
+    if let permAud = permission.aud {
+      if permAud != "*" {
+        throw OAuthScopeError.permissionAudMismatch(
+          "rpc permission has specific aud '\(permAud)' which is not allowed in permission-set")
+      }
+      resolvedAud = "*"
+    } else if permission.inheritAud == true {
+      guard let includeAud = aud else {
+        throw OAuthScopeError.permissionAudMismatch(
+          "rpc permission has inheritAud=true but include scope has no aud")
+      }
+      resolvedAud = includeAud
+    } else {
+      throw OAuthScopeError.missingRequired(
+        "rpc permission has neither aud nor inheritAud=true")
+    }
+
+    guard let lxm = permission.lxm, !lxm.isEmpty else {
+      throw OAuthScopeError.missingRequired("lxm in rpc permission")
+    }
+    for nsidValue in lxm where !isParentAuthorityOf(nsidValue) {
+      throw OAuthScopeError.nsidOutsideAuthority(parent: nsid, other: nsidValue)
+    }
+    return try RpcScope(aud: resolvedAud, lxm: lxm).description
+  }
+
+  private func expandRepo(_ permission: LexPermission) throws -> String {
+    guard let collection = permission.collection, !collection.isEmpty else {
+      throw OAuthScopeError.missingRequired("collection in repo permission")
+    }
+    for nsidValue in collection where !isParentAuthorityOf(nsidValue) {
+      throw OAuthScopeError.nsidOutsideAuthority(parent: nsid, other: nsidValue)
+    }
+    let actions = permission.action ?? RepoScope.defaultActions
+    return try RepoScope(collection: collection, action: actions).description
+  }
 }

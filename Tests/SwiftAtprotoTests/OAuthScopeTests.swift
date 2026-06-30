@@ -339,3 +339,161 @@ struct IncludeScopeTests {
     }
   }
 }
+
+struct IncludeScopeExpandTests {
+  @Test func expandsRpcWithInheritAud() throws {
+    let include = try IncludeScope(
+      nsid: "com.example.auth.scope", aud: "did:web:example.com#service")
+    let permissions = [
+      LexPermission(
+        resource: .rpc,
+        inheritAud: true,
+        lxm: ["com.example.auth.foo"]
+      )
+    ]
+    let scopes = try include.expand(permissions)
+    #expect(
+      scopes == ["rpc:com.example.auth.foo?aud=did:web:example.com%23service"])
+  }
+
+  @Test func expandsRpcWithWildcardAud() throws {
+    let include = try IncludeScope(nsid: "com.example.auth.scope")
+    let permissions = [
+      LexPermission(
+        resource: .rpc,
+        aud: "*",
+        lxm: ["com.example.auth.foo"]
+      )
+    ]
+    let scopes = try include.expand(permissions)
+    #expect(scopes == ["rpc:com.example.auth.foo?aud=*"])
+  }
+
+  @Test func expandsRepo() throws {
+    let include = try IncludeScope(nsid: "com.example.auth.scope")
+    let permissions = [
+      LexPermission(
+        resource: .repo,
+        action: [.create],
+        collection: ["com.example.auth.record"]
+      )
+    ]
+    let scopes = try include.expand(permissions)
+    #expect(scopes == ["repo:com.example.auth.record?action=create"])
+  }
+
+  @Test func expandsRepoWithDefaultActionsOmitted() throws {
+    let include = try IncludeScope(nsid: "com.example.auth.scope")
+    let permissions = [
+      LexPermission(
+        resource: .repo,
+        action: [.create, .update, .delete],
+        collection: ["com.example.auth.record"]
+      )
+    ]
+    let scopes = try include.expand(permissions)
+    #expect(scopes == ["repo:com.example.auth.record"])
+  }
+
+  @Test func rejectsRpcWithSpecificAudInPermissionSet() {
+    #expect(throws: OAuthScopeError.self) {
+      let include = try IncludeScope(nsid: "com.example.auth.scope")
+      let permissions = [
+        LexPermission(
+          resource: .rpc,
+          aud: "did:web:example.com",
+          lxm: ["com.example.auth.foo"]
+        )
+      ]
+      _ = try include.expand(permissions)
+    }
+  }
+
+  @Test func rejectsRpcInheritAudWithoutIncludeAud() {
+    #expect(throws: OAuthScopeError.self) {
+      let include = try IncludeScope(nsid: "com.example.auth.scope")
+      let permissions = [
+        LexPermission(
+          resource: .rpc,
+          inheritAud: true,
+          lxm: ["com.example.auth.foo"]
+        )
+      ]
+      _ = try include.expand(permissions)
+    }
+  }
+
+  @Test func rejectsNsidOutsideAuthority() {
+    #expect(throws: OAuthScopeError.self) {
+      let include = try IncludeScope(nsid: "com.example.auth.scope")
+      let permissions = [
+        LexPermission(
+          resource: .rpc,
+          inheritAud: true,
+          lxm: ["com.other.namespace.foo"]
+        )
+      ]
+      let scope = try IncludeScope(
+        nsid: "com.example.auth.scope", aud: "did:web:example.com")
+      _ = try scope.expand(permissions)
+      _ = include
+    }
+  }
+
+  @Test func rejectsUnsupportedResource() {
+    #expect(throws: OAuthScopeError.self) {
+      let include = try IncludeScope(nsid: "com.example.auth.scope")
+      let permissions = [
+        LexPermission(resource: LexPermissionResource(rawValue: "blob"))
+      ]
+      _ = try include.expand(permissions)
+    }
+  }
+
+  @Test func expandsMixedRpcAndRepo() throws {
+    let include = try IncludeScope(
+      nsid: "com.example.auth.scope", aud: "did:web:example.com")
+    let permissions = [
+      LexPermission(
+        resource: .rpc,
+        inheritAud: true,
+        lxm: ["com.example.auth.foo", "com.example.auth.bar"]
+      ),
+      LexPermission(
+        resource: .repo,
+        action: [.create],
+        collection: ["com.example.auth.record"]
+      ),
+    ]
+    let scopes = try include.expand(permissions)
+    #expect(scopes.count == 2)
+    #expect(
+      scopes[0]
+        == "rpc?lxm=com.example.auth.bar&lxm=com.example.auth.foo&aud=did:web:example.com")
+    #expect(scopes[1] == "repo:com.example.auth.record?action=create")
+  }
+
+  @Test func expandsFromPermissionSetType() throws {
+    let include = try IncludeScope(
+      nsid: "com.example.auth.scope", aud: "did:web:example.com")
+    let scopes = try include.expand(MatchingPermissionSet.self)
+    #expect(scopes == ["rpc:com.example.auth.foo?aud=did:web:example.com"])
+  }
+
+  @Test func rejectsMismatchedPermissionSetId() throws {
+    let include = try IncludeScope(
+      nsid: "com.example.auth.other", aud: "did:web:example.com")
+    #expect(throws: OAuthScopeError.self) {
+      try include.expand(MatchingPermissionSet.self)
+    }
+  }
+}
+
+private enum MatchingPermissionSet: LexPermissionSet {
+  static let id = "com.example.auth.scope"
+  static let title: String? = nil
+  static let detail: String? = nil
+  static let permissions: [LexPermission] = [
+    LexPermission(resource: .rpc, inheritAud: true, lxm: ["com.example.auth.foo"])
+  ]
+}
