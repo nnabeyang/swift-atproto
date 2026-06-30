@@ -23,6 +23,12 @@ public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
     guard !lxm.isEmpty else {
       throw OAuthScopeError.missingRequired("lxm")
     }
+    guard Self.isValidAudience(aud) else {
+      throw OAuthScopeError.invalidSyntax("invalid aud '\(aud)' in rpc scope")
+    }
+    for value in lxm where !Self.isValidLxm(value) {
+      throw OAuthScopeError.invalidSyntax("invalid lxm '\(value)' in rpc scope")
+    }
     let normalized = Self.normalize(lxm: lxm)
     if aud == "*", normalized.contains("*") {
       throw OAuthScopeError.forbiddenCombination("rpc:* with aud:*")
@@ -91,6 +97,14 @@ public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
     }
     return Array(Set(lxm)).sorted()
   }
+
+  private static func isValidLxm(_ value: String) -> Bool {
+    value == "*" || NSID.isValid(value)
+  }
+
+  private static func isValidAudience(_ value: String) -> Bool {
+    isValidOAuthAudience(value)
+  }
 }
 
 public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
@@ -108,6 +122,9 @@ public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
     }
     for a in action where !Self.defaultActions.contains(a) {
       throw OAuthScopeError.invalidSyntax("unknown action '\(a.rawValue)' in repo scope")
+    }
+    for value in collection where !Self.isValidCollection(value) {
+      throw OAuthScopeError.invalidSyntax("invalid collection '\(value)' in repo scope")
     }
     self.collection = Self.normalize(collection: collection)
     self.action = Self.normalize(action: action)
@@ -182,6 +199,10 @@ public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
     let seen = Set(action)
     return Self.defaultActions.filter { seen.contains($0) }
   }
+
+  private static func isValidCollection(_ value: String) -> Bool {
+    value == "*" || NSID.isValid(value)
+  }
 }
 
 public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
@@ -191,6 +212,9 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
   public init(nsid: String, aud: String? = nil) throws {
     guard NSID.isValid(nsid) else {
       throw OAuthScopeError.invalidSyntax("invalid NSID '\(nsid)' in include scope")
+    }
+    if let aud, !isValidOAuthAudience(aud) {
+      throw OAuthScopeError.invalidSyntax("invalid aud '\(aud)' in include scope")
     }
     self.nsid = nsid
     self.aud = aud
@@ -322,5 +346,130 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
     }
     let actions = permission.action ?? RepoScope.defaultActions
     return try RepoScope(collection: collection, action: actions).description
+  }
+}
+
+public struct ScopesSet: Hashable, Sendable {
+  public let rpcScopes: [RpcScope]
+  public let repoScopes: [RepoScope]
+  public let includeScopes: [IncludeScope]
+  public let rawOther: Set<String>
+
+  public init(_ scopes: [String]) throws {
+    var rpc: [RpcScope] = []
+    var repo: [RepoScope] = []
+    var include: [IncludeScope] = []
+    var other: Set<String> = []
+    for scope in scopes {
+      let syntax = OAuthScopeSyntax.parse(scope)
+      switch syntax.prefix {
+      case "rpc":
+        rpc.append(try RpcScope(string: scope))
+      case "repo":
+        repo.append(try RepoScope(string: scope))
+      case "include":
+        include.append(try IncludeScope(string: scope))
+      default:
+        guard isValidRawOAuthScope(scope) else {
+          throw OAuthScopeError.invalidSyntax("invalid scope '\(scope)'")
+        }
+        other.insert(scope)
+      }
+    }
+    self.rpcScopes = rpc
+    self.repoScopes = repo
+    self.includeScopes = include
+    self.rawOther = other
+  }
+
+  public init(rawScopes scopes: [String]) {
+    var rpc: [RpcScope] = []
+    var repo: [RepoScope] = []
+    var include: [IncludeScope] = []
+    var other: Set<String> = []
+    for scope in scopes {
+      let syntax = OAuthScopeSyntax.parse(scope)
+      switch syntax.prefix {
+      case "rpc":
+        if let parsed = try? RpcScope(string: scope) { rpc.append(parsed) }
+      case "repo":
+        if let parsed = try? RepoScope(string: scope) { repo.append(parsed) }
+      case "include":
+        if let parsed = try? IncludeScope(string: scope) { include.append(parsed) }
+      default:
+        guard isValidRawOAuthScope(scope) else {
+          continue
+        }
+        other.insert(scope)
+      }
+    }
+    self.rpcScopes = rpc
+    self.repoScopes = repo
+    self.includeScopes = include
+    self.rawOther = other
+  }
+
+  public var hasAtprotoScope: Bool {
+    rawOther.contains(OAuthScope.atproto)
+  }
+
+  public func allowsRpc(lxm: String, aud: String) -> Bool {
+    guard hasAtprotoScope else {
+      return false
+    }
+    for scope in rpcScopes {
+      let lxmMatches = scope.lxm.contains(lxm) || scope.lxm.contains("*")
+      let audMatches = scope.aud == aud || scope.aud == "*"
+      if lxmMatches, audMatches {
+        return true
+      }
+    }
+    return false
+  }
+
+  public func allowsRepo(collection: String, action: LexPermissionAction) -> Bool {
+    guard hasAtprotoScope else {
+      return false
+    }
+    for scope in repoScopes {
+      let collMatches = scope.collection.contains(collection) || scope.collection.contains("*")
+      let actionMatches = scope.action.contains(action)
+      if collMatches, actionMatches {
+        return true
+      }
+    }
+    return false
+  }
+}
+
+private func isValidOAuthAudience(_ value: String) -> Bool {
+  if value == "*" {
+    return true
+  }
+  guard
+    let fragmentStart = value.firstIndex(of: "#"),
+    fragmentStart > value.startIndex,
+    value.index(after: fragmentStart) < value.endIndex,
+    value[value.index(after: fragmentStart)...].allSatisfy({ $0.isPrintableNonWhitespaceASCII })
+  else {
+    return false
+  }
+  let didPart = String(value[..<fragmentStart])
+  return (try? DID(string: didPart)) != nil
+}
+
+private func isValidRawOAuthScope(_ scope: String) -> Bool {
+  guard !scope.isEmpty else {
+    return false
+  }
+  return scope.allSatisfy(\.isPrintableNonWhitespaceASCII)
+}
+
+private extension Character {
+  var isPrintableNonWhitespaceASCII: Bool {
+    unicodeScalars.count == 1
+      && unicodeScalars.allSatisfy { scalar in
+        scalar.value >= 0x21 && scalar.value <= 0x7E
+      }
   }
 }
