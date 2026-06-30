@@ -26,6 +26,7 @@ extension _XRPCCallable {
   public func call<X: XRPCProcedure>(_ procedure: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody {
     let proxy = getProxy(nsid: X.id)
     try enforceScopeGuard(X.self, proxy: proxy)
+    try enforceRepoScopeGuard(input as? any RepoWriteOperationDescribing)
     var request = try constructRequest(procedure, input: input)
     if let proxy {
       request.headers[.atprotoProxy] = proxy
@@ -39,6 +40,16 @@ extension _XRPCCallable {
     let aud = proxy ?? "\(session.audienceDid.rawValue)#atproto_pds"
     guard session.grantedScopes.allowsRpc(lxm: lxm, aud: aud) else {
       throw OAuthScopeError.insufficientScope(lxm: lxm, aud: aud)
+    }
+  }
+
+  private func enforceRepoScopeGuard(_ op: (any RepoWriteOperationDescribing)?) throws {
+    guard let session = (self as? ATPClientProtocol)?.oauthSession else { return }
+    guard let op else { return }
+    for req in op.repoWriteRequirements {
+      guard session.grantedScopes.allowsRepo(collection: req.collection, action: req.action) else {
+        throw OAuthScopeError.insufficientRepoScope(collection: req.collection, action: req.action)
+      }
     }
   }
 
