@@ -9,20 +9,13 @@ import PackagePlugin
     sourceFiles: FileList,
     targetName: String
   ) throws -> [Command] {
-    if let configData = try? Data(contentsOf: configurationFileURL),
-      let json = try? JSONSerialization.jsonObject(with: configData) as? [String: Any],
-      json["module"] != nil
-    {
-      Diagnostics.warning(
-        "'module' in .atproto.json is only used by the 'Generate Source Code' command plugin and will be ignored by ATProtoGenerator."
-      )
-    }
     let tool = try tool("swift-atproto")
     let codeGenerationExec = tool.url
     var arguments = [String]()
     let outdir = pluginWorkDirectoryURL.appending(components: "GeneratedSources")
     arguments.append(contentsOf: ["--atproto-configuration", configurationFileURL.path()])
     arguments.append(contentsOf: ["--outdir", outdir.path()])
+    arguments.append(contentsOf: ["--plugin-source", "build"])
     return [
       .buildCommand(
         displayName: "Running swift-atproto-generator",

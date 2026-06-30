@@ -56,6 +56,13 @@ swift package plugin \
 
 Sample configuration file is as follows. You can specify whether to generate client code, server code, or both using the `generate` field (defaults to `["client"]`).
 
+The same `.atproto.json` schema serves both the `ATProtoGenerator` build tool plugin and the `Generate Source Code` command plugin, but the `module` field behaves differently:
+
+- **Build tool plugin (`ATProtoGenerator`)** writes the generated sources into SwiftPM's plugin work directory. `module` is ignored.
+- **Command plugin (`Generate Source Code`)** uses `module` to choose where the generated sources are written in your source tree (e.g. `Sources/Lexicon`).
+
+#### Build plugin sample (no `module`)
+
 ```json
 {
   "generate": ["client", "server"],
@@ -98,7 +105,18 @@ Sample configuration file is as follows. You can specify whether to generate cli
         "tag": "@atproto/api@0.19.3"
       }
     }
-  ],
+  ]
+}
+```
+
+#### Command plugin sample (with `module`)
+
+Add `"module": "Sources/Lexicon"` (or the path of your choice) to the same JSON above when invoking `Generate Source Code`:
+
+```json
+{
+  "generate": ["client", "server"],
+  "dependencies": [ ... ],
   "module": "Sources/Lexicon"
 }
 ```

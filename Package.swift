@@ -103,6 +103,7 @@ let package = Package(
       name: "SwiftAtprotoLexTests",
       dependencies: [
         "SwiftAtprotoLex",
+        .target(name: "SourceControl", condition: .when(platforms: [.macOS, .linux])),
         .product(name: "SwiftSyntax", package: "swift-syntax"),
         .product(name: "SwiftParser", package: "swift-syntax"),
       ]

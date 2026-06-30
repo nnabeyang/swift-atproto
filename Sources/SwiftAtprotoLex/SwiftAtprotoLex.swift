@@ -7,13 +7,13 @@ import SwiftSyntaxBuilder
   import SourceControl
 #endif
 
-public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOption) async throws {
+public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOption, pluginSource: PluginSource = .command) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
   let schemasMap = try await decodeSchemasByPrefix(from: fileURLs, baseURL: url)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
-  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate)
+  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate, pluginSource: pluginSource)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -91,21 +91,33 @@ func writeSchemaCode(
   for schemasMap: [String: [Schema]],
   with defMap: ExtDefMap,
   to baseURL: URL,
-  generate: GenerateOption
+  generate: GenerateOption,
+  pluginSource: PluginSource
 ) async throws {
   let schemasArray = schemasMap.sorted { $0.key < $1.key }
   let (blocks, methods, requirements) = try await withThrowingTaskGroup(of: (DeclSyntax, MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { group in
     let src = Lex.genUnknownRecord(for: schemasMap)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
-    let serverSrc: String
-    if generate.contains(.server) {
-      serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
-    } else {
-      serverSrc = ""
-    }
     let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
-    try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
+    switch (generate.contains(.server), pluginSource) {
+    case (true, _):
+      let serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
+      try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
+    case (false, .build):
+      // The build plugin pre-declares this file as an output at plan time, so
+      // write a header-only placeholder that compiles cleanly. Any
+      // pre-existing content from an earlier `.server` run is overwritten.
+      let placeholder = Lex.renderSourceFile(SourceFileSyntax(leadingTrivia: Lex.fileHeader) {})
+      try placeholder.write(to: serverURL, atomically: true, encoding: .utf8)
+    case (false, .command):
+      // XRPCAPIProtocol.swift is a fixed, swift-atproto-owned filename, so a
+      // leftover at this path is always a prior-run artifact (including the
+      // 0-byte placeholders written by older versions). Drop it unconditionally.
+      if FileManager.default.fileExists(atPath: serverURL.path) {
+        try FileManager.default.removeItem(at: serverURL)
+      }
+    }
     for (i, (prefix, schemas)) in schemasArray.enumerated() {
       group.addTask {
         let (types, methods, requirements) = try await withThrowingTaskGroup(of: (MemberBlockItemListSyntax, MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { innerGroup in
@@ -202,7 +214,7 @@ func writeSchemaCode(
       }
     }
   }
-  let clientSrc: String = clientTree.formatted(using: BasicFormat(indentationWidth: .spaces(2))).with(\.trailingTrivia, .newline).description
+  let clientSrc: String = Lex.renderSourceFile(clientTree)
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
@@ -263,6 +275,15 @@ extension URL {
 }
 
 enum Lex {
+  // Render a `SourceFileSyntax` through the project's standard formatter and
+  // append a trailing newline. Centralized so the build-plugin placeholder and
+  // the real client/protocol files always emit identical headers and spacing.
+  static func renderSourceFile(_ source: SourceFileSyntax) -> String {
+    source.formatted(using: BasicFormat(indentationWidth: .spaces(2)))
+      .with(\.trailingTrivia, .newline)
+      .description
+  }
+
   static var fileHeader: Trivia {
     Trivia(pieces: [
       .lineComment("//"),
