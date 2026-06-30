@@ -30,7 +30,10 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
     EnumDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-      name: .lexIdentifier(name)
+      name: .lexIdentifier(name),
+      inheritanceClause: InheritanceClauseSyntax {
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("LexPermissionSet")))
+      }
     ) {
       staticLetDecl(leadingTrivia: .newline, ident: "id", value: StringLiteralExprSyntax(content: typeName))
       Self.optionalStringStaticLet(ident: "title", value: title)
