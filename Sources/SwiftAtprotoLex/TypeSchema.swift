@@ -97,6 +97,8 @@ final class Schema: Encodable, DecodableWithConfiguration, Sendable {
       case .string(let def):
         guard def.knownValues != nil || def.enum != nil else { break }
         out[name] = ts
+      case .permissionSet:
+        out[name] = ts
       default:
         break
       }
@@ -470,6 +472,8 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .procedure(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .query(let def):
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
+    case .permissionSet(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     default:
       fatalError()
