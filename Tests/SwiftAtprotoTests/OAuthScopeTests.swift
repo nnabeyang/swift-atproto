@@ -766,3 +766,135 @@ private struct SampleRepoOp: RepoWriteOperationDescribing {
     [RepoWriteRequirement(collection: collection, action: action)]
   }
 }
+
+struct IncludeScopeMatchTests {
+  @Test func includeWithoutRegistryDoesNotMatch() throws {
+    let set = try ScopesSet([
+      "atproto",
+      "include:com.example.auth.scope?aud=did:web:pds.example.com%23atproto_pds",
+    ])
+    #expect(set.includeScopes.count == 1)
+    #expect(!set.allowsRpc(lxm: "com.example.auth.foo", aud: "did:web:pds.example.com#atproto_pds"))
+  }
+
+  @Test func includeWithRegistryAllowsRpc() throws {
+    let set = try ScopesSet(
+      [
+        "atproto",
+        "include:com.example.auth.scope?aud=did:web:pds.example.com%23atproto_pds",
+      ],
+      permissionSets: [SampleAuthPermissionSet.self]
+    )
+    #expect(
+      set.allowsRpc(lxm: "com.example.auth.foo", aud: "did:web:pds.example.com#atproto_pds"))
+    #expect(
+      set.allowsRpc(lxm: "com.example.auth.bar", aud: "did:web:pds.example.com#atproto_pds"))
+  }
+
+  @Test func includeWithRegistryAllowsRepo() throws {
+    let set = try ScopesSet(
+      [
+        "atproto",
+        "include:com.example.auth.scope?aud=did:web:pds.example.com%23atproto_pds",
+      ],
+      permissionSets: [SampleAuthPermissionSet.self]
+    )
+    #expect(set.allowsRepo(collection: "com.example.auth.record", action: .create))
+    #expect(!set.allowsRepo(collection: "com.example.auth.record", action: .delete))
+  }
+
+  @Test func includeWithMismatchedAudFromRegistryIsRejected() throws {
+    let set = try ScopesSet(
+      [
+        "atproto",
+        "include:com.example.auth.scope?aud=did:web:pds.example.com%23atproto_pds",
+      ],
+      permissionSets: [SampleAuthPermissionSet.self]
+    )
+    #expect(
+      !set.allowsRpc(lxm: "com.example.auth.foo", aud: "did:web:other.example.com#atproto_pds"))
+  }
+
+  @Test func unknownIncludeNsidSilentlySkipped() throws {
+    let set = try ScopesSet(
+      ["include:com.unknown.scope?aud=did:web:pds.example.com%23atproto_pds"],
+      permissionSets: [SampleAuthPermissionSet.self]
+    )
+    #expect(set.includeScopes.count == 1)
+    #expect(!set.allowsRpc(lxm: "com.unknown.foo", aud: "did:web:pds.example.com#atproto_pds"))
+  }
+
+  @Test func rawScopesInitAcceptsRegistry() {
+    let set = ScopesSet(
+      rawScopes: [
+        "atproto",
+        "include:com.example.auth.scope?aud=did:web:pds.example.com%23atproto_pds",
+        "garbage:invalid",
+      ],
+      permissionSets: [SampleAuthPermissionSet.self]
+    )
+    #expect(set.hasAtprotoScope)
+    #expect(
+      set.allowsRpc(lxm: "com.example.auth.foo", aud: "did:web:pds.example.com#atproto_pds"))
+  }
+
+  @Test func throwingInitPropagatesRegisteredPermissionSetExpansionErrors() {
+    #expect(
+      throws: OAuthScopeError.nsidOutsideAuthority(
+        parent: "com.example.bad.scope",
+        other: "com.other.auth.foo"
+      )
+    ) {
+      _ = try ScopesSet(
+        [
+          "atproto",
+          "include:com.example.bad.scope?aud=did:web:pds.example.com%23atproto_pds",
+        ],
+        permissionSets: [BrokenAuthPermissionSet.self]
+      )
+    }
+  }
+
+  @Test func rawScopesInitSkipsRegisteredPermissionSetExpansionErrors() {
+    let set = ScopesSet(
+      rawScopes: [
+        "atproto",
+        "include:com.example.bad.scope?aud=did:web:pds.example.com%23atproto_pds",
+      ],
+      permissionSets: [BrokenAuthPermissionSet.self]
+    )
+    #expect(set.includeScopes.count == 1)
+    #expect(!set.allowsRpc(lxm: "com.other.auth.foo", aud: "did:web:pds.example.com#atproto_pds"))
+  }
+}
+
+private enum SampleAuthPermissionSet: LexPermissionSet {
+  static let id = "com.example.auth.scope"
+  static let title: String? = "Sample Auth"
+  static let detail: String? = nil
+  static let permissions: [LexPermission] = [
+    LexPermission(
+      resource: .rpc,
+      inheritAud: true,
+      lxm: ["com.example.auth.foo", "com.example.auth.bar"]
+    ),
+    LexPermission(
+      resource: .repo,
+      action: [.create],
+      collection: ["com.example.auth.record"]
+    ),
+  ]
+}
+
+private enum BrokenAuthPermissionSet: LexPermissionSet {
+  static let id = "com.example.bad.scope"
+  static let title: String? = nil
+  static let detail: String? = nil
+  static let permissions: [LexPermission] = [
+    LexPermission(
+      resource: .rpc,
+      inheritAud: true,
+      lxm: ["com.other.auth.foo"]
+    )
+  ]
+}
