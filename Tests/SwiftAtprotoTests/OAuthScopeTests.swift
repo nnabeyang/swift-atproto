@@ -497,3 +497,98 @@ private enum MatchingPermissionSet: LexPermissionSet {
     LexPermission(resource: .rpc, inheritAud: true, lxm: ["com.example.auth.foo"])
   ]
 }
+
+private struct PermissionSetWire: Decodable {
+  let defs: Defs
+
+  struct Defs: Decodable {
+    let main: Main
+  }
+
+  struct Main: Decodable {
+    let permissions: [LexPermission]
+  }
+}
+
+struct EndToEndScopeExpansionTests {
+  private static let authCreatePostsJSON = #"""
+    {
+      "lexicon": 1,
+      "id": "com.example.authCreatePosts",
+      "defs": {
+        "main": {
+          "type": "permission-set",
+          "title": "Create Example Posts",
+          "detail": "Can not update or delete posts.",
+          "permissions": [
+            {
+              "type": "permission",
+              "resource": "rpc",
+              "inheritAud": true,
+              "lxm": [
+                "com.example.video.uploadVideo",
+                "com.example.video.getJobStatus",
+                "com.example.video.getUploadLimits"
+              ]
+            },
+            {
+              "type": "permission",
+              "resource": "repo",
+              "action": ["create"],
+              "collection": [
+                "com.example.feed.post",
+                "com.example.feed.postgate",
+                "com.example.feed.threadgate"
+              ]
+            }
+          ]
+        }
+      }
+    }
+    """#
+
+  @Test func expandsAuthCreatePostsAgainstCanonicalScopes() throws {
+    let wire = try JSONDecoder().decode(
+      PermissionSetWire.self, from: Data(Self.authCreatePostsJSON.utf8))
+    let include = try IncludeScope(
+      nsid: "com.example.authCreatePosts", aud: "did:web:example.com")
+    let scopes = try include.expand(wire.defs.main.permissions)
+    #expect(scopes.count == 2)
+    #expect(
+      scopes[0]
+        == "rpc?lxm=com.example.video.getJobStatus&lxm=com.example.video.getUploadLimits&lxm=com.example.video.uploadVideo&aud=did:web:example.com"
+    )
+    #expect(
+      scopes[1]
+        == "repo?collection=com.example.feed.post&collection=com.example.feed.postgate&collection=com.example.feed.threadgate&action=create"
+    )
+  }
+
+  @Test func roundTripExpandedScopesParseBack() throws {
+    let wire = try JSONDecoder().decode(
+      PermissionSetWire.self, from: Data(Self.authCreatePostsJSON.utf8))
+    let include = try IncludeScope(
+      nsid: "com.example.authCreatePosts", aud: "did:web:example.com")
+    let scopes = try include.expand(wire.defs.main.permissions)
+
+    let rpc = try RpcScope(string: scopes[0])
+    #expect(rpc.aud == "did:web:example.com")
+    #expect(
+      rpc.lxm == [
+        "com.example.video.getJobStatus",
+        "com.example.video.getUploadLimits",
+        "com.example.video.uploadVideo",
+      ])
+    #expect(rpc.description == scopes[0])
+
+    let repo = try RepoScope(string: scopes[1])
+    #expect(repo.action == [.create])
+    #expect(
+      repo.collection == [
+        "com.example.feed.post",
+        "com.example.feed.postgate",
+        "com.example.feed.threadgate",
+      ])
+    #expect(repo.description == scopes[1])
+  }
+}
