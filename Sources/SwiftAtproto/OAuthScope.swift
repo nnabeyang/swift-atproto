@@ -4,6 +4,20 @@ public enum OAuthScope {
   public static let atproto = "atproto"
 }
 
+public struct RepoWriteRequirement: Hashable, Sendable {
+  public let collection: String
+  public let action: LexPermissionAction
+
+  public init(collection: String, action: LexPermissionAction) {
+    self.collection = collection
+    self.action = action
+  }
+}
+
+public protocol RepoWriteOperationDescribing: Sendable {
+  var repoWriteRequirements: [RepoWriteRequirement] { get }
+}
+
 public enum OAuthScopeError: Error, Hashable, Sendable {
   case invalidSyntax(String)
   case invalidResource(String)
