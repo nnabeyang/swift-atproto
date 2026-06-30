@@ -61,11 +61,20 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       required[key] = false
     }
     let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
+    let repoWriteAction = Self.repoWriteAction(nsid: ts.id, inputName: name)
+    let inheritedNames: [String] = {
+      if ts.isRecord { return ["ATProtoRecord"] }
+      var names = ["Codable", "Hashable", "Sendable"]
+      if repoWriteAction != nil {
+        names.append("RepoWriteOperationDescribing")
+      }
+      return names
+    }()
     return StructDeclSyntax(
       leadingTrivia: leadingTrivia,
       modifiers: [declModifierSyntax],
       name: .lexIdentifier(name),
-      inheritanceClause: InheritanceClauseSyntax(typeNames: ts.isRecord ? ["ATProtoRecord"] : ["Codable", "Hashable", "Sendable"])
+      inheritanceClause: InheritanceClauseSyntax(typeNames: inheritedNames)
     ) {
       if ts.isRecord {
         VariableDeclSyntax(
@@ -149,6 +158,10 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         .with(\.leadingTrivia, .newlines(2))
       if hasConstraints {
         staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
+          .with(\.leadingTrivia, .newlines(2))
+      }
+      if let actionRaw = repoWriteAction {
+        Self.repoWriteRequirementsAccessor(actionRaw: actionRaw)
           .with(\.leadingTrivia, .newlines(2))
       }
       if !enumCaseIsEmpty {
@@ -867,5 +880,76 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         }
       )
     }
+  }
+
+  private static func repoWriteAction(nsid: String, inputName: String) -> String? {
+    guard inputName.hasSuffix("_Input") else { return nil }
+    switch nsid {
+    case "com.atproto.repo.createRecord": return "create"
+    case "com.atproto.repo.putRecord": return "update"
+    case "com.atproto.repo.deleteRecord": return "delete"
+    default: return nil
+    }
+  }
+
+  private static func repoWriteRequirementsAccessor(actionRaw: String) -> VariableDeclSyntax {
+    VariableDeclSyntax(
+      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+      bindingSpecifier: .keyword(.var),
+      bindings: [
+        PatternBindingSyntax(
+          pattern: IdentifierPatternSyntax(identifier: .identifier("repoWriteRequirements")),
+          typeAnnotation: TypeAnnotationSyntax(
+            type: ArrayTypeSyntax(
+              element: IdentifierTypeSyntax(name: .identifier("RepoWriteRequirement"))
+            )
+          ),
+          accessorBlock: AccessorBlockSyntax(
+            leftBrace: .leftBraceToken(),
+            accessors: AccessorBlockSyntax.Accessors([
+              CodeBlockItemSyntax(
+                item: CodeBlockItemSyntax.Item(
+                  ArrayExprSyntax(
+                    leftSquare: .leftSquareToken(),
+                    elements: ArrayElementListSyntax([
+                      ArrayElementSyntax(
+                        expression: FunctionCallExprSyntax(
+                          calledExpression: DeclReferenceExprSyntax(
+                            baseName: .identifier("RepoWriteRequirement")),
+                          leftParen: .leftParenToken(),
+                          arguments: LabeledExprListSyntax([
+                            LabeledExprSyntax(
+                              label: .identifier("collection"),
+                              colon: .colonToken(),
+                              expression: MemberAccessExprSyntax(
+                                base: DeclReferenceExprSyntax(baseName: .identifier("collection")),
+                                period: .periodToken(),
+                                declName: DeclReferenceExprSyntax(baseName: .identifier("rawValue"))
+                              ),
+                              trailingComma: .commaToken()
+                            ),
+                            LabeledExprSyntax(
+                              label: .identifier("action"),
+                              colon: .colonToken(),
+                              expression: MemberAccessExprSyntax(
+                                period: .periodToken(),
+                                name: .identifier(actionRaw)
+                              )
+                            ),
+                          ]),
+                          rightParen: .rightParenToken()
+                        )
+                      )
+                    ]),
+                    rightSquare: .rightSquareToken()
+                  )
+                )
+              )
+            ]),
+            rightBrace: .rightBraceToken()
+          )
+        )
+      ]
+    )
   }
 }
