@@ -20,6 +20,13 @@ public struct Handle: LexiconStringFormat {
 }
 
 extension Handle {
+  // Sentinel returned by handle-verification paths (e.g. `DIDDocument.Verified`) when the handle
+  // cannot be confirmed against the DID. Well-formed per `isValid`, so it never fails to
+  // construct at runtime.
+  public static let invalid: Handle = try! Handle(string: "handle.invalid")
+}
+
+extension Handle {
   // Strict per the grammar above. Accepts `String` and `Substring` for both top-level use and
   // as a callable component validator from `ATURI` / `AtIdentifier`.
   static func isValid(_ s: some StringProtocol) -> Bool {
