@@ -33,4 +33,37 @@ extension DIDDocument {
     }
     return nil
   }
+
+  public struct Verified: Sendable, Hashable {
+    public let document: DIDDocument
+    public let did: DID
+    // `Handle.invalid` when handle verification failed or no handle was advertised.
+    public let verifiedHandle: Handle
+  }
+
+  // Synchronous check for callers that already have both sides of the pair.
+  public func verified(expecting handle: Handle, did: DID) throws -> Verified {
+    guard let parsed = self.did.typed, parsed == did else { throw VerifyError.invalidDID }
+    guard unverifiedHandle == handle else { throw VerifyError.handleMismatch }
+    return Verified(document: self, did: did, verifiedHandle: handle)
+  }
+
+  // Bidirectional check: parse our advertised DID, look up the advertised handle in the resolver,
+  // and require the round-trip to close. On mismatch we return `Handle.invalid` rather than
+  // throwing so callers can distinguish "no handle advertised" from "document malformed".
+  public func verified(resolver: any DIDHandleResolver) async throws -> Verified {
+    guard let did = self.did.typed else { throw VerifyError.invalidDID }
+    guard let handle = unverifiedHandle else {
+      return Verified(document: self, did: did, verifiedHandle: .invalid)
+    }
+    let resolved = try await resolver.resolveDID(handle: handle)
+    guard resolved == did else {
+      return Verified(document: self, did: did, verifiedHandle: .invalid)
+    }
+    return Verified(document: self, did: did, verifiedHandle: handle)
+  }
+}
+
+public protocol DIDHandleResolver: Sendable {
+  func resolveDID(handle: Handle) async throws -> DID
 }
