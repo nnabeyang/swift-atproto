@@ -1,6 +1,6 @@
 public struct DIDDocument: Codable, Sendable, Hashable {
   public let context: [String]
-  public let did: String
+  public let did: FormatString<DID>
   public let alsoKnownAs: [String]?
   public let verificationMethod: [DocVerificationMethod]?
   public let service: [DocService]?
