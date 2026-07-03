@@ -105,23 +105,54 @@ struct LanguageAdversarialTests {
 
   // MARK: - RFC 5646 §4.1 MUST-NOT: subtag uniqueness
 
-  @Test func rejectsDuplicateVariantSubtags() {
+  @Test func rejectsDuplicateVariantSubtags() throws {
     // §4.1: "The same variant subtag MUST NOT be used more than once within a language tag."
     #expect(throws: (any Error).self) { try Language(string: "de-1996-1996") }
+    #expect(throws: (any Error).self) { try Language(string: "de-1996-1996", strict: true) }
+    let lenient = try Language(string: "de-1996-1996", strict: false)
+    #expect(lenient.components.variants.map(\.rawValue) == ["1996", "1996"])
   }
 
-  @Test func rejectsDuplicateVariantSubtagsCaseInsensitively() {
+  @Test func rejectsDuplicateVariantSubtagsCaseInsensitively() throws {
     // §2.1.1 subtag comparison is case-insensitive.
     #expect(throws: (any Error).self) { try Language(string: "sl-rozaj-ROZAJ") }
+    let lenient = try Language(string: "sl-rozaj-ROZAJ", strict: false)
+    #expect(lenient.components.variants.map(\.rawValue) == ["rozaj", "ROZAJ"])
   }
 
   @Test func rejectsDuplicateExtensionSingletons() {
     // §4.1: "The same singleton MUST NOT be used more than once in a language tag."
     #expect(throws: (any Error).self) { try Language(string: "en-u-co-phonebk-u-other") }
+    let lenient = try? Language(string: "en-u-co-phonebk-u-other", strict: false)
+    #expect(lenient?.components.extensions.map(\.singleton) == ["u", "u"])
   }
 
   @Test func rejectsDuplicateExtensionSingletonsCaseInsensitively() {
     #expect(throws: (any Error).self) { try Language(string: "en-U-co-u-other") }
+    let lenient = try? Language(string: "en-U-co-u-other", strict: false)
+    #expect(lenient?.components.extensions.map(\.singleton) == ["U", "u"])
+  }
+
+  // Lenient only relaxes RFC 5646 §4.1 value checks; every other syntax gate
+  // (non-ASCII, control bytes, underscore, length cap, missing extension subtag) must
+  // still reject.
+  static let lenientSyntaxInvalid: [String] = {
+    let overLength =
+      "en-x-" + String(repeating: "a", count: 8) + "-"
+      + String(repeating: "b", count: 8) + "-" + String(repeating: "c", count: 8)
+      + "-" + String(repeating: "d", count: 8) + "-"
+      + String(repeating: "e", count: 8) + "-"
+      + String(repeating: "f", count: 8) + "-" + String(repeating: "g", count: 6)
+    return confusables + controlChars + [
+      "not a language tag",
+      "en-u",  // extension singleton with no subtag
+      overLength,  // 65 bytes
+    ]
+  }()
+
+  @Test(arguments: lenientSyntaxInvalid)
+  func lenientStillRejectsSyntaxInvalidLanguage(_ tag: String) {
+    #expect(throws: (any Error).self) { try Language(string: tag, strict: false) }
   }
 
   // MARK: - Hashable identity
