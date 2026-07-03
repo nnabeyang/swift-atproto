@@ -29,6 +29,21 @@ public struct DID: LexiconStringFormat {
 }
 
 extension DID {
+  // An open, extensible tag for the DID method. Use `switch` with `case .plc` / `case .web` /
+  // `default` for dispatch; unknown methods survive as `KnownMethod(rawValue:)` values so
+  // constructing a DID with a future or unregistered method never fails and never gets silently
+  // downgraded. `knownMethod.rawValue == method` always.
+  public struct KnownMethod: RawRepresentable, Hashable, Sendable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public static let plc = Self(rawValue: "plc")
+    public static let web = Self(rawValue: "web")
+  }
+
+  public var knownMethod: KnownMethod { KnownMethod(rawValue: method) }
+}
+
+extension DID {
   // Strict per the grammar above. Accepts `String` and `Substring` so it can serve both as the
   // top-level entry point and as a callable component validator from `ATURI` / `AtIdentifier`.
   static func isValid(_ s: some StringProtocol) -> Bool {
