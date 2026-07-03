@@ -12,11 +12,21 @@ extension DIDDocument {
   // preserves interoperability with older DID documents that predate the fragment convention.
   public var pdsUrl: URL {
     get throws {
+      let atprotoPDSID = "\(did.rawValue)#atproto_pds"
       let svc =
-        (service ?? []).first { $0.id == "#atproto_pds" }
+        (service ?? []).first {
+          ($0.id == "#atproto_pds" || $0.id == atprotoPDSID)
+            && $0.type == "AtprotoPersonalDataServer"
+        }
         ?? (service ?? []).first { $0.type == "AtprotoPersonalDataServer" }
       guard let svc else { throw VerifyError.missingPDSService }
-      guard let url = URL(string: svc.serviceEndpoint) else { throw VerifyError.invalidPDSEndpoint }
+      guard let url = URL(string: svc.serviceEndpoint),
+        let scheme = url.scheme?.lowercased(),
+        scheme == "http" || scheme == "https",
+        url.host != nil
+      else {
+        throw VerifyError.invalidPDSEndpoint
+      }
       return url
     }
   }

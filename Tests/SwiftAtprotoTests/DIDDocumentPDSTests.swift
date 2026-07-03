@@ -19,7 +19,18 @@ struct DIDDocumentPDSTests {
   func preferAtprotoPdsIdOverAllOthers() throws {
     let doc = makeDoc(services: [
       DocService(id: "#other", type: "AtprotoPersonalDataServer", serviceEndpoint: "https://other.example"),
-      DocService(id: "#atproto_pds", type: "SomethingElse", serviceEndpoint: "https://pds.example"),
+      DocService(id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: "https://pds.example"),
+    ])
+    #expect(try doc.pdsUrl == URL(string: "https://pds.example"))
+  }
+
+  @Test
+  func acceptsFullDIDFragmentPDSID() throws {
+    let doc = makeDoc(services: [
+      DocService(
+        id: "did:plc:example#atproto_pds",
+        type: "AtprotoPersonalDataServer",
+        serviceEndpoint: "https://pds.example")
     ])
     #expect(try doc.pdsUrl == URL(string: "https://pds.example"))
   }
@@ -28,6 +39,15 @@ struct DIDDocumentPDSTests {
   func fallbackToTypeWhenIdMissing() throws {
     let doc = makeDoc(services: [
       DocService(id: "#legacy", type: "AtprotoPersonalDataServer", serviceEndpoint: "https://legacy.example")
+    ])
+    #expect(try doc.pdsUrl == URL(string: "https://legacy.example"))
+  }
+
+  @Test
+  func ignoresAtprotoPdsIdWithWrongType() throws {
+    let doc = makeDoc(services: [
+      DocService(id: "#atproto_pds", type: "OtherService", serviceEndpoint: "https://wrong.example"),
+      DocService(id: "#legacy", type: "AtprotoPersonalDataServer", serviceEndpoint: "https://legacy.example"),
     ])
     #expect(try doc.pdsUrl == URL(string: "https://legacy.example"))
   }
@@ -52,6 +72,22 @@ struct DIDDocumentPDSTests {
       {"@context": ["c"], "id": "did:plc:x"}
       """
     let doc = try JSONDecoder().decode(DIDDocument.self, from: Data(json.utf8))
+    #expect(throws: DIDDocument.VerifyError.self) { try doc.pdsUrl }
+  }
+
+  @Test
+  func relativePDSEndpointThrows() {
+    let doc = makeDoc(services: [
+      DocService(id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: "/xrpc")
+    ])
+    #expect(throws: DIDDocument.VerifyError.self) { try doc.pdsUrl }
+  }
+
+  @Test
+  func nonHTTPPDSEndpointThrows() {
+    let doc = makeDoc(services: [
+      DocService(id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: "ftp://pds.example")
+    ])
     #expect(throws: DIDDocument.VerifyError.self) { try doc.pdsUrl }
   }
 }
