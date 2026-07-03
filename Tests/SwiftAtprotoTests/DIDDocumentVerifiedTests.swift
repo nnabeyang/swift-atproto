@@ -57,6 +57,17 @@ struct DIDDocumentVerifiedTests {
   }
 
   @Test
+  func verifiedCanBeConstructedDirectly() throws {
+    let doc = makeDoc(id: "did:plc:x", alsoKnownAs: ["at://alice.test"])
+    let did = try DID(string: "did:plc:x")
+    let handle = try Handle(string: "alice.test")
+    let verified = DIDDocument.Verified(document: doc, did: did, verifiedHandle: handle)
+    #expect(verified.document == doc)
+    #expect(verified.did == did)
+    #expect(verified.verifiedHandle == handle)
+  }
+
+  @Test
   func syncVerifiedThrowsHandleMismatch() throws {
     let doc = makeDoc(id: "did:plc:x", alsoKnownAs: ["at://alice.test"])
     let handle = try Handle(string: "eve.test")

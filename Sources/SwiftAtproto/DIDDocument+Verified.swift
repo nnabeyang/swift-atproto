@@ -49,6 +49,12 @@ extension DIDDocument {
     public let did: DID
     // `Handle.invalid` when handle verification failed or no handle was advertised.
     public let verifiedHandle: Handle
+
+    public init(document: DIDDocument, did: DID, verifiedHandle: Handle) {
+      self.document = document
+      self.did = did
+      self.verifiedHandle = verifiedHandle
+    }
   }
 
   // Synchronous check for callers that already have both sides of the pair.
