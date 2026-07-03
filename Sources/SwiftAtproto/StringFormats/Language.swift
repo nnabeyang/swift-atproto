@@ -6,8 +6,8 @@ import Foundation
 //
 // Scope: the canonical BCP-47 langtag grammar plus the RFC 5646 §2.2.8 grandfathered/irregular
 // whitelist, in strict mode. The parser only validates grammar — it does not consult any subtag
-// registry. A lenient mode (`_` separators, etc.) and canonicalization are intentionally NOT
-// supported.
+// registry. Lenient mode is still syntax-only BCP-47 parsing: it does not accept `_` separators
+// or perform canonicalization, but it skips RFC 5646 §4.1 duplicate-subtag value checks.
 public struct Language: LexiconStringFormat {
   // The original wire string, kept verbatim (no normalization).
   public let rawValue: String
@@ -15,7 +15,14 @@ public struct Language: LexiconStringFormat {
   public let components: Components
 
   public init(string: String) throws {
-    guard let components = Language.parse(string) else {
+    try self.init(string: string, strict: true)
+  }
+
+  // When `strict == false`, skips RFC 5646 §4.1 duplicate variant / extension-singleton
+  // rejection; grammar, length cap, and ASCII charset gates still apply. Lenient instances
+  // may therefore hold duplicate subtags — an invariant strict-parsed values never violate.
+  public init(string: String, strict: Bool) throws {
+    guard let components = Language.parse(string, strict: strict) else {
       throw LexiconStringFormatError.invalid(format: "language", value: string)
     }
     rawValue = string
@@ -136,9 +143,15 @@ extension Language {
   private static let grandfatheredLowercasedMap: [String: Grandfathered] =
     Dictionary(uniqueKeysWithValues: Grandfathered.allCases.map { ($0.rawValue.lowercased(), $0) })
 
-  // Strict parser. Returns nil on any grammar violation; the caller wraps that in
-  // `LexiconStringFormatError.invalid(format: "language", …)`.
+  // Strict parser. Returns nil on any grammar or value violation; the caller wraps that in
+  // `LexiconStringFormatError.invalid(format: "language", ...)`.
   static func parse(_ input: String) -> Components? {
+    parse(input, strict: true)
+  }
+
+  // Shared parser. Strict mode also enforces RFC 5646 §4.1 duplicate variant / extension
+  // singleton rejection. Lenient mode only checks well-formed syntax.
+  static func parse(_ input: String, strict: Bool) -> Components? {
     guard !input.isEmpty, input.utf8.count <= maxLength else { return nil }
     for byte in input.utf8 where !isAllowedByte(byte) { return nil }
 
@@ -202,8 +215,10 @@ extension Language {
     var variants: [Variant] = []
     var seenVariants: Set<String> = []
     while i < n, isVariantSubtag(subtags[i]) {
-      let key = subtags[i].lowercased()
-      guard seenVariants.insert(key).inserted else { return nil }
+      if strict {
+        let key = subtags[i].lowercased()
+        guard seenVariants.insert(key).inserted else { return nil }
+      }
       variants.append(Variant(rawValue: String(subtags[i])))
       i += 1
     }
@@ -213,8 +228,10 @@ extension Language {
     var seenSingletons: Set<Character> = []
     while i < n, isExtensionSingleton(subtags[i]) {
       guard let singleton = subtags[i].first else { return nil }
-      let key = Character(singleton.lowercased())
-      guard seenSingletons.insert(key).inserted else { return nil }
+      if strict {
+        let key = Character(singleton.lowercased())
+        guard seenSingletons.insert(key).inserted else { return nil }
+      }
       i += 1
       var extSubtags: [String] = []
       while i < n, isExtensionSubtag(subtags[i]) {
