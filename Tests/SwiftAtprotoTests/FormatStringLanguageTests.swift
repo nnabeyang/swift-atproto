@@ -20,6 +20,19 @@ struct FormatStringLanguageTests {
     let value = try JSONDecoder().decode(FormatString<Language>.self, from: data)
     #expect(value.rawValue == "not a language tag")
     #expect(value.typed == nil)
+    #expect(value.typedLenient == nil)
+  }
+
+  @Test(arguments: [
+    "de-DE-1901-1901",
+    "en-a-foo-a-bar",
+  ])
+  func typedIsNilButTypedLenientAcceptsDuplicateSubtags(_ wire: String) throws {
+    let data = Data("\"\(wire)\"".utf8)
+    let value = try JSONDecoder().decode(FormatString<Language>.self, from: data)
+    #expect(value.rawValue == wire)
+    #expect(value.typed == nil)
+    #expect(value.typedLenient?.rawValue == wire)
   }
 
   @Test func encodeEmitsWireString() throws {
