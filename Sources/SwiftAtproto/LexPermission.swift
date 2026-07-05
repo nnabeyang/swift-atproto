@@ -43,6 +43,7 @@ public struct LexPermissionResource: RawRepresentable, Codable, Hashable, Sendab
 
   public static let rpc = Self(rawValue: "rpc")
   public static let repo = Self(rawValue: "repo")
+  public static let blob = Self(rawValue: "blob")
 }
 
 public struct LexPermissionAction: RawRepresentable, Codable, Hashable, Sendable {

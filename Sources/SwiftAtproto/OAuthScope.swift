@@ -221,6 +221,125 @@ public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
   }
 }
 
+public struct BlobScope: CustomStringConvertible, Hashable, Sendable {
+  public let accept: [String]
+
+  public init(accept: [String]) throws {
+    guard !accept.isEmpty else {
+      throw OAuthScopeError.missingRequired("accept")
+    }
+    for value in accept where !Self.isValidAccept(value) {
+      throw OAuthScopeError.invalidSyntax("invalid accept '\(value)' in blob scope")
+    }
+    self.accept = Self.normalize(accept: accept)
+  }
+
+  public init(string: String) throws {
+    let syntax = OAuthScopeSyntax.parse(string)
+    guard syntax.prefix == "blob" else {
+      throw OAuthScopeError.invalidResource(syntax.prefix)
+    }
+    var accepts: [String] = []
+    var sawAcceptInQuery = false
+    if let positional = syntax.positional {
+      guard !positional.isEmpty else {
+        throw OAuthScopeError.invalidSyntax("empty positional in blob scope")
+      }
+      accepts.append(positional)
+    }
+    for param in syntax.params {
+      switch param.key {
+      case "accept":
+        sawAcceptInQuery = true
+        guard !param.value.isEmpty else {
+          throw OAuthScopeError.invalidSyntax("empty accept value in blob scope")
+        }
+        accepts.append(param.value)
+      default:
+        throw OAuthScopeError.invalidSyntax("unknown key '\(param.key)' in blob scope")
+      }
+    }
+    if syntax.positional != nil, sawAcceptInQuery {
+      throw OAuthScopeError.invalidSyntax("blob scope has both positional and accept query")
+    }
+    try self.init(accept: accepts)
+  }
+
+  public var description: String {
+    if accept.count == 1 {
+      return OAuthScopeSyntax(prefix: "blob", positional: accept[0]).description
+    }
+    let params = accept.map { OAuthScopeQueryParam(key: "accept", value: $0) }
+    return OAuthScopeSyntax(prefix: "blob", params: params).description
+  }
+
+  public func allows(mime: String) -> Bool {
+    guard Self.isValidMime(mime) else {
+      return false
+    }
+    let normalizedMime = mime.lowercased()
+    for value in accept {
+      if value == "*/*" {
+        return true
+      }
+      if value.hasSuffix("/*") {
+        let prefix = String(value.dropLast())
+        if normalizedMime.hasPrefix(prefix) {
+          return true
+        }
+      } else if value == normalizedMime {
+        return true
+      }
+    }
+    return false
+  }
+
+  private static func normalize(accept: [String]) -> [String] {
+    var normalized = Array(Set(accept.map { $0.lowercased() })).sorted()
+    if normalized.contains("*/*") {
+      return ["*/*"]
+    }
+    let wildcards = Set(normalized.filter { $0.hasSuffix("/*") }.map { String($0.split(separator: "/", maxSplits: 1)[0]) })
+    normalized.removeAll { value in
+      guard !value.hasSuffix("/*") else { return false }
+      let type = String(value.split(separator: "/", maxSplits: 1)[0])
+      return wildcards.contains(type)
+    }
+    return normalized
+  }
+
+  private static func isValidAccept(_ value: String) -> Bool {
+    if value == "*/*" {
+      return true
+    }
+    guard isValidMimeLike(value) else {
+      return false
+    }
+    if value.contains("*") {
+      return value.hasSuffix("/*") && value.dropLast(2).allSatisfy { $0 != "*" }
+    }
+    return true
+  }
+
+  private static func isValidMime(_ value: String) -> Bool {
+    isValidMimeLike(value) && !value.contains("*")
+  }
+
+  private static func isValidMimeLike(_ value: String) -> Bool {
+    let parts = value.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+    guard
+      parts.count == 2,
+      !parts[0].isEmpty,
+      !parts[1].isEmpty,
+      value.allSatisfy({ $0.isPrintableNonWhitespaceASCII }),
+      !value.contains(" ")
+    else {
+      return false
+    }
+    return true
+  }
+}
+
 public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
   public let nsid: String
   public let aud: String?
@@ -319,7 +438,7 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
       case .repo:
         scopes.append(try expandRepo(permission))
       default:
-        throw OAuthScopeError.unsupportedResource(permission.resource.rawValue)
+        continue
       }
     }
     return scopes
@@ -368,12 +487,14 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
 public struct ScopesSet: Hashable, Sendable {
   public let rpcScopes: [RpcScope]
   public let repoScopes: [RepoScope]
+  public let blobScopes: [BlobScope]
   public let includeScopes: [IncludeScope]
   public let rawOther: Set<String>
 
   public init(_ scopes: [String], permissionSets: [any LexPermissionSet.Type] = []) throws {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
+    var blob: [BlobScope] = []
     var include: [IncludeScope] = []
     var other: Set<String> = []
     for scope in scopes {
@@ -383,6 +504,8 @@ public struct ScopesSet: Hashable, Sendable {
         rpc.append(try RpcScope(string: scope))
       case "repo":
         repo.append(try RepoScope(string: scope))
+      case "blob":
+        blob.append(try BlobScope(string: scope))
       case "include":
         include.append(try IncludeScope(string: scope))
       default:
@@ -395,6 +518,7 @@ public struct ScopesSet: Hashable, Sendable {
     try Self.expandIncludes(include, permissionSets: permissionSets, into: &rpc, repo: &repo)
     self.rpcScopes = rpc
     self.repoScopes = repo
+    self.blobScopes = blob
     self.includeScopes = include
     self.rawOther = other
   }
@@ -402,6 +526,7 @@ public struct ScopesSet: Hashable, Sendable {
   public init(rawScopes scopes: [String], permissionSets: [any LexPermissionSet.Type] = []) {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
+    var blob: [BlobScope] = []
     var include: [IncludeScope] = []
     var other: Set<String> = []
     for scope in scopes {
@@ -411,6 +536,8 @@ public struct ScopesSet: Hashable, Sendable {
         if let parsed = try? RpcScope(string: scope) { rpc.append(parsed) }
       case "repo":
         if let parsed = try? RepoScope(string: scope) { repo.append(parsed) }
+      case "blob":
+        if let parsed = try? BlobScope(string: scope) { blob.append(parsed) }
       case "include":
         if let parsed = try? IncludeScope(string: scope) { include.append(parsed) }
       default:
@@ -423,6 +550,7 @@ public struct ScopesSet: Hashable, Sendable {
     try? Self.expandIncludes(include, permissionSets: permissionSets, into: &rpc, repo: &repo)
     self.rpcScopes = rpc
     self.repoScopes = repo
+    self.blobScopes = blob
     self.includeScopes = include
     self.rawOther = other
   }
@@ -483,6 +611,16 @@ public struct ScopesSet: Hashable, Sendable {
       if collMatches, actionMatches {
         return true
       }
+    }
+    return false
+  }
+
+  public func allowsBlob(mime: String) -> Bool {
+    guard hasAtprotoScope else {
+      return false
+    }
+    for scope in blobScopes where scope.allows(mime: mime) {
+      return true
     }
     return false
   }

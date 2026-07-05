@@ -282,6 +282,64 @@ struct RepoScopeTests {
   }
 }
 
+struct BlobScopeTests {
+  @Test func parsePositionalAccept() throws {
+    let scope = try BlobScope(string: "blob:image/png")
+    #expect(scope.accept == ["image/png"])
+  }
+
+  @Test func parseQueryFormCanonicalizes() throws {
+    let scope = try BlobScope(string: "blob?accept=image/jpeg&accept=image/png")
+    #expect(scope.accept == ["image/jpeg", "image/png"])
+  }
+
+  @Test func wildcardAcceptCollapses() throws {
+    let scope = try BlobScope(string: "blob?accept=image/*&accept=*/*")
+    #expect(scope.accept == ["*/*"])
+  }
+
+  @Test func redundantExactAcceptsAreRemoved() throws {
+    let scope = try BlobScope(string: "blob?accept=image/png&accept=image/*&accept=text/html")
+    #expect(scope.accept == ["image/*", "text/html"])
+  }
+
+  @Test func serializePositionalForSingleAccept() throws {
+    let scope = try BlobScope(accept: ["image/png"])
+    #expect(scope.description == "blob:image/png")
+  }
+
+  @Test func serializeMultipleAcceptsAsQuery() throws {
+    let scope = try BlobScope(accept: ["image/png", "image/jpeg"])
+    #expect(scope.description == "blob?accept=image/jpeg&accept=image/png")
+  }
+
+  @Test func matchesExactAndWildcardMimeTypes() throws {
+    #expect(try BlobScope(string: "blob:image/png").allows(mime: "image/png"))
+    #expect(!(try BlobScope(string: "blob:image/png").allows(mime: "image/jpeg")))
+    #expect(try BlobScope(string: "blob:image/*").allows(mime: "image/jpeg"))
+    #expect(!(try BlobScope(string: "blob:image/*").allows(mime: "text/html")))
+    #expect(try BlobScope(string: "blob:*/*").allows(mime: "application/json"))
+  }
+
+  @Test func invalidBlobScopesThrow() {
+    for scope in [
+      "blob",
+      "blob:",
+      "blob:*",
+      "blob:/image",
+      "blob:*/png",
+      "blob:*/**",
+      "blob:image/png?accept=image/jpeg",
+      "blob:image/png?extra=value",
+      "blob?accept=",
+    ] {
+      #expect(throws: OAuthScopeError.self) {
+        _ = try BlobScope(string: scope)
+      }
+    }
+  }
+}
+
 struct IncludeScopeTests {
   @Test func parsePositionalNsid() throws {
     let scope = try IncludeScope(string: "include:com.example.foo.auth")
@@ -467,14 +525,12 @@ struct IncludeScopeExpandTests {
     }
   }
 
-  @Test func rejectsUnsupportedResource() {
-    #expect(throws: OAuthScopeError.self) {
-      let include = try IncludeScope(nsid: "com.example.auth.scope")
-      let permissions = [
-        LexPermission(resource: LexPermissionResource(rawValue: "blob"))
-      ]
-      _ = try include.expand(permissions)
-    }
+  @Test func skipsUnsupportedResource() throws {
+    let include = try IncludeScope(nsid: "com.example.auth.scope")
+    let permissions = [
+      LexPermission(resource: .blob)
+    ]
+    #expect(try include.expand(permissions).isEmpty)
   }
 
   @Test func expandsMixedRpcAndRepo() throws {
@@ -655,10 +711,14 @@ struct ScopesSetTests {
       "atproto",
       "rpc:*?aud=*",
       "rpc:com.example.foo?aud=did:web:example.com%23service",
+      "blob:*",
+      "blob:image/*",
     ])
     #expect(set.hasAtprotoScope)
     #expect(set.rpcScopes.count == 1)
     #expect(set.rpcScopes[0].lxm == ["com.example.foo"])
+    #expect(set.blobScopes.count == 1)
+    #expect(set.blobScopes[0].accept == ["image/*"])
   }
 
   @Test func allowsRpcExactMatch() throws {
@@ -703,6 +763,20 @@ struct ScopesSetTests {
     let set = try ScopesSet(["atproto", "repo:*?action=create"])
     #expect(set.allowsRepo(collection: "com.example.anything", action: .create))
     #expect(!set.allowsRepo(collection: "com.example.anything", action: .update))
+  }
+
+  @Test func allowsBlobDirectScope() throws {
+    let set = try ScopesSet(["atproto", "blob:image/*"])
+    #expect(set.blobScopes.map(\.accept) == [["image/*"]])
+    #expect(set.allowsBlob(mime: "image/png"))
+    #expect(set.allowsBlob(mime: "image/jpeg"))
+    #expect(!set.allowsBlob(mime: "text/html"))
+  }
+
+  @Test func allowsBlobRequiresAtprotoScope() throws {
+    let set = try ScopesSet(["blob:*/*"])
+    #expect(!set.hasAtprotoScope)
+    #expect(!set.allowsBlob(mime: "image/png"))
   }
 
   @Test func repoWriteRequirementInitAndEquality() {
@@ -866,6 +940,19 @@ struct IncludeScopeMatchTests {
     #expect(set.includeScopes.count == 1)
     #expect(!set.allowsRpc(lxm: "com.other.auth.foo", aud: "did:web:pds.example.com#atproto_pds"))
   }
+
+  @Test func includeWithBlobPermissionDoesNotGrantBlobAccess() throws {
+    let set = try ScopesSet(
+      [
+        "atproto",
+        "include:com.example.blob.scope",
+      ],
+      permissionSets: [BlobAuthPermissionSet.self]
+    )
+    #expect(set.includeScopes.count == 1)
+    #expect(set.blobScopes.isEmpty)
+    #expect(!set.allowsBlob(mime: "image/png"))
+  }
 }
 
 private enum SampleAuthPermissionSet: LexPermissionSet {
@@ -896,5 +983,14 @@ private enum BrokenAuthPermissionSet: LexPermissionSet {
       inheritAud: true,
       lxm: ["com.other.auth.foo"]
     )
+  ]
+}
+
+private enum BlobAuthPermissionSet: LexPermissionSet {
+  static let id = "com.example.blob.scope"
+  static let title: String? = nil
+  static let detail: String? = nil
+  static let permissions: [LexPermission] = [
+    LexPermission(resource: .blob)
   ]
 }
