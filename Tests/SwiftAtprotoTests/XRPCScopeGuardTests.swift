@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import SwiftAtproto
@@ -75,6 +76,20 @@ struct ScopeGuardEnforcementTests {
     let client = MockClient(session: nil)
     _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
     _ = try await client.call(StubProcedure.self, input: nil)
+  }
+
+  @Test func nilSessionStillAppliesProxyHeader() async throws {
+    let recorder = RequestRecorder()
+    let client = MockClient(
+      session: nil,
+      proxy: "did:web:api.example.com#svc_appview",
+      recorder: recorder
+    )
+
+    _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+
+    let request = try #require(recorder.lastRequest)
+    #expect(request.headers[HTTPField.Name("atproto-proxy")!] == "did:web:api.example.com#svc_appview")
   }
 
   @Test func wildcardAudMatches() async throws {
@@ -174,17 +189,26 @@ private struct MockClient: @unchecked Sendable, ATPClientProtocol {
   let decoder = JSONDecoder()
   let oauthSession: (any OAuthSession)?
   let proxy: String?
+  let recorder: RequestRecorder?
 
-  init(session: (any OAuthSession)?, proxy: String? = nil) {
+  init(session: (any OAuthSession)?, proxy: String? = nil, recorder: RequestRecorder? = nil) {
     self.oauthSession = session
     self.proxy = proxy
+    self.recorder = recorder
   }
 
   func tokenIsExpired(error _: some XRPCError) -> Bool { false }
   func getProxy(nsid _: String) -> String? { proxy }
   func getAuthorization(endpoint _: String) -> String? { nil }
   func refreshSession() async -> Bool { false }
-  func response(_: XRPCRequestComponents) async throws -> Data { Data("{}".utf8) }
+  func response(_ request: XRPCRequestComponents) async throws -> Data {
+    recorder?.lastRequest = request
+    return Data("{}".utf8)
+  }
+}
+
+private final class RequestRecorder: @unchecked Sendable {
+  var lastRequest: XRPCRequestComponents?
 }
 
 struct EndToEndOAuthScopeGuardTests {
