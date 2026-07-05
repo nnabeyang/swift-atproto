@@ -99,7 +99,7 @@ struct RpcScopeTests {
 
   @Test func lxmWildcardCollapsesEvenWithOtherValues() throws {
     let scope = try RpcScope(
-      string: "rpc?lxm=com.example.m1&lxm=com.example.m2&lxm=*&aud=did:web:example.com")
+      string: "rpc?lxm=com.example.m1&lxm=com.example.m2&lxm=*&aud=did:web:example.com%23service")
     #expect(scope.lxm == ["*"])
   }
 
@@ -110,8 +110,8 @@ struct RpcScopeTests {
   }
 
   @Test func serializePositionalForSingleLxm() throws {
-    let scope = try RpcScope(aud: "did:web:example.com", lxm: ["com.example.method1"])
-    #expect(scope.description == "rpc:com.example.method1?aud=did:web:example.com")
+    let scope = try RpcScope(aud: "did:web:example.com#service", lxm: ["com.example.method1"])
+    #expect(scope.description == "rpc:com.example.method1?aud=did:web:example.com%23service")
   }
 
   @Test func serializeMultipleLxmAsQuery() throws {
@@ -168,6 +168,24 @@ struct RpcScopeTests {
   @Test func emptyLxmValueThrows() {
     #expect(throws: OAuthScopeError.self) {
       try RpcScope(string: "rpc?lxm=&aud=did:web:example.com")
+    }
+  }
+
+  @Test func invalidAudienceThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try RpcScope(string: "rpc:com.example.method?aud=not-a-did")
+    }
+    #expect(throws: OAuthScopeError.self) {
+      try RpcScope(string: "rpc:com.example.method?aud=did:web:example.com")
+    }
+  }
+
+  @Test func invalidLxmThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try RpcScope(string: "rpc:com.example.*?aud=did:web:example.com%23service")
+    }
+    #expect(throws: OAuthScopeError.self) {
+      try RpcScope(string: "rpc:not-an-nsid?aud=did:web:example.com%23service")
     }
   }
 }
@@ -251,6 +269,15 @@ struct RepoScopeTests {
   @Test func emptyCollectionValueThrows() {
     #expect(throws: OAuthScopeError.self) {
       try RepoScope(string: "repo?collection=&action=create")
+    }
+  }
+
+  @Test func invalidCollectionThrows() {
+    #expect(throws: OAuthScopeError.self) {
+      try RepoScope(string: "repo:com.example.*")
+    }
+    #expect(throws: OAuthScopeError.self) {
+      try RepoScope(string: "repo:not-an-nsid")
     }
   }
 }
@@ -401,7 +428,7 @@ struct IncludeScopeExpandTests {
       let permissions = [
         LexPermission(
           resource: .rpc,
-          aud: "did:web:example.com",
+          aud: "did:web:example.com#service",
           lxm: ["com.example.auth.foo"]
         )
       ]
@@ -434,7 +461,7 @@ struct IncludeScopeExpandTests {
         )
       ]
       let scope = try IncludeScope(
-        nsid: "com.example.auth.scope", aud: "did:web:example.com")
+        nsid: "com.example.auth.scope", aud: "did:web:example.com#service")
       _ = try scope.expand(permissions)
       _ = include
     }
@@ -452,7 +479,7 @@ struct IncludeScopeExpandTests {
 
   @Test func expandsMixedRpcAndRepo() throws {
     let include = try IncludeScope(
-      nsid: "com.example.auth.scope", aud: "did:web:example.com")
+      nsid: "com.example.auth.scope", aud: "did:web:example.com#service")
     let permissions = [
       LexPermission(
         resource: .rpc,
@@ -469,20 +496,20 @@ struct IncludeScopeExpandTests {
     #expect(scopes.count == 2)
     #expect(
       scopes[0]
-        == "rpc?lxm=com.example.auth.bar&lxm=com.example.auth.foo&aud=did:web:example.com")
+        == "rpc?lxm=com.example.auth.bar&lxm=com.example.auth.foo&aud=did:web:example.com%23service")
     #expect(scopes[1] == "repo:com.example.auth.record?action=create")
   }
 
   @Test func expandsFromPermissionSetType() throws {
     let include = try IncludeScope(
-      nsid: "com.example.auth.scope", aud: "did:web:example.com")
+      nsid: "com.example.auth.scope", aud: "did:web:example.com#service")
     let scopes = try include.expand(MatchingPermissionSet.self)
-    #expect(scopes == ["rpc:com.example.auth.foo?aud=did:web:example.com"])
+    #expect(scopes == ["rpc:com.example.auth.foo?aud=did:web:example.com%23service"])
   }
 
   @Test func rejectsMismatchedPermissionSetId() throws {
     let include = try IncludeScope(
-      nsid: "com.example.auth.other", aud: "did:web:example.com")
+      nsid: "com.example.auth.other", aud: "did:web:example.com#service")
     #expect(throws: OAuthScopeError.self) {
       try include.expand(MatchingPermissionSet.self)
     }
@@ -551,12 +578,12 @@ struct EndToEndScopeExpansionTests {
     let wire = try JSONDecoder().decode(
       PermissionSetWire.self, from: Data(Self.authCreatePostsJSON.utf8))
     let include = try IncludeScope(
-      nsid: "com.example.authCreatePosts", aud: "did:web:example.com")
+      nsid: "com.example.authCreatePosts", aud: "did:web:example.com#service")
     let scopes = try include.expand(wire.defs.main.permissions)
     #expect(scopes.count == 2)
     #expect(
       scopes[0]
-        == "rpc?lxm=com.example.video.getJobStatus&lxm=com.example.video.getUploadLimits&lxm=com.example.video.uploadVideo&aud=did:web:example.com"
+        == "rpc?lxm=com.example.video.getJobStatus&lxm=com.example.video.getUploadLimits&lxm=com.example.video.uploadVideo&aud=did:web:example.com%23service"
     )
     #expect(
       scopes[1]
@@ -568,11 +595,11 @@ struct EndToEndScopeExpansionTests {
     let wire = try JSONDecoder().decode(
       PermissionSetWire.self, from: Data(Self.authCreatePostsJSON.utf8))
     let include = try IncludeScope(
-      nsid: "com.example.authCreatePosts", aud: "did:web:example.com")
+      nsid: "com.example.authCreatePosts", aud: "did:web:example.com#service")
     let scopes = try include.expand(wire.defs.main.permissions)
 
     let rpc = try RpcScope(string: scopes[0])
-    #expect(rpc.aud == "did:web:example.com")
+    #expect(rpc.aud == "did:web:example.com#service")
     #expect(
       rpc.lxm == [
         "com.example.video.getJobStatus",
@@ -590,5 +617,126 @@ struct EndToEndScopeExpansionTests {
         "com.example.feed.threadgate",
       ])
     #expect(repo.description == scopes[1])
+  }
+}
+
+struct ScopesSetTests {
+  @Test func parsesAtprotoAndRpcScopes() throws {
+    let set = try ScopesSet([
+      "atproto",
+      "rpc:com.example.foo?aud=did:web:example.com%23service",
+    ])
+    #expect(set.hasAtprotoScope)
+    #expect(set.rpcScopes.count == 1)
+    #expect(set.repoScopes.isEmpty)
+    #expect(set.includeScopes.isEmpty)
+  }
+
+  @Test func parsesIncludeScope() throws {
+    let set = try ScopesSet(["include:com.example.foo.auth?aud=*"])
+    #expect(set.includeScopes.count == 1)
+    #expect(set.includeScopes[0].nsid == "com.example.foo.auth")
+  }
+
+  @Test func unknownPrefixGoesToRawOther() throws {
+    let set = try ScopesSet(["transition:generic", "atproto"])
+    #expect(set.rawOther.contains("transition:generic"))
+    #expect(set.hasAtprotoScope)
+  }
+
+  @Test func throwingInitRejectsInvalidScope() {
+    #expect(throws: OAuthScopeError.self) {
+      _ = try ScopesSet(["rpc:*?aud=*"])
+    }
+  }
+
+  @Test func rawScopesInitSkipsInvalid() {
+    let set = ScopesSet(rawScopes: [
+      "atproto",
+      "rpc:*?aud=*",
+      "rpc:com.example.foo?aud=did:web:example.com%23service",
+    ])
+    #expect(set.hasAtprotoScope)
+    #expect(set.rpcScopes.count == 1)
+    #expect(set.rpcScopes[0].lxm == ["com.example.foo"])
+  }
+
+  @Test func allowsRpcExactMatch() throws {
+    let set = try ScopesSet(["atproto", "rpc:com.example.foo?aud=did:web:example.com%23service"])
+    #expect(set.allowsRpc(lxm: "com.example.foo", aud: "did:web:example.com#service"))
+    #expect(!set.allowsRpc(lxm: "com.example.bar", aud: "did:web:example.com#service"))
+    #expect(!set.allowsRpc(lxm: "com.example.foo", aud: "did:web:other.com"))
+  }
+
+  @Test func allowsRpcWildcardLxm() throws {
+    let set = try ScopesSet(["atproto", "rpc:*?aud=did:web:example.com%23service"])
+    #expect(set.allowsRpc(lxm: "com.example.anything", aud: "did:web:example.com#service"))
+    #expect(!set.allowsRpc(lxm: "com.example.anything", aud: "did:web:other.com"))
+  }
+
+  @Test func allowsRpcWildcardAud() throws {
+    let set = try ScopesSet(["atproto", "rpc:com.example.foo?aud=*"])
+    #expect(set.allowsRpc(lxm: "com.example.foo", aud: "did:web:example.com#service"))
+    #expect(set.allowsRpc(lxm: "com.example.foo", aud: "did:web:other.com"))
+  }
+
+  @Test func allowsRpcReturnsFalseOnEmptyScopes() throws {
+    let set = try ScopesSet(["atproto"])
+    #expect(!set.allowsRpc(lxm: "com.example.foo", aud: "did:web:example.com"))
+  }
+
+  @Test func allowsRepoExactMatch() throws {
+    let set = try ScopesSet(["atproto", "repo:com.example.post?action=create"])
+    #expect(set.allowsRepo(collection: "com.example.post", action: .create))
+    #expect(!set.allowsRepo(collection: "com.example.post", action: .delete))
+    #expect(!set.allowsRepo(collection: "com.example.other", action: .create))
+  }
+
+  @Test func allowsRepoDefaultActions() throws {
+    let set = try ScopesSet(["atproto", "repo:com.example.post"])
+    #expect(set.allowsRepo(collection: "com.example.post", action: .create))
+    #expect(set.allowsRepo(collection: "com.example.post", action: .update))
+    #expect(set.allowsRepo(collection: "com.example.post", action: .delete))
+  }
+
+  @Test func allowsRepoCollectionWildcard() throws {
+    let set = try ScopesSet(["atproto", "repo:*?action=create"])
+    #expect(set.allowsRepo(collection: "com.example.anything", action: .create))
+    #expect(!set.allowsRepo(collection: "com.example.anything", action: .update))
+  }
+
+  @Test func multipleScopesCombineForBroadCoverage() throws {
+    let set = try ScopesSet([
+      "atproto",
+      "rpc:com.example.foo?aud=did:web:example.com%23service",
+      "rpc:com.example.bar?aud=did:web:example.com%23service",
+      "repo:com.example.post?action=create",
+    ])
+    #expect(set.allowsRpc(lxm: "com.example.foo", aud: "did:web:example.com#service"))
+    #expect(set.allowsRpc(lxm: "com.example.bar", aud: "did:web:example.com#service"))
+    #expect(set.allowsRepo(collection: "com.example.post", action: .create))
+  }
+
+  @Test func allowsRequireAtprotoScope() throws {
+    let set = try ScopesSet([
+      "rpc:com.example.foo?aud=did:web:example.com%23service",
+      "repo:com.example.post?action=create",
+    ])
+    #expect(!set.hasAtprotoScope)
+    #expect(!set.allowsRpc(lxm: "com.example.foo", aud: "did:web:example.com#service"))
+    #expect(!set.allowsRepo(collection: "com.example.post", action: .create))
+  }
+
+  @Test func throwingInitRejectsMalformedRawScopes() {
+    for scope in ["", "bad scope", "emoji:☺️"] {
+      #expect(throws: OAuthScopeError.self) {
+        _ = try ScopesSet([scope])
+      }
+    }
+  }
+
+  @Test func rawScopesInitSkipsMalformedRawScopes() {
+    let set = ScopesSet(rawScopes: ["", "bad scope", "emoji:☺️", "transition:generic"])
+    #expect(set.rawOther == ["transition:generic"])
   }
 }

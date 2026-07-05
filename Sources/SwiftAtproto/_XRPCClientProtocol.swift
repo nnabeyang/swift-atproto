@@ -8,6 +8,8 @@ public protocol ATPClientProtocol: _XRPCCallable {
   func getAuthorization(endpoint: String) -> String?
 
   func refreshSession() async -> Bool
+
+  var oauthSession: (any OAuthSession)? { get }
 }
 
 public protocol _XRPCClientProtocol: ATPClientProtocol {
@@ -18,6 +20,7 @@ public protocol _XRPCClientProtocol: ATPClientProtocol {
 
 extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
+  public var oauthSession: (any OAuthSession)? { nil }
 }
 
 public protocol XRPCError: Error, LocalizedError, Decodable, Sendable {
