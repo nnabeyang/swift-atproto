@@ -65,3 +65,10 @@ public struct LexPermissionAction: RawRepresentable, Codable, Hashable, Sendable
   public static let update = Self(rawValue: "update")
   public static let delete = Self(rawValue: "delete")
 }
+
+public protocol LexPermissionSet {
+  static var id: String { get }
+  static var title: String? { get }
+  static var detail: String? { get }
+  static var permissions: [LexPermission] { get }
+}

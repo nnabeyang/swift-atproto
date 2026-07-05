@@ -64,4 +64,21 @@ struct LexPermissionTests {
     let decoded = try JSONDecoder().decode(LexPermission.self, from: data)
     #expect(decoded == original)
   }
+
+  @Test func conformingTypeSatisfiesProtocol() {
+    #expect(SampleAuthPermissionSet.id == "com.example.auth.sample")
+    #expect(SampleAuthPermissionSet.title == "Sample")
+    #expect(SampleAuthPermissionSet.detail == nil)
+    #expect(SampleAuthPermissionSet.permissions.count == 1)
+    #expect(SampleAuthPermissionSet.permissions[0].resource == .rpc)
+  }
+}
+
+private enum SampleAuthPermissionSet: LexPermissionSet {
+  static let id = "com.example.auth.sample"
+  static let title: String? = "Sample"
+  static let detail: String? = nil
+  static let permissions: [LexPermission] = [
+    LexPermission(resource: .rpc, inheritAud: true, lxm: ["com.example.foo.getThing"])
+  ]
 }
