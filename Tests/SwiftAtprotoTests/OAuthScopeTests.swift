@@ -705,6 +705,24 @@ struct ScopesSetTests {
     #expect(!set.allowsRepo(collection: "com.example.anything", action: .update))
   }
 
+  @Test func repoWriteRequirementInitAndEquality() {
+    let a = RepoWriteRequirement(collection: "com.example.post", action: .create)
+    let b = RepoWriteRequirement(collection: "com.example.post", action: .create)
+    let c = RepoWriteRequirement(collection: "com.example.post", action: .delete)
+    #expect(a == b)
+    #expect(a != c)
+    #expect(a.collection == "com.example.post")
+    #expect(a.action == .create)
+  }
+
+  @Test func conformingTypeReportsRequirements() {
+    let op = SampleRepoOp(collection: "com.example.post", action: .create)
+    #expect(
+      op.repoWriteRequirements == [
+        RepoWriteRequirement(collection: "com.example.post", action: .create)
+      ])
+  }
+
   @Test func multipleScopesCombineForBroadCoverage() throws {
     let set = try ScopesSet([
       "atproto",
@@ -738,5 +756,13 @@ struct ScopesSetTests {
   @Test func rawScopesInitSkipsMalformedRawScopes() {
     let set = ScopesSet(rawScopes: ["", "bad scope", "emoji:☺️", "transition:generic"])
     #expect(set.rawOther == ["transition:generic"])
+  }
+}
+
+private struct SampleRepoOp: RepoWriteOperationDescribing {
+  let collection: String
+  let action: LexPermissionAction
+  var repoWriteRequirements: [RepoWriteRequirement] {
+    [RepoWriteRequirement(collection: collection, action: action)]
   }
 }
