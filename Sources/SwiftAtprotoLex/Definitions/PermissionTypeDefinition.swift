@@ -1,5 +1,5 @@
 struct PermissionTypeDefinition: Codable {
-  var type: FieldType { .permission }
+  let type: FieldType
   let resource: PermissionResource
   let aud: String?
   let inheritAud: Bool?
