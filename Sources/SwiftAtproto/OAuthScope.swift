@@ -371,7 +371,7 @@ public struct ScopesSet: Hashable, Sendable {
   public let includeScopes: [IncludeScope]
   public let rawOther: Set<String>
 
-  public init(_ scopes: [String]) throws {
+  public init(_ scopes: [String], permissionSets: [any LexPermissionSet.Type] = []) throws {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
     var include: [IncludeScope] = []
@@ -392,13 +392,14 @@ public struct ScopesSet: Hashable, Sendable {
         other.insert(scope)
       }
     }
+    try Self.expandIncludes(include, permissionSets: permissionSets, into: &rpc, repo: &repo)
     self.rpcScopes = rpc
     self.repoScopes = repo
     self.includeScopes = include
     self.rawOther = other
   }
 
-  public init(rawScopes scopes: [String]) {
+  public init(rawScopes scopes: [String], permissionSets: [any LexPermissionSet.Type] = []) {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
     var include: [IncludeScope] = []
@@ -419,10 +420,39 @@ public struct ScopesSet: Hashable, Sendable {
         other.insert(scope)
       }
     }
+    try? Self.expandIncludes(include, permissionSets: permissionSets, into: &rpc, repo: &repo)
     self.rpcScopes = rpc
     self.repoScopes = repo
     self.includeScopes = include
     self.rawOther = other
+  }
+
+  private static func expandIncludes(
+    _ includes: [IncludeScope],
+    permissionSets: [any LexPermissionSet.Type],
+    into rpc: inout [RpcScope],
+    repo: inout [RepoScope]
+  ) throws {
+    guard !permissionSets.isEmpty, !includes.isEmpty else { return }
+    let registry = Dictionary(
+      permissionSets.map { ($0.id, $0) },
+      uniquingKeysWith: { first, _ in first }
+    )
+    for include in includes {
+      guard let psType = registry[include.nsid] else { continue }
+      let expanded = try include.expand(psType)
+      for scopeStr in expanded {
+        let syntax = OAuthScopeSyntax.parse(scopeStr)
+        switch syntax.prefix {
+        case "rpc":
+          rpc.append(try RpcScope(string: scopeStr))
+        case "repo":
+          repo.append(try RepoScope(string: scopeStr))
+        default:
+          break
+        }
+      }
+    }
   }
 
   public var hasAtprotoScope: Bool {
