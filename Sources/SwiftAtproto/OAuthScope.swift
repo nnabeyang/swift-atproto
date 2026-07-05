@@ -465,8 +465,8 @@ private func isValidRawOAuthScope(_ scope: String) -> Bool {
   return scope.allSatisfy(\.isPrintableNonWhitespaceASCII)
 }
 
-private extension Character {
-  var isPrintableNonWhitespaceASCII: Bool {
+extension Character {
+  fileprivate var isPrintableNonWhitespaceASCII: Bool {
     unicodeScalars.count == 1
       && unicodeScalars.allSatisfy { scalar in
         scalar.value >= 0x21 && scalar.value <= 0x7E
