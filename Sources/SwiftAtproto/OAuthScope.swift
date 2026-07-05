@@ -13,6 +13,7 @@ public enum OAuthScopeError: Error, Hashable, Sendable {
   case permissionAudMismatch(String)
   case nsidOutsideAuthority(parent: String, other: String)
   case unsupportedResource(String)
+  case insufficientScope(lxm: String, aud: String)
 }
 
 public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
@@ -465,8 +466,8 @@ private func isValidRawOAuthScope(_ scope: String) -> Bool {
   return scope.allSatisfy(\.isPrintableNonWhitespaceASCII)
 }
 
-private extension Character {
-  var isPrintableNonWhitespaceASCII: Bool {
+extension Character {
+  fileprivate var isPrintableNonWhitespaceASCII: Bool {
     unicodeScalars.count == 1
       && unicodeScalars.allSatisfy { scalar in
         scalar.value >= 0x21 && scalar.value <= 0x7E

@@ -14,19 +14,32 @@ public protocol _XRPCCallable: Sendable {
 
 extension _XRPCCallable {
   public func call<X: XRPCQuery>(_ query: X.Type, input: X.Input.Query) async throws -> X.ResponseBody {
+    let proxy = getProxy(nsid: X.id)
+    try enforceScopeGuard(X.self, proxy: proxy)
     var request = try constructRequest(query, input: input)
-    if let proxy = getProxy(nsid: X.id) {
+    if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
     return try await send(query, for: request)
   }
 
   public func call<X: XRPCProcedure>(_ procedure: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody {
+    let proxy = getProxy(nsid: X.id)
+    try enforceScopeGuard(X.self, proxy: proxy)
     var request = try constructRequest(procedure, input: input)
-    if let proxy = getProxy(nsid: X.id) {
+    if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
     return try await send(procedure, for: request)
+  }
+
+  private func enforceScopeGuard<X: XRPCRequest>(_: X.Type, proxy: String?) throws {
+    guard let session = (self as? ATPClientProtocol)?.oauthSession else { return }
+    let lxm = X.requiredRpcLxm()
+    let aud = proxy ?? "\(session.audienceDid.rawValue)#atproto_pds"
+    guard session.grantedScopes.allowsRpc(lxm: lxm, aud: aud) else {
+      throw OAuthScopeError.insufficientScope(lxm: lxm, aud: aud)
+    }
   }
 
   private func send<X: XRPCRequest>(_: X.Type, for request: XRPCRequestComponents) async throws -> X.ResponseBody {

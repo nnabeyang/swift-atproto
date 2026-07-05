@@ -20,6 +20,10 @@ public protocol XRPCRequest: Sendable {
   static var id: String { get }
 }
 
+extension XRPCRequest {
+  public static func requiredRpcLxm() -> String { id }
+}
+
 public protocol XRPCQuery: XRPCRequest {
   associatedtype Input: XRPCQueryInput
 }
