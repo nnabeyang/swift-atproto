@@ -155,21 +155,23 @@ struct DatetimeFormatTests {
     #expect(throws: (any Error).self) { try Date(string: value) }
   }
 
-  @Test func subMillisecondTruncates() throws {
-    // Sub-millisecond digits are dropped (ms-precise, like the reference), not rounded up.
+  @Test func subMillisecondRounds() throws {
+    // Sub-millisecond digits round to the nearest millisecond so that parse and rawValue agree.
     #expect(try Date(string: "2024-01-15T12:30:00.1234Z").rawValue == "2024-01-15T12:30:00.123Z")
-    #expect(try Date(string: "2024-01-15T12:30:00.1236Z").rawValue == "2024-01-15T12:30:00.123Z")
+    #expect(try Date(string: "2024-01-15T12:30:00.1236Z").rawValue == "2024-01-15T12:30:00.124Z")
   }
 
   @Test func maxYearSubMillisecondDoesNotOverflow() throws {
-    // Sub-millisecond truncation keeps the canonical value within year 9999 and re-parsable.
+    // .9999 at 9999-12-31 rounds into 10000-01-01 during parse; the format-side year clamp
+    // brings it back to the last representable millisecond, keeping the value re-parsable.
     let date = try Date(string: "9999-12-31T23:59:59.9999Z")
     #expect(date.rawValue == "9999-12-31T23:59:59.999Z")
     #expect(throws: Never.self) { try Date(string: date.rawValue) }
   }
 
-  @Test func boundarySubMillisecondDoesNotCarry() throws {
-    // .9999 must not roll over into the next day/month/year.
-    #expect(try Date(string: "2024-12-31T23:59:59.9999Z").rawValue == "2024-12-31T23:59:59.999Z")
+  @Test func boundarySubMillisecondCarries() throws {
+    // .9999 rounds up and carries into the next second/day/month/year.
+    #expect(
+      try Date(string: "2024-12-31T23:59:59.9999Z").rawValue == "2025-01-01T00:00:00.000Z")
   }
 }
