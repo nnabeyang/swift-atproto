@@ -155,21 +155,47 @@ struct DatetimeFormatTests {
     #expect(throws: (any Error).self) { try Date(string: value) }
   }
 
-  @Test func subMillisecondTruncates() throws {
-    // Sub-millisecond digits are dropped (ms-precise, like the reference), not rounded up.
+  @Test func subMillisecondRounds() throws {
+    // Sub-millisecond digits round to the nearest millisecond so that parse and rawValue agree.
     #expect(try Date(string: "2024-01-15T12:30:00.1234Z").rawValue == "2024-01-15T12:30:00.123Z")
-    #expect(try Date(string: "2024-01-15T12:30:00.1236Z").rawValue == "2024-01-15T12:30:00.123Z")
+    #expect(try Date(string: "2024-01-15T12:30:00.1236Z").rawValue == "2024-01-15T12:30:00.124Z")
   }
 
   @Test func maxYearSubMillisecondDoesNotOverflow() throws {
-    // Sub-millisecond truncation keeps the canonical value within year 9999 and re-parsable.
+    // .9999 at 9999-12-31 rounds into 10000-01-01 during parse; the format-side year clamp
+    // brings it back to the last representable millisecond, keeping the value re-parsable.
     let date = try Date(string: "9999-12-31T23:59:59.9999Z")
     #expect(date.rawValue == "9999-12-31T23:59:59.999Z")
     #expect(throws: Never.self) { try Date(string: date.rawValue) }
   }
 
-  @Test func boundarySubMillisecondDoesNotCarry() throws {
-    // .9999 must not roll over into the next day/month/year.
-    #expect(try Date(string: "2024-12-31T23:59:59.9999Z").rawValue == "2024-12-31T23:59:59.999Z")
+  @Test func boundarySubMillisecondCarries() throws {
+    // .9999 rounds up and carries into the next second/day/month/year.
+    #expect(
+      try Date(string: "2024-12-31T23:59:59.9999Z").rawValue == "2025-01-01T00:00:00.000Z")
+  }
+
+  @Test func nonParseMaxYearDoesNotOverflow() throws {
+    // A non-parsed Date at 9999-12-31T23:59:59.9996Z rounds up in rawValue past the 4-digit-year
+    // boundary; the format layer clamps it back to the last representable millisecond.
+    let date = Date(timeIntervalSince1970: 253_402_300_799.9996)
+    #expect(date.rawValue == "9999-12-31T23:59:59.999Z")
+    #expect(throws: Never.self) { try Date(string: date.rawValue) }
+  }
+
+  @Test func parseAndRawValueAgreeOnSubMillisecond() throws {
+    // The same logical instant must canonicalise identically whether it reaches rawValue
+    // through the parser or through Date(timeIntervalSince1970:).
+    let parsed = try Date(string: "2024-01-15T12:30:00.0007Z").rawValue
+    let constructed = Date(timeIntervalSince1970: 1_705_321_800.0007).rawValue
+    #expect(parsed == constructed)
+    #expect(parsed == "2024-01-15T12:30:00.001Z")
+  }
+
+  @Test func rawValueForExactMillisecondNineNineNine() throws {
+    // Regression guard against a naive floor(t*1000) reduction. Double("X.999") is stored as
+    // ~X.998999...; only (t*1000).rounded() recovers the millisecond exactly.
+    let date = Date(timeIntervalSince1970: 1_705_321_800.999)
+    #expect(date.rawValue == "2024-01-15T12:30:00.999Z")
   }
 }

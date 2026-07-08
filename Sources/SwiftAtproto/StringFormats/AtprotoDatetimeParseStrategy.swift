@@ -110,12 +110,18 @@ private struct Scanner {
       }
       // 1 to 20 fraction digits.
       guard index > start, index - start <= 20 else { return nil }
-      // Truncate to millisecond precision (the reference implementation is millisecond-precise);
-      // keeping sub-millisecond digits would let rounding in `Date.rawValue` overflow the year.
+      // Round to the nearest millisecond by inspecting the 4th fractional digit. A carry
+      // (millis == 1000) is passed through as fraction = 1.0 and absorbed by the
+      // `base.addingTimeInterval(...)` below, propagating into seconds/day/year as needed.
+      // Year 10000 overflow from that carry is caught by the format-side clamp.
       var millis = 0
       for offset in 0..<3 {
         let i = start + offset
         millis = millis * 10 + (i < index ? Int(bytes[i] - UInt8(ascii: "0")) : 0)
+      }
+      let fourth = start + 3
+      if fourth < index, bytes[fourth] >= UInt8(ascii: "5") {
+        millis += 1
       }
       fraction = Double(millis) / 1000
     }

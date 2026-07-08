@@ -20,6 +20,11 @@ public struct AtprotoDatetimeFormatStyle: FormatStyle {
     let c = Self.calendar.dateComponents(
       [.year, .month, .day, .hour, .minute, .second],
       from: Date(timeIntervalSince1970: Double(days) * 86_400 + Double(secondOfDay)))
+    // Sub-millisecond rounding at year 9999 can push year to 10000; a 4-digit-year format
+    // cannot represent that, so clamp to the last representable millisecond.
+    if c.year! > 9999 {
+      return "9999-12-31T23:59:59.999Z"
+    }
     return String(
       format: "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
       c.year!, c.month!, c.day!, c.hour!, c.minute!, c.second!, msOfDay % 1000)
