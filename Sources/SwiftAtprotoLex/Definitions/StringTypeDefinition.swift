@@ -56,7 +56,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
           DeclModifierSyntax(name: .keyword(.indirect)),
         ],
         name: .lexIdentifier(name),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["Swift.String", "Codable", "Hashable"])
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["Swift.String", "Codable", "Hashable", "Sendable"])
       ) {
         for value in cases {
           EnumCaseDeclSyntax {
