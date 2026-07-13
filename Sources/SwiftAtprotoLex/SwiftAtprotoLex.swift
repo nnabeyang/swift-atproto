@@ -800,7 +800,8 @@ extension String {
   }
 
   var escapedSwiftKeyword: String {
-    isNeedEscapingKeyword(self) ? "`\(self)`" : self
+    let identifier = first?.isASCII == true && first?.isNumber == true ? "_\(self)" : self
+    return isNeedEscapingKeyword(identifier) ? "`\(identifier)`" : identifier
   }
 }
 
