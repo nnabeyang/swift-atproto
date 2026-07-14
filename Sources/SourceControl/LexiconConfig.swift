@@ -66,20 +66,20 @@ public struct LexiconConfig: Encodable, DecodableWithConfiguration, Sendable {
 
 public struct LexiconDependency: Codable, Sendable {
   public struct Lexicon: Codable, Sendable {
-    public let prefix: String
+    /// Source-repo-relative directory that holds the lexicon JSON files. The
+    /// install step reads each JSON's `id`, joins it as `<id-as-path>.json`
+    /// onto `.lexicons/lexicons/`, and copies (or symlinks, for local deps)
+    /// the file there. No transformation of `path` beyond this is performed.
     public let path: String
+    /// Optional allowlist. When present, only the listed NSIDs are installed
+    /// (each expected to live at `<path>/<nsid-as-path>.json` in the source).
+    /// When absent, every `.json` file under `<path>` is discovered
+    /// recursively and installed based on its own `id`.
     public let nsIds: [NSID]?
 
-    public var rootPath: String {
-      if path.hasSuffix(prefixAsPath) {
-        let index = path.index(path.endIndex, offsetBy: -prefixAsPath.count)
-        return String(path[..<index]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-      }
-      return path  // 一致しない場合は path そのものを返すか、空にする
-    }
-
-    private var prefixAsPath: String {
-      prefix.replacingOccurrences(of: ".", with: "/")
+    public init(path: String, nsIds: [NSID]? = nil) {
+      self.path = path
+      self.nsIds = nsIds
     }
   }
 

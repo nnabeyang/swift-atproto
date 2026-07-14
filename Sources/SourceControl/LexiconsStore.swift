@@ -28,11 +28,6 @@ public struct LexiconsStore: Codable {
 }
 
 public struct ResolvedLexiconDependency: Codable {
-  public struct Lexicon: Codable {
-    public let prefix: String
-    public let path: String
-  }
-
   public struct SourceState: Codable {
     public let tag: String?
     public let revision: String

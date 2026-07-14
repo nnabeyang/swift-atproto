@@ -50,14 +50,63 @@ func isLocalDependency(_ location: URL) -> Bool {
 
 public enum LexiconConfigError: Error, CustomStringConvertible, Equatable {
   case unsafeLexiconSubpath(field: String, value: String)
+  case missingNSID(nsId: String, path: String)
 
   public var description: String {
     switch self {
     case .unsafeLexiconSubpath(let field, let value):
       return
         "Invalid lexicon \(field) \"\(value)\": must be a relative path with no `..`, `.`, or absolute prefix."
+    case .missingNSID(let nsId, let path):
+      return
+        "NSID \"\(nsId)\" listed in `nsIds` was not found under `path: \"\(path)\"` — no lexicon JSON declares this `id`."
     }
   }
+}
+
+// Ensure the parent directory of `url` exists so a subsequent install call can
+// write into it without hitting ENOENT. `FileManager` short-circuits when the
+// directory is already present, so this is safe to call unconditionally.
+func ensureParentDirectoryExists(for url: URL) throws {
+  let parent = url.deletingLastPathComponent()
+  if !FileManager.default.fileExists(atPath: parent.path(percentEncoded: false)) {
+    try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+  }
+}
+
+// Recursively enumerate every `*.json` file under `baseURL`. Symlinks are not
+// followed while walking (so a repo can't self-loop into `.git`), which
+// mirrors the enclosing walkLexicons contract.
+func collectLexiconJSONFiles(under baseURL: URL) throws -> [URL] {
+  guard
+    let enumerator = FileManager.default.enumerator(
+      at: baseURL,
+      includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],
+      options: [.skipsHiddenFiles, .skipsPackageDescendants])
+  else {
+    return []
+  }
+  var results: [URL] = []
+  for case let fileURL as URL in enumerator {
+    let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+    if resourceValues.isRegularFile == true, fileURL.pathExtension == "json" {
+      results.append(fileURL)
+    }
+  }
+  // Sort so install ordering is deterministic across runs.
+  return results.sorted { $0.path < $1.path }
+}
+
+// Extract the top-level `id` string from a lexicon JSON without materializing
+// the full Codable graph — SourceControl doesn't own the lexicon schema, so we
+// keep the read defensive and skip files where `id` is missing or not a string.
+func readLexiconNSID(at url: URL) throws -> NSID? {
+  let data = try Data(contentsOf: url)
+  let object = try? JSONSerialization.jsonObject(with: data)
+  guard let dict = object as? [String: Any], let id = dict["id"] as? String else {
+    return nil
+  }
+  return NSID(rawValue: id)
 }
 
 // Reject `..`, `.`, and absolute paths in any lexicon-supplied sub-path so a
@@ -215,31 +264,39 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
     }
 
     for lexicon in dependency.lexicons {
-      let safePrefix = try validatedLexiconSubpath(
-        lexicon.prefix.replacingOccurrences(of: ".", with: "/"),
-        field: "prefix")
+      let safePath = try validatedLexiconSubpath(lexicon.path, field: "path")
+      let srcBaseURL = srcRootURL.appending(component: safePath)
+      // Walk `<path>` once and index every JSON by the NSID it declares. This
+      // lets both the allowlist (`nsIds`) and enumerate-everything modes look
+      // up sources by id — which in turn lets `path` point at either the
+      // lexicon root or an authority-scoped sub-directory without any config
+      // migration on the caller's side.
+      var idIndex: [String: URL] = [:]
+      for srcURL in try collectLexiconJSONFiles(under: srcBaseURL) {
+        guard let nsId = try readLexiconNSID(at: srcURL) else {
+          FileHandle.standardError.write(
+            Data(
+              "warning: skipping \(srcURL.path()): JSON does not carry a top-level `id` string.\n"
+                .utf8))
+          continue
+        }
+        idIndex[nsId.rawValue] = srcURL
+      }
+      let selected: [(NSID, URL)]
       if let nsIds = lexicon.nsIds {
-        let safeRootPath = try validatedLexiconSubpath(lexicon.rootPath, field: "rootPath")
-        let srcBaseURL = srcRootURL.appending(component: safeRootPath)
-        for nsId in nsIds {
-          let dest = nsId.url(from: lexiconsDirectory)
-          if !FileManager.default.fileExists(atPath: dest.deletingLastPathComponent().path(percentEncoded: false)) {
-            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        selected = try nsIds.map { nsId in
+          guard let srcURL = idIndex[nsId.rawValue] else {
+            throw LexiconConfigError.missingNSID(nsId: nsId.rawValue, path: lexicon.path)
           }
-          try install(nsId.url(from: srcBaseURL), dest)
+          return (nsId, srcURL)
         }
       } else {
-        let safePath = try validatedLexiconSubpath(lexicon.path, field: "path")
-        let srcBaseURL = srcRootURL.appending(component: safePath)
-        for name in try FileManager.default.contentsOfDirectory(atPath: srcBaseURL.path()) {
-          let srcURL = srcBaseURL.appending(component: name)
-          let lexiconBaseDirectory = lexiconsDirectory.appending(component: safePrefix)
-          if !FileManager.default.fileExists(atPath: lexiconBaseDirectory.path()) {
-            try FileManager.default.createDirectory(at: lexiconBaseDirectory, withIntermediateDirectories: true)
-          }
-          let lexiconDirectory = lexiconBaseDirectory.appending(component: name)
-          try install(srcURL, lexiconDirectory)
-        }
+        selected = idIndex.keys.sorted().map { id in (NSID(rawValue: id), idIndex[id]!) }
+      }
+      for (nsId, srcURL) in selected {
+        let dest = nsId.url(from: lexiconsDirectory)
+        try ensureParentDirectoryExists(for: dest)
+        try install(srcURL, dest)
       }
     }
   }
