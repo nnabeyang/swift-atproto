@@ -73,10 +73,12 @@ extension MemberTypeSyntax {
 }
 
 extension InheritanceClauseSyntax {
+  // Names may be dotted (e.g. `"Swift.String"`) — build a `MemberTypeSyntax`
+  // in that case so the raw type / protocol is emitted fully-qualified.
   package init(typeNames: [String]) {
     self.init {
       for name in typeNames {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier(name)))
+        InheritedTypeSyntax(type: Lex.typeSyntax(name))
       }
     }
   }

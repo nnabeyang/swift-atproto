@@ -105,7 +105,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               pattern: IdentifierPatternSyntax(identifier: .identifier("type")),
               typeAnnotation: TypeAnnotationSyntax(
                 colon: .colonToken(),
-                type: IdentifierTypeSyntax(name: .identifier("String"))
+                type: Lex.typeSyntax("Swift.String")
               ),
               accessorBlock: AccessorBlockSyntax(
                 leftBrace: .leftBraceToken(),
@@ -145,7 +145,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               colon: .colonToken(),
               type: DictionaryTypeSyntax(
                 leftSquare: .leftSquareToken(),
-                key: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String"))),
+                key: Lex.typeSyntax("Swift.String"),
                 colon: .colonToken(),
                 value: TypeSyntax(IdentifierTypeSyntax(name: .identifier("AnyCodable"))),
                 rightSquare: .rightSquareToken()
@@ -168,7 +168,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         EnumDeclSyntax(
           leadingTrivia: .newlines(2),
           name: "CodingKeys",
-          inheritanceClause: InheritanceClauseSyntax(typeNames: ["String", "CodingKey"])
+          inheritanceClause: InheritanceClauseSyntax(typeNames: ["Swift.String", "CodingKey"])
         ) {
           if ts.isRecord {
             EnumCaseDeclSyntax {
@@ -314,7 +314,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                       content: DictionaryExprSyntax.Content(
                         DictionaryElementListSyntax([
                           DictionaryElementSyntax(
-                            key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
+                            key: Lex.refExpr("Swift.String"),
                             colon: .colonToken(),
                             value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
                           )
@@ -705,7 +705,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                   content: DictionaryExprSyntax.Content(
                     DictionaryElementListSyntax([
                       DictionaryElementSyntax(
-                        key: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("String"))),
+                        key: Lex.refExpr("Swift.String"),
                         colon: .colonToken(),
                         value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
                       )

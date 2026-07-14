@@ -218,7 +218,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       if applyStringFormat, let formatType = def.format?.swiftFormatTypeName {
         return ("INVALID", "FormatString<\(formatType)>")
       }
-      return ("INVALID", "String")
+      return ("INVALID", "Swift.String")
     }
     let tname: String =
       if dropPrefix, ts.prefix == prefix {
@@ -269,17 +269,17 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
   static func typeNameForField(name: String, k: String, v: TypeSchema, defMap: ExtDefMap, dropPrefix: Bool = true, applyStringFormat: Bool = true) -> String {
     switch v.type {
     case .boolean:
-      return "Bool"
+      return "Swift.Bool"
     case .blob:
       return "LexBlob"
     case .bytes:
-      return "Data"
+      return "Foundation.Data"
     case .string(let def):
       if def.isPrimitive {
         if applyStringFormat, let formatType = def.format?.swiftFormatTypeName {
           return "FormatString<\(formatType)>"
         }
-        return "String"
+        return "Swift.String"
       }
       if !dropPrefix {
         return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
@@ -288,7 +288,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       }
     case .integer(let def):
       if def.isPrimitive {
-        return "Int"
+        return "Swift.Int"
       }
       if !dropPrefix {
         return "\(Lex.structNameFor(prefix: v.prefix)).\(name)_\(k.titleCased())"
@@ -643,7 +643,7 @@ struct OutputType: Encodable, DecodableWithConfiguration {
     description = try container.decodeIfPresent(String.self, forKey: .description)
   }
 
-  func typeName(fname: String, prefix: String, defMap: ExtDefMap, binaryTypeName: String = "Data", isOutput: Bool) -> TokenSyntax {
+  func typeName(fname: String, prefix: String, defMap: ExtDefMap, binaryTypeName: String = "Foundation.Data", isOutput: Bool) -> String {
     switch encoding {
     case .json, .jsonl:
       let token: String = {
@@ -658,11 +658,11 @@ struct OutputType: Encodable, DecodableWithConfiguration {
         }
         return "\(prefix).\(outname)"
       }()
-      return .identifier(token)
+      return token
     case .text:
-      return .identifier("String")
+      return "Swift.String"
     case .cbor, .car, .any, .mp4:
-      return .identifier(binaryTypeName)
+      return binaryTypeName
     }
   }
 

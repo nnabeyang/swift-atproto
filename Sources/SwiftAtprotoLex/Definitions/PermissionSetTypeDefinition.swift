@@ -60,7 +60,7 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
       PatternBindingSyntax(
         pattern: IdentifierPatternSyntax(identifier: .identifier(ident)),
         typeAnnotation: TypeAnnotationSyntax(
-          type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
+          type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.String"))
         ),
         initializer: InitializerClauseSyntax(value: valueExpr)
       )

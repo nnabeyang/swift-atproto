@@ -470,7 +470,7 @@ enum Lex {
               pattern: IdentifierPatternSyntax(identifier: .identifier("type")),
               typeAnnotation: TypeAnnotationSyntax(
                 colon: .colonToken(),
-                type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
+                type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.String"))
               ),
               accessorBlock: AccessorBlockSyntax(
                 leftBrace: .leftBraceToken(),

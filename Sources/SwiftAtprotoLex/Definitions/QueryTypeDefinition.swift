@@ -110,9 +110,9 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         }
         return Lex.typeSyntax("\(prefix).\(outname)")
       case .text:
-        return Lex.typeSyntax("String")
+        return Lex.typeSyntax("Swift.String")
       case .cbor, .car, .any, .mp4:
-        return Lex.typeSyntax("Data")
+        return Lex.typeSyntax("Foundation.Data")
       }
     }
     return Lex.typeSyntax("EmptyResponse")
@@ -962,7 +962,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
               leftParen: .leftParenToken(),
               parameters: EnumCaseParameterListSyntax([
                 EnumCaseParameterSyntax(
-                  type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String")))
+                  type: Lex.typeSyntax("Swift.String")
                 )
               ]),
               rightParen: .rightParenToken()
@@ -983,7 +983,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                   FunctionParameterSyntax(
                     firstName: .identifier("rawValue"),
                     colon: .colonToken(),
-                    type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String")))
+                    type: Lex.typeSyntax("Swift.String")
                   )
                 ],
                 rightParen: .rightParenToken()
@@ -1075,7 +1075,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                 pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("rawValue"))),
                 typeAnnotation: TypeAnnotationSyntax(
                   colon: .colonToken(),
-                  type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String")))
+                  type: Lex.typeSyntax("Swift.String")
                 ),
                 accessorBlock: AccessorBlockSyntax(
                   leftBrace: .leftBraceToken(),

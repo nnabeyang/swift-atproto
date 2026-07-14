@@ -15,7 +15,7 @@ protocol HTTPAPITypeDefinition: Encodable, DecodableWithConfiguration, SwiftCode
 
 extension HTTPAPITypeDefinition {
   func rpcOutput(fname: String, defMap: ExtDefMap, prefix: String) -> ReturnClauseSyntax {
-    ReturnClauseSyntax(type: IdentifierTypeSyntax(name: output?.typeName(fname: fname, prefix: prefix, defMap: defMap, isOutput: true) ?? .identifier("Bool")))
+    ReturnClauseSyntax(type: Lex.typeSyntax(output?.typeName(fname: fname, prefix: prefix, defMap: defMap, isOutput: true) ?? "Swift.Bool"))
   }
 
   func makeErrorDeclaration(leadingTrivia: Trivia?, ts: TypeSchema, name typeName: String, type: String) -> any DeclSyntaxProtocol {
@@ -38,7 +38,7 @@ extension HTTPAPITypeDefinition {
             name: .lexIdentifier(error.name.camelCased()),
             parameterClause: EnumCaseParameterClauseSyntax(
               parameters: [
-                EnumCaseParameterSyntax(type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String"))))
+                EnumCaseParameterSyntax(type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.String")))
               ]
             )
           )
@@ -52,13 +52,13 @@ extension HTTPAPITypeDefinition {
               EnumCaseParameterSyntax(
                 firstName: .identifier("error"),
                 colon: .colonToken(),
-                type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String"))),
+                type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.String")),
                 trailingComma: .commaToken()
               ),
               EnumCaseParameterSyntax(
                 firstName: .identifier("message"),
                 colon: .colonToken(),
-                type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
+                type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.String"))
               ),
             ]
           )
@@ -164,7 +164,7 @@ extension HTTPAPITypeDefinition {
             pattern: IdentifierPatternSyntax(identifier: .identifier("error")),
             typeAnnotation: TypeAnnotationSyntax(
               colon: .colonToken(),
-              type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
+              type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.String"))
             ),
             accessorBlock: AccessorBlockSyntax(
               accessors: .getter(
@@ -239,7 +239,7 @@ extension HTTPAPITypeDefinition {
             pattern: IdentifierPatternSyntax(identifier: .identifier("message")),
             typeAnnotation: TypeAnnotationSyntax(
               colon: .colonToken(),
-              type: OptionalTypeSyntax(wrappedType: IdentifierTypeSyntax(name: .identifier("String")))
+              type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.String"))
             ),
             accessorBlock: AccessorBlockSyntax(
               leftBrace: .leftBraceToken(),
