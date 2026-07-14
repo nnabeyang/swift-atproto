@@ -11,7 +11,16 @@ struct TypeInfo {
   let type: TypeSchema
 }
 
-final class Schema: Encodable, DecodableWithConfiguration, Sendable {
+final class Schema: Encodable, Decodable, Sendable {
+  /// NSID authority portion of `id`. Derived from the JSON's `id` field
+  /// rather than the file system layout, so a lexicon vendored under an
+  /// unrelated directory (e.g. `sh/tangled/com/atproto/repo/strongRef.json`
+  /// for canonical `com.atproto.repo.strongRef`) still generates types under
+  /// the correct Swift namespace. The last two segments are the collection
+  /// and record name, camel-cased into a single Swift identifier
+  /// (`com.atproto.repo.strongRef` → prefix `com.atproto`, name
+  /// `RepoStrongRef`), so `prefix` drops the final two segments when the id
+  /// has four or more and the final one otherwise.
   let prefix: String
   let lexicon: Int
   let id: String
@@ -27,19 +36,28 @@ final class Schema: Encodable, DecodableWithConfiguration, Sendable {
     case defs
   }
 
-  init(from decoder: any Decoder, configuration prefix: String) throws {
+  init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     self.lexicon = try container.decode(Int.self, forKey: .lexicon)
-    self.id = try container.decode(String.self, forKey: .id)
+    let id = try container.decode(String.self, forKey: .id)
+    self.id = id
     self.revision = try container.decodeIfPresent(Int.self, forKey: .revision)
     self.description = try container.decodeIfPresent(String.self, forKey: .description)
+    let prefix = Self.derivePrefix(from: id)
+    self.prefix = prefix
     let nestedContainer = try container.nestedContainer(keyedBy: AnyCodingKeys.self, forKey: .defs)
     var defs = [String: TypeSchema]()
     for key in nestedContainer.allKeys {
       defs[key.stringValue] = try nestedContainer.decode(TypeSchema.self, forKey: key, configuration: .init(prefix: prefix, id: id, defName: key.stringValue))
     }
     self.defs = defs
-    self.prefix = prefix
+  }
+
+  static func derivePrefix(from id: String) -> String {
+    let segments = id.split(separator: ".")
+    guard segments.count >= 2 else { return "" }
+    let dropCount = segments.count >= 4 ? 2 : 1
+    return segments.dropLast(dropCount).joined(separator: ".")
   }
 
   func allTypes(prefix: String) -> [String: TypeSchema] {
@@ -138,6 +156,8 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case type
   }
 
+  /// NSID authority + collection portion of the owning schema's `id`.
+  /// See `Schema.prefix` for the derivation.
   let prefix: String
   let id: String
   let defName: String

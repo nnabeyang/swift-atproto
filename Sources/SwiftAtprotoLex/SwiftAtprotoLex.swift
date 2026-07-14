@@ -11,7 +11,7 @@ public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOpti
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
-  let schemasMap = try await decodeSchemasByPrefix(from: fileURLs, baseURL: url)
+  let schemasMap = try await decodeSchemasByPrefix(from: fileURLs)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
   try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate, pluginSource: pluginSource)
 }
@@ -19,9 +19,8 @@ public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOpti
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
   // `FileManager.enumerator` does not traverse symbolic links, so it would
   // miss local lexicon trees installed under `.lexicons/lexicons/` as symlinks.
-  // Walk the tree manually instead, resolving each entry's target while
-  // keeping the logical path rooted at `baseURL` so `prefix(baseURL:)` still
-  // works on the returned URLs.
+  // Walk the tree manually instead, resolving each entry's target so
+  // symlinked lexicon trees are discovered as if they were physically nested.
   var fileURLs = [URL]()
   var visited = Set<String>()
   walkLexicons(at: baseURL, visited: &visited, into: &fileURLs)
@@ -56,22 +55,47 @@ private func walkLexicons(at url: URL, visited: inout Set<String>, into result: 
   }
 }
 
-func decodeSchemasByPrefix(from fileURLs: [URL], baseURL: URL) async throws -> [String: [Schema]] {
+enum SchemaDecodeError: Error, CustomStringConvertible {
+  case duplicateNSID(id: String, firstPath: URL, secondPath: URL)
+
+  var description: String {
+    switch self {
+    case .duplicateNSID(let id, let firstPath, let secondPath):
+      return "duplicate NSID \(id) loaded from both \(firstPath.path) and \(secondPath.path)"
+    }
+  }
+}
+
+func decodeSchemasByPrefix(from fileURLs: [URL]) async throws -> [String: [Schema]] {
   let decoder = JSONDecoder()
-  return try await withThrowingTaskGroup(of: Schema.self) { group in
+  let entries: [(URL, Schema)] = try await withThrowingTaskGroup(of: (URL, Schema).self) { group in
     for fileURL in fileURLs {
       group.addTask {
         let data = try Data(contentsOf: fileURL)
-        let prefix = fileURL.prefix(baseURL: baseURL)
-        return try decoder.decode(Schema.self, from: data, configuration: prefix)
+        let schema = try decoder.decode(Schema.self, from: data)
+        return (fileURL, schema)
       }
     }
-    var schemasMap = [String: [Schema]]()
-    for try await schema in group {
-      schemasMap[schema.prefix, default: []].append(schema)
+    var out: [(URL, Schema)] = []
+    for try await pair in group {
+      out.append(pair)
     }
-    return schemasMap
+    return out
   }
+  // Sort so duplicate-NSID errors report a stable "first" / "second" pair
+  // regardless of task completion order.
+  let sortedEntries = entries.sorted { $0.0.path < $1.0.path }
+
+  var seen: [String: URL] = [:]
+  var schemasMap: [String: [Schema]] = [:]
+  for (fileURL, schema) in sortedEntries {
+    if let firstPath = seen[schema.id] {
+      throw SchemaDecodeError.duplicateNSID(id: schema.id, firstPath: firstPath, secondPath: fileURL)
+    }
+    seen[schema.id] = fileURL
+    schemasMap[schema.prefix, default: []].append(schema)
+  }
+  return schemasMap
 }
 
 func createOutputDirectory(for prefix: String, baseURL: URL) throws {
@@ -262,15 +286,6 @@ class EnumDeclSyntaxNode {
       }
     }
     return roots.values.sorted { $0.name < $1.name }
-  }
-}
-
-extension URL {
-  fileprivate func prefix(baseURL: URL) -> String {
-    precondition(path.hasPrefix(baseURL.path))
-    let relativeCount = pathComponents.count - baseURL.pathComponents.count
-    let url = relativeCount >= 4 ? deletingLastPathComponent() : self
-    return url.deletingLastPathComponent().path.dropFirst(baseURL.path.count + 1).replacingOccurrences(of: "/", with: ".")
   }
 }
 
