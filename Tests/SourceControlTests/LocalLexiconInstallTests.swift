@@ -16,19 +16,6 @@
       return url
     }
 
-    /// Sets up a fake project skeleton with `.atproto.json` containing `body` and an
-    /// empty source tree at `lex-src/`. Returns the configuration URL and the source root.
-    private static func makeProject(_ body: String) throws -> (config: URL, source: URL) {
-      let root = try makeTempRoot()
-      let project = root.appendingPathComponent("proj", isDirectory: true)
-      let source = root.appendingPathComponent("lex-src", isDirectory: true)
-      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-      try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
-      let configURL = project.appendingPathComponent(".atproto.json")
-      try body.write(to: configURL, atomically: true, encoding: .utf8)
-      return (configURL, source)
-    }
-
     private static func writeLexicon(at url: URL, id: String) throws {
       try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
       try Data(#"{"lexicon":1,"id":"\#(id)","defs":{}}"#.utf8).write(to: url)
@@ -36,14 +23,20 @@
 
     // Tests ------------------------------------------------------------------
 
-    @Test func localFileSchemeInstallsSymlinks() throws {
+    @Test func localFileSchemeInstallsSymlinksPerFile() throws {
+      // Without an nsIds allowlist the installer walks `<path>` recursively,
+      // reads each JSON's `id`, and symlinks the individual file to its
+      // canonical `<lexiconsDirectory>/<id-as-path>.json` location — file-level
+      // rather than directory-level, so a new file added to the source tree
+      // requires a re-run to appear (documented behavior change from the
+      // pre-`prefix`-removal SourceControl).
       let root = try Self.makeTempRoot()
       defer { try? FileManager.default.removeItem(at: root) }
       let project = root.appendingPathComponent("proj", isDirectory: true)
       let source = root.appendingPathComponent("lex-src", isDirectory: true)
       try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-      let lexFile = source.appendingPathComponent("lexicons/app/bsky/feed/post.json")
-      try Self.writeLexicon(at: lexFile, id: "app.bsky.feed.post")
+      let lexFile = source.appendingPathComponent("lexicons/com/example/feed/post.json")
+      try Self.writeLexicon(at: lexFile, id: "com.example.feed.post")
 
       let configURL = project.appendingPathComponent(".atproto.json")
       let body = """
@@ -51,7 +44,7 @@
           "generate": ["client"],
           "dependencies": [{
             "location": "file://\(source.path)",
-            "lexicons": [{ "prefix": "app.bsky", "path": "lexicons/app/bsky" }],
+            "lexicons": [{ "path": "lexicons" }],
             "state": { "tag": "local" }
           }]
         }
@@ -60,16 +53,183 @@
 
       _ = try main(configurationURL: configURL, outdir: nil)
 
-      // For non-nsIds the installer symlinks each top-level entry of
-      // `lexicon.path`. With `path: "lexicons/app/bsky"` the only entry is `feed`,
-      // so a directory symlink lives at `.lexicons/lexicons/app/bsky/feed`.
-      let installedDir = project.appendingPathComponent(".lexicons/lexicons/app/bsky/feed")
-      let attrs = try FileManager.default.attributesOfItem(atPath: installedDir.path)
+      let installed = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/post.json")
+      let attrs = try FileManager.default.attributesOfItem(atPath: installed.path)
       #expect(attrs[.type] as? FileAttributeType == .typeSymbolicLink)
-      let target = try FileManager.default.destinationOfSymbolicLink(atPath: installedDir.path)
-      #expect(target.hasSuffix("lexicons/app/bsky/feed"))
-      // The file is reachable through the symlink.
-      #expect(FileManager.default.fileExists(atPath: installedDir.appendingPathComponent("post.json").path))
+      let target = try FileManager.default.destinationOfSymbolicLink(atPath: installed.path)
+      #expect(target.hasSuffix("lexicons/com/example/feed/post.json"))
+      #expect(FileManager.default.fileExists(atPath: installed.path))
+    }
+
+    @Test func destinationDerivedFromIdIgnoresSourceLayout() throws {
+      // A lexicon can live at any path on disk and still install to its
+      // canonical NSID location — this locks in the "install layout is derived
+      // from the JSON `id`, not the file system" contract.
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      // Intentionally place the file under a mis-nested directory tree.
+      let lexFile = source.appendingPathComponent("lexicons/wrong/place/for/canonical.json")
+      try Self.writeLexicon(at: lexFile, id: "com.example.repo.strongRef")
+
+      let configURL = project.appendingPathComponent(".atproto.json")
+      let body = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{ "path": "lexicons" }],
+            "state": { "tag": "local" }
+          }]
+        }
+        """
+      try body.write(to: configURL, atomically: true, encoding: .utf8)
+
+      _ = try main(configurationURL: configURL, outdir: nil)
+
+      let installed = project.appendingPathComponent(".lexicons/lexicons/com/example/repo/strongRef.json")
+      #expect(FileManager.default.fileExists(atPath: installed.path))
+      // The mis-nested source path must NOT appear as a shadow entry.
+      let shadow = project.appendingPathComponent(".lexicons/lexicons/wrong")
+      #expect(!FileManager.default.fileExists(atPath: shadow.path))
+    }
+
+    @Test func nsIdsAllowlistInstallsListedFilesOnly() throws {
+      // With `nsIds`, only the listed NSIDs are installed. Each JSON under
+      // `<path>` is indexed by its declared `id`, so `path` can point at
+      // either the lexicon root or an authority-scoped sub-directory — both
+      // resolve to the same install destination.
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/post.json"), id: "com.example.feed.post")
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/like.json"), id: "com.example.feed.like")
+
+      let configURL = project.appendingPathComponent(".atproto.json")
+      let body = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{
+              "path": "lexicons",
+              "nsIds": ["com.example.feed.post"]
+            }],
+            "state": { "tag": "local" }
+          }]
+        }
+        """
+      try body.write(to: configURL, atomically: true, encoding: .utf8)
+
+      _ = try main(configurationURL: configURL, outdir: nil)
+
+      let installedPost = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/post.json")
+      let installedLike = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/like.json")
+      #expect(FileManager.default.fileExists(atPath: installedPost.path))
+      #expect(!FileManager.default.fileExists(atPath: installedLike.path))
+    }
+
+    @Test func nsIdsAllowlistWorksWithAuthorityScopedPath() throws {
+      // A `path` pointing at an authority-scoped sub-directory (as pre-existing
+      // `.atproto.json` files often do) must resolve NSIDs by looking inside
+      // that sub-directory, so `path: "lexicons/com/example"` combined with
+      // `nsIds: ["com.example.feed.post"]` finds the file at
+      // `<path>/feed/post.json` without doubling the authority segments.
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/post.json"), id: "com.example.feed.post")
+
+      let configURL = project.appendingPathComponent(".atproto.json")
+      let body = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{
+              "path": "lexicons/com/example",
+              "nsIds": ["com.example.feed.post"]
+            }],
+            "state": { "tag": "local" }
+          }]
+        }
+        """
+      try body.write(to: configURL, atomically: true, encoding: .utf8)
+
+      _ = try main(configurationURL: configURL, outdir: nil)
+
+      let installed = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/post.json")
+      #expect(FileManager.default.fileExists(atPath: installed.path))
+    }
+
+    @Test func nsIdsAllowlistErrorsWhenEntryHasNoMatchingFile() throws {
+      // A typo or missing lexicon in `nsIds` should surface a
+      // `LexiconConfigError.missingNSID`, not the low-level "file couldn't be
+      // opened" NSError the old path-join installer used to raise.
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/post.json"), id: "com.example.feed.post")
+
+      let configURL = project.appendingPathComponent(".atproto.json")
+      let body = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{
+              "path": "lexicons",
+              "nsIds": ["com.example.feed.doesNotExist"]
+            }],
+            "state": { "tag": "local" }
+          }]
+        }
+        """
+      try body.write(to: configURL, atomically: true, encoding: .utf8)
+
+      #expect(throws: LexiconConfigError.missingNSID(nsId: "com.example.feed.doesNotExist", path: "lexicons")) {
+        _ = try main(configurationURL: configURL, outdir: nil)
+      }
+    }
+
+    @Test func legacyPrefixFieldIsAcceptedAndIgnored() throws {
+      // `.atproto.json` from before the `prefix` removal must continue to
+      // parse. The value is discarded; install destinations still come from
+      // each JSON's `id`.
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/post.json"), id: "com.example.feed.post")
+
+      let configURL = project.appendingPathComponent(".atproto.json")
+      let body = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{ "prefix": "com.example", "path": "lexicons" }],
+            "state": { "tag": "local" }
+          }]
+        }
+        """
+      try body.write(to: configURL, atomically: true, encoding: .utf8)
+
+      _ = try main(configurationURL: configURL, outdir: nil)
+
+      // Install continues to derive dest from the JSON `id` — the legacy
+      // `prefix: "com.example"` field is silently ignored by the decoder.
+      let installed = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/post.json")
+      #expect(FileManager.default.fileExists(atPath: installed.path))
     }
 
     @Test func rejectsLexiconPathWithParentTraversal() throws {
@@ -88,7 +248,7 @@
           "generate": ["client"],
           "dependencies": [{
             "location": "file://\(source.path)",
-            "lexicons": [{ "prefix": "evil", "path": "../escape" }],
+            "lexicons": [{ "path": "../escape" }],
             "state": { "tag": "local" }
           }]
         }
@@ -98,52 +258,14 @@
       #expect(throws: (any Error).self) {
         _ = try main(configurationURL: configURL, outdir: nil)
       }
-      // The escape file must never appear under .lexicons/lexicons/.
-      let installed = project.appendingPathComponent(".lexicons/lexicons/evil/secret.json")
+      let installed = project.appendingPathComponent(".lexicons/lexicons/secret.json")
       #expect(!FileManager.default.fileExists(atPath: installed.path))
     }
 
-    @Test func rejectsRootPathWithParentTraversal() throws {
-      let root = try Self.makeTempRoot()
-      defer { try? FileManager.default.removeItem(at: root) }
-      let project = root.appendingPathComponent("proj", isDirectory: true)
-      let source = root.appendingPathComponent("lex-src", isDirectory: true)
-      let escape = root.appendingPathComponent("escape", isDirectory: true)
-      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-      try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
-      // nsIds path joins as `<rootPath>/<nsid_components>.json`. So if rootPath
-      // is `../escape` and we point nsId at `secret`, the source URL becomes
-      // `<source>/../escape/secret.json`.
-      try Self.writeLexicon(at: escape.appendingPathComponent("secret.json"), id: "secret")
-
-      let configURL = project.appendingPathComponent(".atproto.json")
-      // `path: "../escape/evil"` makes rootPath="../escape" (strips the prefix-as-path).
-      let body = """
-        {
-          "generate": ["client"],
-          "dependencies": [{
-            "location": "file://\(source.path)",
-            "lexicons": [{
-              "prefix": "evil",
-              "path": "../escape/evil",
-              "nsIds": ["secret"]
-            }],
-            "state": { "tag": "local" }
-          }]
-        }
-        """
-      try body.write(to: configURL, atomically: true, encoding: .utf8)
-
-      #expect(throws: (any Error).self) {
-        _ = try main(configurationURL: configURL, outdir: nil)
-      }
-    }
-
     @Test func rejectsAbsoluteLexiconPath() throws {
-      // Create a sibling `etc` directory inside the source root so that an
-      // absolute `/etc` path would, if URL append silently stripped the leading
-      // slash, point at real content. We assert the install rejects the path
-      // explicitly rather than relying on the missing-directory side effect.
+      // Ensure an absolute `/etc` path can't slip through when URL append
+      // silently strips the leading slash. `validatedLexiconSubpath` should
+      // reject it up front.
       let root = try Self.makeTempRoot()
       defer { try? FileManager.default.removeItem(at: root) }
       let project = root.appendingPathComponent("proj", isDirectory: true)
@@ -157,7 +279,7 @@
           "generate": ["client"],
           "dependencies": [{
             "location": "file://\(source.path)",
-            "lexicons": [{ "prefix": "evil", "path": "/etc" }],
+            "lexicons": [{ "path": "/etc" }],
             "state": { "tag": "local" }
           }]
         }
@@ -167,8 +289,7 @@
       #expect(throws: (any Error).self) {
         _ = try main(configurationURL: configURL, outdir: nil)
       }
-      // The secret must never leak into the project's lexicons directory.
-      let leaked = project.appendingPathComponent(".lexicons/lexicons/evil/secret.json")
+      let leaked = project.appendingPathComponent(".lexicons/lexicons/secret.json")
       #expect(!FileManager.default.fileExists(atPath: leaked.path))
     }
 
@@ -185,14 +306,14 @@
       let project = root.appendingPathComponent("proj", isDirectory: true)
       let source = root.appendingPathComponent("lex-src", isDirectory: true)
       try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/app/bsky/feed/post.json"), id: "app.bsky.feed.post")
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/post.json"), id: "com.example.feed.post")
 
       let configBody = """
         {
           "generate": ["client"],
           "dependencies": [{
             "location": "file://\(source.path)",
-            "lexicons": [{ "prefix": "app.bsky", "path": "lexicons/app/bsky" }],
+            "lexicons": [{ "path": "lexicons" }],
             "state": { "revision": "stale-sha" }
           }]
         }
@@ -200,8 +321,6 @@
       let configURL = project.appendingPathComponent(".atproto.json")
       try configBody.write(to: configURL, atomically: true, encoding: .utf8)
 
-      // Pre-seed the lockfile with the *same* originHash as the config above
-      // and a revision that lies (`"stale-sha"` instead of `"local"`).
       let configData = try Data(contentsOf: configURL)
       let originHash = SHA256.hash(data: configData).map { String(format: "%02x", $0) }.joined()
       let staleLockfile = """
@@ -211,14 +330,13 @@
           "module": "Sources/Out",
           "dependencies": [{
             "location": "file://\(source.path)",
-            "lexicons": [{ "prefix": "app.bsky", "path": "lexicons/app/bsky" }],
+            "lexicons": [{ "path": "lexicons" }],
             "state": { "revision": "stale-sha" }
           }]
         }
         """
       let lockfileURL = project.appendingPathComponent(".atproto-lock.json")
       try staleLockfile.write(to: lockfileURL, atomically: true, encoding: .utf8)
-      // The fast-path also requires `.lexicons/lexicons/` to exist on disk.
       try FileManager.default.createDirectory(
         at: project.appendingPathComponent(".lexicons/lexicons", isDirectory: true),
         withIntermediateDirectories: true)
@@ -231,15 +349,15 @@
     }
 
     @Test func uppercaseFileSchemeIsTreatedAsLocal() throws {
-      // Mirrors `localFileSchemeInstallsSymlinks` but with a `FILE://` scheme to
-      // pin the case-insensitive contract between misc.swift and
+      // Mirrors `localFileSchemeInstallsSymlinksPerFile` but with a `FILE://`
+      // scheme to pin the case-insensitive contract between misc.swift and
       // RepositoryLocation.parse (which already lowercases).
       let root = try Self.makeTempRoot()
       defer { try? FileManager.default.removeItem(at: root) }
       let project = root.appendingPathComponent("proj", isDirectory: true)
       let source = root.appendingPathComponent("lex-src", isDirectory: true)
       try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/app/bsky/feed/post.json"), id: "app.bsky.feed.post")
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/post.json"), id: "com.example.feed.post")
 
       let configURL = project.appendingPathComponent(".atproto.json")
       let body = """
@@ -247,7 +365,7 @@
           "generate": ["client"],
           "dependencies": [{
             "location": "FILE://\(source.path)",
-            "lexicons": [{ "prefix": "app.bsky", "path": "lexicons/app/bsky" }],
+            "lexicons": [{ "path": "lexicons" }],
             "state": { "tag": "local" }
           }]
         }
@@ -256,8 +374,8 @@
 
       _ = try main(configurationURL: configURL, outdir: nil)
 
-      let installedDir = project.appendingPathComponent(".lexicons/lexicons/app/bsky/feed")
-      let attrs = try FileManager.default.attributesOfItem(atPath: installedDir.path)
+      let installed = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/post.json")
+      let attrs = try FileManager.default.attributesOfItem(atPath: installed.path)
       #expect(attrs[.type] as? FileAttributeType == .typeSymbolicLink)
     }
   }
