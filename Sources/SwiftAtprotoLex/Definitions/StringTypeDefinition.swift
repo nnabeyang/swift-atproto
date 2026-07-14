@@ -56,7 +56,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
           DeclModifierSyntax(name: .keyword(.indirect)),
         ],
         name: .lexIdentifier(name),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["String", "Codable", "Hashable"])
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["Swift.String", "Codable", "Hashable"])
       ) {
         for value in cases {
           EnumCaseDeclSyntax {
@@ -112,11 +112,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
                       )
                     ) {
                       LabeledExprSyntax(
-                        expression: MemberAccessExprSyntax(
-                          base: DeclReferenceExprSyntax(baseName: .identifier("String")),
-                          period: .periodToken(),
-                          declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
-                        ))
+                        expression: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("String"), .keyword(.self)]))
                     }
                   )
                 )
@@ -242,7 +238,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
           parameterClause: EnumCaseParameterClauseSyntax(
             parameters: [
               EnumCaseParameterSyntax(
-                type: IdentifierTypeSyntax(name: .identifier("String"))
+                type: Lex.typeSyntax("Swift.String")
               )
             ]
           )
@@ -253,7 +249,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
         modifiers: [.init(name: .keyword(.public))],
         signature: FunctionSignatureSyntax(
           parameterClause: FunctionParameterClauseSyntax {
-            FunctionParameterSyntax(firstName: .identifier("rawValue"), type: IdentifierTypeSyntax(name: .identifier("String")))
+            FunctionParameterSyntax(firstName: .identifier("rawValue"), type: Lex.typeSyntax("Swift.String"))
           }
         )
       ) {
@@ -321,7 +317,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
             pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("rawValue"))),
             typeAnnotation: TypeAnnotationSyntax(
               colon: .colonToken(),
-              type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("String")))
+              type: Lex.typeSyntax("Swift.String")
             ),
             accessorBlock: AccessorBlockSyntax(
               accessors: AccessorBlockSyntax.Accessors(
@@ -408,7 +404,7 @@ struct StringTypeDefinition: Codable, SwiftCodeGeneratable {
                 equal: .equalToken(),
                 value: TryExprSyntax(
                   expression: FunctionCallExprSyntax(
-                    callee: DeclReferenceExprSyntax(baseName: .identifier("String"))
+                    callee: Lex.refExpr("Swift.String")
                   ) {
                     LabeledExprSyntax(
                       label: .identifier("from"),

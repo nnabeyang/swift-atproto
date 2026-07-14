@@ -74,7 +74,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
       EnumDeclSyntax(
         leadingTrivia: .newlines(2),
         name: "CodingKeys",
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["String", "CodingKey"])
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["Swift.String", "CodingKey"])
       ) {
         EnumCaseDeclSyntax {
           EnumCaseElementSyntax(
@@ -125,7 +125,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
                 ) {
                   LabeledExprSyntax(
                     expression: MemberAccessExprSyntax(
-                      base: DeclReferenceExprSyntax(baseName: .identifier("String")),
+                      base: Lex.refExpr("Swift.String"),
                       name: .keyword(.self)
                     ))
                   LabeledExprSyntax(label: "forKey", colon: .colonToken(), expression: MemberAccessExprSyntax(name: "type"))

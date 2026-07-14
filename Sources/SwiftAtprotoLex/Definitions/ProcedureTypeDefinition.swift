@@ -83,7 +83,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             leftParen: .leftParenToken(),
             parameters: EnumCaseParameterListSyntax([
               EnumCaseParameterSyntax(
-                type: IdentifierTypeSyntax(name: .identifier("String"))
+                type: Lex.typeSyntax("Swift.String")
               )
             ]),
             rightParen: .rightParenToken()
@@ -125,12 +125,12 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         }()
         return Lex.typeSyntax(token)
       case .text:
-        return Lex.typeSyntax("String")
+        return Lex.typeSyntax("Swift.String")
       case .cbor, .car, .any, .mp4:
-        return Lex.typeSyntax("Data")
+        return Lex.typeSyntax("Foundation.Data")
       }
     }
-    return Lex.typeSyntax("Bool")
+    return Lex.typeSyntax("Swift.Bool")
   }
 
   func responseBody(fname: String, defMap: ExtDefMap, prefix: String) -> TypeSyntax {
@@ -151,9 +151,9 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         }()
         return Lex.typeSyntax(token)
       case .text:
-        return Lex.typeSyntax("String")
+        return Lex.typeSyntax("Swift.String")
       case .cbor, .car, .any, .mp4:
-        return Lex.typeSyntax("Data")
+        return Lex.typeSyntax("Foundation.Data")
       }
     }
     return Lex.typeSyntax("EmptyResponse")
@@ -164,10 +164,10 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     guard let input else { return arguments }
     switch input.encoding {
     case .cbor, .any, .car, .mp4:
-      let tname = "Data"
+      let tname = "Foundation.Data"
       arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname)))
     case .text:
-      let tname = "String"
+      let tname = "Swift.String"
       arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname)))
     case .json, .jsonl:
       let tname: String
@@ -185,15 +185,15 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     NilLiteralExprSyntax()
   }
 
-  func inputType(fname: String, defMap: ExtDefMap, prefix: String, binaryTypeName: String = "Data") -> ExprSyntax {
-    guard let token = input?.typeName(fname: fname, prefix: prefix, defMap: defMap, binaryTypeName: binaryTypeName, isOutput: false) else {
+  func inputType(fname: String, defMap: ExtDefMap, prefix: String, binaryTypeName: String = "Foundation.Data") -> ExprSyntax {
+    guard let typeName = input?.typeName(fname: fname, prefix: prefix, defMap: defMap, binaryTypeName: binaryTypeName, isOutput: false) else {
       return ExprSyntax(
         OptionalChainingExprSyntax(
-          expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("Bool"))),
+          expression: Lex.refExpr("Swift.Bool"),
           questionMark: .postfixQuestionMarkToken()
         ))
     }
-    return ExprSyntax(DeclReferenceExprSyntax(baseName: token))
+    return Lex.refExpr(typeName)
   }
 
   var isBinary: Bool {

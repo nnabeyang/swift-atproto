@@ -270,7 +270,7 @@ extension FieldTypeDefinition {
         items.append(
           constraintGuardItem(
             lhs: FunctionCallExprSyntax(
-              callee: DeclReferenceExprSyntax(baseName: .identifier("Int"))
+              callee: Lex.refExpr("Swift.Int")
             ) {
               LabeledExprSyntax(
                 expression: MemberAccessExprSyntax(
