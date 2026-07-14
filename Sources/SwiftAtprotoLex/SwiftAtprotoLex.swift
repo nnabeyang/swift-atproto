@@ -192,6 +192,27 @@ func writeSchemaCode(
     return (combine(blocks), combine(methods), combine(requirements))
   }
   let prefixes = schemasArray.map(\.0)
+  // A record NSID can also be a namespace prefix when deeper NSIDs exist. In
+  // that case, the namespace tree and record declaration can emit the same
+  // Swift name. Detect that overlap and attach the sub-namespaces to the
+  // record instead of emitting a conflicting namespace enum.
+  // Only ids whose derived struct name is a single Swift identifier can
+  // collide with a same-named namespace enum. That happens exactly when the
+  // trimmed portion (id minus prefix) is a single NSID segment — with the
+  // `count >= 4 ? drop 2 : drop 1` prefix rule, that means ids with 2 or 3
+  // segments. Longer ids camel-case the tail and therefore live alongside
+  // the namespace enums, not on top of them.
+  let candidateIds = Set(schemasMap.values.flatMap { $0.map(\.id) })
+    .filter {
+      let count = $0.split(separator: ".").count
+      return count == 2 || count == 3
+    }
+  let namespaceCollisions = candidateIds.intersection(schemasMap.keys)
+  let namespaceRoots = EnumDeclSyntaxNode.buildTree(from: prefixes)
+  var collisionExtensions: [(nsidPath: [String], children: [EnumDeclSyntaxNode])] = []
+  for root in namespaceRoots {
+    EnumDeclSyntaxNode.extractCollisionExtensions(root, path: [root.segment], collisions: namespaceCollisions, into: &collisionExtensions)
+  }
   let clientTree = SourceFileSyntax(leadingTrivia: Lex.fileHeader) {
     ImportDeclSyntax(
       path: [ImportPathComponentSyntax(name: "Foundation")]
@@ -218,8 +239,18 @@ func writeSchemaCode(
       path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
       trailingTrivia: .newlines(2)
     )
-    for (i, node) in EnumDeclSyntaxNode.buildTree(from: prefixes).enumerated() {
+    for (i, node) in namespaceRoots.enumerated() {
       node.generateEnums(leadingTrivia: i == 0 ? nil : .newlines(2))
+    }
+    for ext in collisionExtensions {
+      ExtensionDeclSyntax(
+        leadingTrivia: .newlines(2),
+        extendedType: TypeSyntax(MemberTypeSyntax(parts: ext.nsidPath.map { .lexIdentifier($0.capitalized) }))
+      ) {
+        for child in ext.children {
+          child.generateEnums()
+        }
+      }
     }
     blocks
     if !methods.isEmpty {
@@ -244,11 +275,13 @@ func writeSchemaCode(
 }
 
 class EnumDeclSyntaxNode {
+  let segment: String
   let name: String
   var children: [String: EnumDeclSyntaxNode] = [:]
 
-  init(name: String) {
-    self.name = name
+  init(segment: String) {
+    self.segment = segment
+    self.name = segment.capitalized
   }
 
   func generateEnums(leadingTrivia: Trivia? = nil, depth: Int = 0) -> EnumDeclSyntax {
@@ -274,18 +307,51 @@ class EnumDeclSyntaxNode {
       guard let firstPart = parts.first else { continue }
 
       if roots[firstPart] == nil {
-        roots[firstPart] = EnumDeclSyntaxNode(name: firstPart.capitalized)
+        roots[firstPart] = EnumDeclSyntaxNode(segment: firstPart)
       }
 
       var current = roots[firstPart]!
       for part in parts.dropFirst() {
         if current.children[part] == nil {
-          current.children[part] = EnumDeclSyntaxNode(name: part.capitalized)
+          current.children[part] = EnumDeclSyntaxNode(segment: part)
         }
         current = current.children[part]!
       }
     }
     return roots.values.sorted { $0.name < $1.name }
+  }
+
+  /// Descends into `node` and, for any child whose full NSID path is in
+  /// `collisions`, removes the node from the tree and records a
+  /// `(nsidPath, children)` tuple in `into`. The caller emits each tuple as
+  /// `extension <Capitalized.Path> { <children as nested enums> }`, so the
+  /// namespace sub-hierarchy lives on the same Swift name as the record
+  /// struct/enum without redeclaring it. Nested collisions are surfaced by
+  /// recursing before extracting, so an inner collision produces its own
+  /// extension.
+  static func extractCollisionExtensions(
+    _ node: EnumDeclSyntaxNode,
+    path: [String],
+    collisions: Set<String>,
+    into extensions: inout [(nsidPath: [String], children: [EnumDeclSyntaxNode])]
+  ) {
+    for childKey in Array(node.children.keys) {
+      let child = node.children[childKey]!
+      let childPath = path + [child.segment]
+      let childNsid = childPath.joined(separator: ".")
+      if collisions.contains(childNsid) {
+        // Recurse first so any deeper collisions inside `child` also get
+        // extracted (rather than collapsing into this extension's body).
+        extractCollisionExtensions(child, path: childPath, collisions: collisions, into: &extensions)
+        let subChildren = child.children.keys.sorted().map { child.children[$0]! }
+        if !subChildren.isEmpty {
+          extensions.append((nsidPath: childPath, children: subChildren))
+        }
+        node.children.removeValue(forKey: childKey)
+      } else {
+        extractCollisionExtensions(child, path: childPath, collisions: collisions, into: &extensions)
+      }
+    }
   }
 }
 
