@@ -126,7 +126,9 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return Lex.typeSyntax(token)
       case .text:
         return Lex.typeSyntax("Swift.String")
-      case .cbor, .car, .any, .mp4:
+      case .any:
+        return Lex.typeSyntax("SwiftAtproto.XRPCBlobUpload")
+      case .cbor, .car, .mp4:
         return Lex.typeSyntax("Foundation.Data")
       }
     }
@@ -163,7 +165,10 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     var arguments = [FunctionParameterSyntax]()
     guard let input else { return arguments }
     switch input.encoding {
-    case .cbor, .any, .car, .mp4:
+    case .any:
+      let tname = "SwiftAtproto.XRPCBlobUpload"
+      arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname)))
+    case .cbor, .car, .mp4:
       let tname = "Foundation.Data"
       arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname)))
     case .text:
