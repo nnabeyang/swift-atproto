@@ -77,6 +77,7 @@ extension _XRPCCallable {
         return data as! X.ResponseBody
       }
       let decoder = JSONDecoder()
+      decoder.userInfo[.atprotoLexiconDecodingMode] = LexiconDecodingMode.permissive
       return try decoder.decode(X.ResponseBody.self, from: data)
     } catch let error as UnExpectedError {
       throw X.Error(error: error)

@@ -28,6 +28,22 @@ enum StubQuery: XRPCQuery {
   typealias Error = UnExpectedError
 }
 
+private struct DecoderModeResponse: Codable, Hashable, Sendable {
+  init(from decoder: any Decoder) throws {
+    guard !LexiconDecodingMode.shouldValidateConstraints(in: decoder) else {
+      throw DecodingError.dataCorrupted(
+        .init(codingPath: decoder.codingPath, debugDescription: "expected permissive decoding"))
+    }
+  }
+}
+
+private enum StubDecoderModeQuery: XRPCQuery {
+  static let id = "com.example.stub.decoderMode"
+  typealias Input = StubQueryInput
+  typealias ResponseBody = DecoderModeResponse
+  typealias Error = UnExpectedError
+}
+
 enum StubProcedure: XRPCProcedure {
   static let id = "com.example.stub.procedure"
   static let contentType = "application/json"
@@ -53,6 +69,12 @@ enum StubChatProcedure: XRPCProcedure {
 }
 
 struct ScopeGuardEnforcementTests {
+  @Test func xrpcResponseUsesPermissiveLexiconDecoding() async throws {
+    let client = MockClient(session: nil)
+
+    _ = try await client.call(StubDecoderModeQuery.self, input: StubQueryInput.Query())
+  }
+
   @Test func allowedProxiedQueryPassesGuard() async throws {
     let session = try sampleSession(scopes: [
       "atproto",
