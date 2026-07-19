@@ -6,6 +6,7 @@ extension HTTPField.Name {
 }
 
 public protocol _XRPCCallable: Sendable {
+  var oauthSession: (any OAuthSession)? { get }
   func getProxy(nsid: String) -> String?
   func response(_ requestComponents: XRPCRequestComponents) async throws -> Data
   func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query) async throws -> X.ResponseBody
@@ -13,9 +14,13 @@ public protocol _XRPCCallable: Sendable {
 }
 
 extension _XRPCCallable {
+  public var oauthSession: (any OAuthSession)? { nil }
+}
+
+extension _XRPCCallable {
   public func call<X: XRPCQuery>(_ query: X.Type, input: X.Input.Query) async throws -> X.ResponseBody {
     let proxy = getProxy(nsid: X.id)
-    try enforceScopeGuard(X.self, proxy: proxy)
+    try enforceRpcScopeGuard(X.self, proxy: proxy)
     var request = try constructRequest(query, input: input)
     if let proxy {
       request.headers[.atprotoProxy] = proxy
@@ -25,8 +30,9 @@ extension _XRPCCallable {
 
   public func call<X: XRPCProcedure>(_ procedure: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody {
     let proxy = getProxy(nsid: X.id)
-    try enforceScopeGuard(X.self, proxy: proxy)
+    try enforceRpcScopeGuard(X.self, proxy: proxy)
     try enforceRepoScopeGuard(input as? any RepoWriteOperationDescribing)
+    try enforceBlobScopeGuard(input as? XRPCBlobUpload)
     var request = try constructRequest(procedure, input: input)
     if let proxy {
       request.headers[.atprotoProxy] = proxy
@@ -34,22 +40,30 @@ extension _XRPCCallable {
     return try await send(procedure, for: request)
   }
 
-  private func enforceScopeGuard<X: XRPCRequest>(_: X.Type, proxy: String?) throws {
-    guard let session = (self as? ATPClientProtocol)?.oauthSession else { return }
+  private func enforceRpcScopeGuard<X: XRPCRequest>(_: X.Type, proxy: String?) throws {
+    guard let session = oauthSession else { return }
+    guard let proxy else { return }
     let lxm = X.requiredRpcLxm()
-    let aud = proxy ?? "\(session.audienceDid.rawValue)#atproto_pds"
-    guard session.grantedScopes.allowsRpc(lxm: lxm, aud: aud) else {
-      throw OAuthScopeError.insufficientScope(lxm: lxm, aud: aud)
+    guard session.grantedScopes.allowsRpc(lxm: lxm, aud: proxy) else {
+      throw OAuthScopeError.insufficientScope(lxm: lxm, aud: proxy)
     }
   }
 
   private func enforceRepoScopeGuard(_ op: (any RepoWriteOperationDescribing)?) throws {
-    guard let session = (self as? ATPClientProtocol)?.oauthSession else { return }
+    guard let session = oauthSession else { return }
     guard let op else { return }
     for req in op.repoWriteRequirements {
       guard session.grantedScopes.allowsRepo(collection: req.collection, action: req.action) else {
         throw OAuthScopeError.insufficientRepoScope(collection: req.collection, action: req.action)
       }
+    }
+  }
+
+  private func enforceBlobScopeGuard(_ upload: XRPCBlobUpload?) throws {
+    guard let session = oauthSession else { return }
+    guard let upload else { return }
+    guard session.grantedScopes.allowsBlob(mime: upload.mimeType) else {
+      throw OAuthScopeError.insufficientBlobScope(mime: upload.mimeType)
     }
   }
 
@@ -89,19 +103,24 @@ extension _XRPCCallable {
     input: X.RequestBody?,
   ) throws -> XRPCRequestComponents {
     var headerFields = HTTPFields()
-    headerFields[.contentType] = X.contentType
     let encoder = JSONEncoder()
     encoder.dataEncodingStrategy = .xrpc
     encoder.outputFormatting = [.withoutEscapingSlashes]
-    let body: Data =
-      switch input {
-      case let data as Data:
-        data
-      case .none:
-        Data()
-      default:
-        try encoder.encode(input)
-      }
+    let body: Data
+    switch input {
+    case let upload as XRPCBlobUpload:
+      headerFields[.contentType] = upload.mimeType
+      body = upload.data
+    case let data as Data:
+      headerFields[.contentType] = X.contentType
+      body = data
+    case .none:
+      headerFields[.contentType] = X.contentType
+      body = Data()
+    default:
+      headerFields[.contentType] = X.contentType
+      body = try encoder.encode(input)
+    }
 
     return .init(
       nsId: X.id,

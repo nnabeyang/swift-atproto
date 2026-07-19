@@ -2,6 +2,7 @@ import Foundation
 
 public enum OAuthScope {
   public static let atproto = "atproto"
+  public static let transitionGeneric = "transition:generic"
 }
 
 public struct RepoWriteRequirement: Hashable, Sendable {
@@ -29,6 +30,7 @@ public enum OAuthScopeError: Error, Hashable, Sendable {
   case unsupportedResource(String)
   case insufficientScope(lxm: String, aud: String)
   case insufficientRepoScope(collection: String, action: LexPermissionAction)
+  case insufficientBlobScope(mime: String)
 }
 
 public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
@@ -587,9 +589,16 @@ public struct ScopesSet: Hashable, Sendable {
     rawOther.contains(OAuthScope.atproto)
   }
 
+  public var hasTransitionGeneric: Bool {
+    rawOther.contains(OAuthScope.transitionGeneric)
+  }
+
   public func allowsRpc(lxm: String, aud: String) -> Bool {
-    guard hasAtprotoScope else {
+    guard hasAtprotoScope || hasTransitionGeneric else {
       return false
+    }
+    if hasTransitionGeneric, lxm != "*", !lxm.hasPrefix("chat.bsky.") {
+      return true
     }
     for scope in rpcScopes {
       let lxmMatches = scope.lxm.contains(lxm) || scope.lxm.contains("*")
@@ -602,8 +611,11 @@ public struct ScopesSet: Hashable, Sendable {
   }
 
   public func allowsRepo(collection: String, action: LexPermissionAction) -> Bool {
-    guard hasAtprotoScope else {
+    guard hasAtprotoScope || hasTransitionGeneric else {
       return false
+    }
+    if hasTransitionGeneric {
+      return true
     }
     for scope in repoScopes {
       let collMatches = scope.collection.contains(collection) || scope.collection.contains("*")
@@ -616,8 +628,11 @@ public struct ScopesSet: Hashable, Sendable {
   }
 
   public func allowsBlob(mime: String) -> Bool {
-    guard hasAtprotoScope else {
+    guard hasAtprotoScope || hasTransitionGeneric else {
       return false
+    }
+    if hasTransitionGeneric {
+      return true
     }
     for scope in blobScopes where scope.allows(mime: mime) {
       return true
