@@ -36,36 +36,53 @@ enum StubProcedure: XRPCProcedure {
   typealias Error = UnExpectedError
 }
 
+enum StubBlobProcedure: XRPCProcedure {
+  static let id = "com.example.stub.uploadBlob"
+  static let contentType = "*/*"
+  typealias RequestBody = XRPCBlobUpload
+  typealias ResponseBody = EmptyResponse
+  typealias Error = UnExpectedError
+}
+
 struct ScopeGuardEnforcementTests {
-  @Test func allowedQueryPassesGuard() async throws {
+  @Test func allowedProxiedQueryPassesGuard() async throws {
     let session = try sampleSession(scopes: [
       "atproto",
-      "rpc:com.example.stub.query?aud=did:web:pds.example.com%23atproto_pds",
+      "rpc:com.example.stub.query?aud=did:web:api.example.com%23svc_appview",
     ])
-    let client = MockClient(session: session)
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
     _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
   }
 
-  @Test func disallowedQueryThrowsInsufficientScope() async throws {
+  @Test func disallowedProxiedQueryThrowsInsufficientScope() async throws {
     let session = try sampleSession(scopes: ["atproto"])
-    let client = MockClient(session: session)
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
     await #expect(
       throws: OAuthScopeError.insufficientScope(
         lxm: "com.example.stub.query",
-        aud: "did:web:pds.example.com#atproto_pds"
+        aud: "did:web:api.example.com#svc_appview"
       )
     ) {
       _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
     }
   }
 
-  @Test func disallowedProcedureThrowsInsufficientScope() async throws {
+  @Test func disallowedProxiedProcedureThrowsInsufficientScope() async throws {
     let session = try sampleSession(scopes: ["atproto"])
-    let client = MockClient(session: session)
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
     await #expect(
       throws: OAuthScopeError.insufficientScope(
         lxm: "com.example.stub.procedure",
-        aud: "did:web:pds.example.com#atproto_pds"
+        aud: "did:web:api.example.com#svc_appview"
       )
     ) {
       _ = try await client.call(StubProcedure.self, input: nil)
@@ -97,32 +114,38 @@ struct ScopeGuardEnforcementTests {
       "atproto",
       "rpc:com.example.stub.query?aud=*",
     ])
-    let client = MockClient(session: session)
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
     _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
   }
 
   @Test func wildcardLxmMatches() async throws {
     let session = try sampleSession(scopes: [
       "atproto",
-      "rpc:*?aud=did:web:pds.example.com%23atproto_pds",
+      "rpc:*?aud=did:web:api.example.com%23svc_appview",
     ])
-    let client = MockClient(session: session)
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
     _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
   }
 
-  @Test func audienceMismatchThrows() async throws {
-    let session = try sampleSession(
-      audienceDidString: "did:web:other.example.com",
-      scopes: [
-        "atproto",
-        "rpc:com.example.stub.query?aud=did:web:pds.example.com%23atproto_pds",
-      ]
+  @Test func proxyAudienceMismatchThrows() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "rpc:com.example.stub.query?aud=did:web:other.example.com%23svc_appview",
+    ])
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
     )
-    let client = MockClient(session: session)
     await #expect(
       throws: OAuthScopeError.insufficientScope(
         lxm: "com.example.stub.query",
-        aud: "did:web:other.example.com#atproto_pds"
+        aud: "did:web:api.example.com#svc_appview"
       )
     ) {
       _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
@@ -158,6 +181,93 @@ struct ScopeGuardEnforcementTests {
     ) {
       _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
     }
+  }
+}
+
+struct DirectPDSScopeGuardTests {
+  @Test func directPDSQueryDoesNotRequireRpcScope() async throws {
+    let session = try sampleSession(scopes: ["atproto"])
+    let client = MockClient(session: session)
+    _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+  }
+
+  @Test func directPDSProcedureDoesNotRequireRpcScope() async throws {
+    let session = try sampleSession(scopes: ["atproto"])
+    let client = MockClient(session: session)
+    _ = try await client.call(StubProcedure.self, input: nil)
+  }
+
+  @Test func directPDSQueryPassesEvenWhenRpcScopeAbsent() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "repo:com.example.post?action=create",
+    ])
+    let client = MockClient(session: session)
+    _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+  }
+}
+
+struct BlobScopeGuardEnforcementTests {
+  @Test func blobUploadWithMatchingMimePasses() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "blob:image/*",
+    ])
+    let client = MockClient(session: session)
+    _ = try await client.call(
+      StubBlobProcedure.self,
+      input: XRPCBlobUpload(data: Data("payload".utf8), mimeType: "image/png"))
+  }
+
+  @Test func blobUploadWithoutBlobScopeThrows() async throws {
+    let session = try sampleSession(scopes: ["atproto"])
+    let client = MockClient(session: session)
+    await #expect(
+      throws: OAuthScopeError.insufficientBlobScope(mime: "image/png")
+    ) {
+      _ = try await client.call(
+        StubBlobProcedure.self,
+        input: XRPCBlobUpload(data: Data("payload".utf8), mimeType: "image/png"))
+    }
+  }
+
+  @Test func blobUploadWithNonMatchingMimeThrows() async throws {
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "blob:video/*",
+    ])
+    let client = MockClient(session: session)
+    await #expect(
+      throws: OAuthScopeError.insufficientBlobScope(mime: "image/png")
+    ) {
+      _ = try await client.call(
+        StubBlobProcedure.self,
+        input: XRPCBlobUpload(data: Data("payload".utf8), mimeType: "image/png"))
+    }
+  }
+
+  @Test func blobUploadRoutesMimeAsContentType() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "blob:image/*",
+    ])
+    let client = MockClient(session: session, recorder: recorder)
+    let payload = Data("payload".utf8)
+    _ = try await client.call(
+      StubBlobProcedure.self,
+      input: XRPCBlobUpload(data: payload, mimeType: "image/png"))
+
+    let request = try #require(recorder.lastRequest)
+    #expect(request.headers[.contentType] == "image/png")
+    #expect(request.body == payload)
+  }
+
+  @Test func nilSessionSkipsBlobGuard() async throws {
+    let client = MockClient(session: nil)
+    _ = try await client.call(
+      StubBlobProcedure.self,
+      input: XRPCBlobUpload(data: Data("payload".utf8), mimeType: "image/png"))
   }
 }
 
@@ -222,7 +332,7 @@ struct EndToEndOAuthScopeGuardTests {
     ]
     let include = try IncludeScope(
       nsid: "com.example.stub.scope",
-      aud: "did:web:pds.example.com#atproto_pds"
+      aud: "did:web:api.example.com#svc_appview"
     )
     let expandedScopes = try include.expand(permissions)
     let grantedScopes = try ScopesSet(["atproto"] + expandedScopes)
@@ -231,14 +341,17 @@ struct EndToEndOAuthScopeGuardTests {
       audienceDid: try DID(string: "did:web:pds.example.com"),
       grantedScopes: grantedScopes
     )
-    let client = MockClient(session: session)
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
 
     _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
 
     await #expect(
       throws: OAuthScopeError.insufficientScope(
         lxm: "com.example.stub.procedure",
-        aud: "did:web:pds.example.com#atproto_pds"
+        aud: "did:web:api.example.com#svc_appview"
       )
     ) {
       _ = try await client.call(StubProcedure.self, input: nil)
@@ -249,14 +362,17 @@ struct EndToEndOAuthScopeGuardTests {
     let grantedScopes = ScopesSet(rawScopes: [
       "atproto",
       "transition:generic",
-      "rpc:com.example.stub.query?aud=did:web:pds.example.com%23atproto_pds",
+      "rpc:com.example.stub.query?aud=did:web:api.example.com%23svc_appview",
     ])
     let session = PrebuiltScopesSession(
       sessionDid: try DID(string: "did:web:user.example.com"),
       audienceDid: try DID(string: "did:web:pds.example.com"),
       grantedScopes: grantedScopes
     )
-    let client = MockClient(session: session)
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
     _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
     #expect(grantedScopes.hasAtprotoScope)
     #expect(grantedScopes.rawOther.contains("transition:generic"))
@@ -273,7 +389,6 @@ struct RepoScopeGuardEnforcementTests {
   @Test func sufficientRepoScopePassesGuard() async throws {
     let session = try sampleSession(scopes: [
       "atproto",
-      "rpc:com.example.stub.repoWrite?aud=did:web:pds.example.com%23atproto_pds",
       "repo:com.example.post?action=create",
     ])
     let client = MockClient(session: session)
@@ -283,10 +398,7 @@ struct RepoScopeGuardEnforcementTests {
   }
 
   @Test func insufficientRepoScopeThrows() async throws {
-    let session = try sampleSession(scopes: [
-      "atproto",
-      "rpc:com.example.stub.repoWrite?aud=did:web:pds.example.com%23atproto_pds",
-    ])
+    let session = try sampleSession(scopes: ["atproto"])
     let client = MockClient(session: session)
     await #expect(
       throws: OAuthScopeError.insufficientRepoScope(
@@ -303,7 +415,6 @@ struct RepoScopeGuardEnforcementTests {
   @Test func wrongActionRepoScopeThrows() async throws {
     let session = try sampleSession(scopes: [
       "atproto",
-      "rpc:com.example.stub.repoWrite?aud=did:web:pds.example.com%23atproto_pds",
       "repo:com.example.post?action=update",
     ])
     let client = MockClient(session: session)
@@ -320,10 +431,7 @@ struct RepoScopeGuardEnforcementTests {
   }
 
   @Test func nonConformingInputSkipsRepoGuard() async throws {
-    let session = try sampleSession(scopes: [
-      "atproto",
-      "rpc:com.example.stub.procedure?aud=did:web:pds.example.com%23atproto_pds",
-    ])
+    let session = try sampleSession(scopes: ["atproto"])
     let client = MockClient(session: session)
     _ = try await client.call(StubProcedure.self, input: nil)
   }
@@ -338,7 +446,6 @@ struct RepoScopeGuardEnforcementTests {
   @Test func multipleRequirementsAllChecked() async throws {
     let session = try sampleSession(scopes: [
       "atproto",
-      "rpc:com.example.stub.repoWriteBatch?aud=did:web:pds.example.com%23atproto_pds",
       "repo:com.example.post?action=create",
     ])
     let client = MockClient(session: session)

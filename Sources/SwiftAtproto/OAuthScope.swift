@@ -29,6 +29,7 @@ public enum OAuthScopeError: Error, Hashable, Sendable {
   case unsupportedResource(String)
   case insufficientScope(lxm: String, aud: String)
   case insufficientRepoScope(collection: String, action: LexPermissionAction)
+  case insufficientBlobScope(mime: String)
 }
 
 public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
