@@ -387,6 +387,24 @@ private final class RequestRecorder: @unchecked Sendable {
   var lastRequest: XRPCRequestComponents?
 }
 
+private struct OAuthOnlyCallable: @unchecked Sendable, _XRPCCallable {
+  let oauthSession: (any OAuthSession)?
+  let proxy: String?
+  let recorder: RequestRecorder?
+
+  init(session: (any OAuthSession)?, proxy: String? = nil, recorder: RequestRecorder? = nil) {
+    self.oauthSession = session
+    self.proxy = proxy
+    self.recorder = recorder
+  }
+
+  func getProxy(nsid _: String) -> String? { proxy }
+  func response(_ request: XRPCRequestComponents) async throws -> Data {
+    recorder?.lastRequest = request
+    return Data("{}".utf8)
+  }
+}
+
 struct EndToEndOAuthScopeGuardTests {
   @Test func permissionSetExpandedScopesGateXrpcCalls() async throws {
     let permissions = [
@@ -566,4 +584,109 @@ enum StubRepoBatchProcedure: XRPCProcedure {
   typealias RequestBody = StubRepoBatchInput
   typealias ResponseBody = EmptyResponse
   typealias Error = UnExpectedError
+}
+
+struct OAuthOnlyCallableGuardTests {
+  @Test func disallowedProxiedRpcThrowsAndSkipsRequest() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: ["atproto"])
+    let client = OAuthOnlyCallable(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview",
+      recorder: recorder
+    )
+    await #expect(
+      throws: OAuthScopeError.insufficientScope(
+        lxm: "com.example.stub.query",
+        aud: "did:web:api.example.com#svc_appview"
+      )
+    ) {
+      _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+    }
+    #expect(recorder.lastRequest == nil)
+  }
+
+  @Test func allowedProxiedRpcSendsRequest() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "rpc:com.example.stub.query?aud=did:web:api.example.com%23svc_appview",
+    ])
+    let client = OAuthOnlyCallable(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview",
+      recorder: recorder
+    )
+    _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+    #expect(recorder.lastRequest != nil)
+  }
+
+  @Test func disallowedRepoWriteThrowsAndSkipsRequest() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: ["atproto"])
+    let client = OAuthOnlyCallable(session: session, recorder: recorder)
+    await #expect(
+      throws: OAuthScopeError.insufficientRepoScope(
+        collection: "com.example.post",
+        action: .create
+      )
+    ) {
+      _ = try await client.call(
+        StubRepoProcedure.self,
+        input: StubRepoInput(collection: "com.example.post", action: .create))
+    }
+    #expect(recorder.lastRequest == nil)
+  }
+
+  @Test func disallowedBlobUploadThrowsAndSkipsRequest() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: ["atproto"])
+    let client = OAuthOnlyCallable(session: session, recorder: recorder)
+    await #expect(
+      throws: OAuthScopeError.insufficientBlobScope(mime: "image/png")
+    ) {
+      _ = try await client.call(
+        StubBlobProcedure.self,
+        input: XRPCBlobUpload(data: Data("payload".utf8), mimeType: "image/png"))
+    }
+    #expect(recorder.lastRequest == nil)
+  }
+
+  @Test func nilSessionSkipsAllGuards() async throws {
+    let recorder = RequestRecorder()
+    let client = OAuthOnlyCallable(session: nil, recorder: recorder)
+    _ = try await client.call(
+      StubBlobProcedure.self,
+      input: XRPCBlobUpload(data: Data("payload".utf8), mimeType: "image/png"))
+    #expect(recorder.lastRequest != nil)
+  }
+
+  @Test func transitionGenericAllowsRepoWriteOnCallableClient() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: ["transition:generic"])
+    let client = OAuthOnlyCallable(session: session, recorder: recorder)
+    _ = try await client.call(
+      StubRepoProcedure.self,
+      input: StubRepoInput(collection: "com.example.post", action: .create))
+    #expect(recorder.lastRequest != nil)
+  }
+
+  @Test func transitionGenericDeniesChatBskyRpcOnCallableClient() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: ["transition:generic"])
+    let client = OAuthOnlyCallable(
+      session: session,
+      proxy: "did:web:chat.example.com#svc_chat",
+      recorder: recorder
+    )
+    await #expect(
+      throws: OAuthScopeError.insufficientScope(
+        lxm: "chat.bsky.convo.sendMessage",
+        aud: "did:web:chat.example.com#svc_chat"
+      )
+    ) {
+      _ = try await client.call(StubChatProcedure.self, input: nil)
+    }
+    #expect(recorder.lastRequest == nil)
+  }
 }
