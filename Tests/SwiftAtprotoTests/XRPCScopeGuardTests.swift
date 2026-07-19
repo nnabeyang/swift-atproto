@@ -44,6 +44,14 @@ enum StubBlobProcedure: XRPCProcedure {
   typealias Error = UnExpectedError
 }
 
+enum StubChatProcedure: XRPCProcedure {
+  static let id = "chat.bsky.convo.sendMessage"
+  static let contentType = "application/json"
+  typealias RequestBody = EmptyResponse
+  typealias ResponseBody = EmptyResponse
+  typealias Error = UnExpectedError
+}
+
 struct ScopeGuardEnforcementTests {
   @Test func allowedProxiedQueryPassesGuard() async throws {
     let session = try sampleSession(scopes: [
@@ -271,6 +279,64 @@ struct BlobScopeGuardEnforcementTests {
   }
 }
 
+struct TransitionGenericTests {
+  @Test func transitionGenericAllowsProxiedRpcExceptChatBsky() async throws {
+    let session = try sampleSession(scopes: ["transition:generic"])
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:api.example.com#svc_appview"
+    )
+    _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
+  }
+
+  @Test func transitionGenericDeniesChatBskyRpc() async throws {
+    let session = try sampleSession(scopes: ["transition:generic"])
+    let client = MockClient(
+      session: session,
+      proxy: "did:web:chat.example.com#svc_chat"
+    )
+    await #expect(
+      throws: OAuthScopeError.insufficientScope(
+        lxm: "chat.bsky.convo.sendMessage",
+        aud: "did:web:chat.example.com#svc_chat"
+      )
+    ) {
+      _ = try await client.call(StubChatProcedure.self, input: nil)
+    }
+  }
+
+  @Test func transitionGenericAllowsRepoWrite() async throws {
+    let session = try sampleSession(scopes: ["transition:generic"])
+    let client = MockClient(session: session)
+    _ = try await client.call(
+      StubRepoProcedure.self,
+      input: StubRepoInput(collection: "com.example.post", action: .create))
+  }
+
+  @Test func transitionGenericAllowsBlobUpload() async throws {
+    let session = try sampleSession(scopes: ["transition:generic"])
+    let client = MockClient(session: session)
+    _ = try await client.call(
+      StubBlobProcedure.self,
+      input: XRPCBlobUpload(data: Data("payload".utf8), mimeType: "image/png"))
+  }
+
+  @Test func atprotoAloneDoesNotBypassRepoScope() async throws {
+    let session = try sampleSession(scopes: ["atproto"])
+    let client = MockClient(session: session)
+    await #expect(
+      throws: OAuthScopeError.insufficientRepoScope(
+        collection: "com.example.post",
+        action: .create
+      )
+    ) {
+      _ = try await client.call(
+        StubRepoProcedure.self,
+        input: StubRepoInput(collection: "com.example.post", action: .create))
+    }
+  }
+}
+
 private func sampleSession(
   audienceDidString: String = "did:web:pds.example.com",
   scopes: [String]
@@ -375,7 +441,7 @@ struct EndToEndOAuthScopeGuardTests {
     )
     _ = try await client.call(StubQuery.self, input: StubQueryInput.Query())
     #expect(grantedScopes.hasAtprotoScope)
-    #expect(grantedScopes.rawOther.contains("transition:generic"))
+    #expect(grantedScopes.hasTransitionGeneric)
   }
 }
 
