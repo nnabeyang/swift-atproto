@@ -779,6 +779,47 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           )
         }
       }
+      IfExprSyntax(
+        conditions: ConditionElementListSyntax {
+          PrefixOperatorExprSyntax(
+            operator: .prefixOperator("!"),
+            expression: FunctionCallExprSyntax(
+              callee: MemberAccessExprSyntax(
+                base: DeclReferenceExprSyntax(baseName: .identifier("LexiconDecodingMode")),
+                period: .periodToken(),
+                declName: DeclReferenceExprSyntax(baseName: .identifier("shouldValidateConstraints"))
+              )
+            ) {
+              LabeledExprSyntax(
+                label: .identifier("in"),
+                colon: .colonToken(),
+                expression: DeclReferenceExprSyntax(baseName: .identifier("decoder"))
+              )
+            }
+          )
+        }
+      ) {
+        SequenceExprSyntax {
+          DeclReferenceExprSyntax(baseName: .keyword(.self))
+          AssignmentExprSyntax(equal: .equalToken())
+          FunctionCallExprSyntax(
+            callee: MemberAccessExprSyntax(
+              base: DeclReferenceExprSyntax(baseName: .keyword(.Self)),
+              period: .periodToken(),
+              declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
+            )
+          ) {
+            for (key, _) in sortedProperties {
+              LabeledExprSyntax(
+                label: .lexIdentifier(key),
+                colon: .colonToken(),
+                expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
+              )
+            }
+          }
+        }
+        ReturnStmtSyntax()
+      }
       DoStmtSyntax(
         body: CodeBlockSyntax {
           SequenceExprSyntax {

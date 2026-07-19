@@ -50,6 +50,10 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
     let text = try keyedContainer.decode(String.self, forKey: .text)
     let limit = try keyedContainer.decodeIfPresent(Int.self, forKey: .limit)
     let tags = try keyedContainer.decodeIfPresent([String].self, forKey: .tags)
+    if !LexiconDecodingMode.shouldValidateConstraints(in: decoder) {
+      self.init(text: text, limit: limit, tags: tags)
+      return
+    }
     do {
       self = try Self.make(text: text, limit: limit, tags: tags)
     } catch let error as LexiconConstraintError {
@@ -168,6 +172,17 @@ final class LexiconConstraintTests: XCTestCase {
     let json = try JSONEncoder().encode(["text": "hello world"])
     let record = try JSONDecoder().decode(ConstrainedRecord.self, from: json)
     XCTAssertEqual(record.text, "hello world")
+  }
+
+  func testPermissiveDecodeAcceptsConstraintViolation() throws {
+    let tooLong = String(repeating: "a", count: 3001)
+    let json = try JSONEncoder().encode(["text": tooLong])
+    let decoder = JSONDecoder()
+    decoder.userInfo[.atprotoLexiconDecodingMode] = LexiconDecodingMode.permissive
+
+    let record = try decoder.decode(ConstrainedRecord.self, from: json)
+
+    XCTAssertEqual(record.text, tooLong)
   }
 
   func testKnownValuesOtherWithinLimitSucceeds() throws {
