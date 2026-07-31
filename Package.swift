@@ -36,6 +36,7 @@ let package = Package(
     ),
   ],
   dependencies: [
+    .package(url: "https://github.com/nnabeyang/swift-cbor.git", exact: "0.1.0"),
     .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
     .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.0.2"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"604.0.0"),
@@ -50,6 +51,7 @@ let package = Package(
       dependencies: [
         .product(name: "CID", package: "swift-cid"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "SwiftCbor", package: "swift-cbor"),
       ]
     ),
     .target(
@@ -97,7 +99,10 @@ let package = Package(
     .target(name: "ATProtoMacro", dependencies: ["Macros", "SwiftAtproto"]),
     .testTarget(
       name: "SwiftAtprotoTests",
-      dependencies: ["SwiftAtproto"]
+      dependencies: [
+        "SwiftAtproto",
+        .product(name: "SwiftCbor", package: "swift-cbor"),
+      ]
     ),
     .testTarget(
       name: "SwiftAtprotoLexTests",

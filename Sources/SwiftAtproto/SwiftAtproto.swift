@@ -1,5 +1,6 @@
 import CID
 import Foundation
+import SwiftCbor
 
 public struct EmptyResponse: Codable, Sendable, Hashable {
   public init() {}
@@ -161,6 +162,10 @@ extension LexLink: @retroactive Codable {
     bytes.append(contentsOf: rawBuffer)
     try container.encode(Data(bytes))
   }
+}
+
+extension LexLink: @retroactive CborCodable {
+  public var tag: UInt64 { 42 }
 }
 
 public struct LexBlob: Codable, Sendable, Hashable {

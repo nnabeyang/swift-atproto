@@ -260,7 +260,8 @@ func writeSchemaCode(
           DeclModifierSyntax(name: .keyword(.public))
         ],
         name: .identifier("XRPCCallable"),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["_XRPCCallable"])
+        inheritanceClause: InheritanceClauseSyntax(
+          typeNames: ["_XRPCCallable"])
       ) {
         requirements
       }

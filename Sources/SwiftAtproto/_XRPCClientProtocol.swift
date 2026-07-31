@@ -20,6 +20,30 @@ extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
 }
 
+extension ATPClientProtocol where Self: XRPCSubscriptionCallable {
+  public func prepareSubscriptionRequest(
+    _ components: XRPCSubscriptionRequestComponents
+  ) async throws -> XRPCWebSocketRequest {
+    var urlComponents = URLComponents(
+      url: serviceEndpoint.appending(path: "xrpc/\(components.nsId)"),
+      resolvingAgainstBaseURL: false)
+    switch urlComponents?.scheme {
+    case "https": urlComponents?.scheme = "wss"
+    case "http": urlComponents?.scheme = "ws"
+    default: break
+    }
+    urlComponents?.percentEncodedQueryItems = components.queryItems
+    guard let url = urlComponents?.url else {
+      throw URLError(.badURL)
+    }
+    var headers = components.headers
+    if let authorization = getAuthorization(endpoint: components.nsId) {
+      headers[.authorization] = authorization
+    }
+    return XRPCWebSocketRequest(url: url, headers: headers)
+  }
+}
+
 public protocol XRPCError: Error, LocalizedError, Decodable, Sendable {
   var error: String? { get }
   var message: String? { get }
