@@ -110,30 +110,10 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
           )
         }
 
-        VariableDeclSyntax(
-          bindingSpecifier: .keyword(.let)
-        ) {
-          PatternBindingSyntax(
-            pattern: PatternSyntax("type"),
-            initializer: InitializerClauseSyntax(
-              value: TryExprSyntax(
-                expression: FunctionCallExprSyntax(
-                  callee: MemberAccessExprSyntax(
-                    base: DeclReferenceExprSyntax(baseName: .identifier("container")),
-                    name: .identifier("decode")
-                  )
-                ) {
-                  LabeledExprSyntax(
-                    expression: MemberAccessExprSyntax(
-                      base: Lex.refExpr("Swift.String"),
-                      name: .keyword(.self)
-                    ))
-                  LabeledExprSyntax(label: "forKey", colon: .colonToken(), expression: MemberAccessExprSyntax(name: "type"))
-                }
-              )
-            )
-          )
-        }
+        DeclSyntax(
+          stringLiteral:
+            "let type = try container.decodeIfPresent(Swift.String.self, forKey: .type) ?? decoder.userInfo[.atprotoSubscriptionMessageType] as? Swift.String ?? \"\""
+        )
 
         SwitchExprSyntax(subject: ExprSyntax("type")) {
           for cts in tss {

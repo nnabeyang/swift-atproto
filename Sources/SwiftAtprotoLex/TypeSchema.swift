@@ -104,6 +104,19 @@ final class Schema: Encodable, Decodable, Sendable {
             walk?(childname, ts)
           }
         }
+      case .subscription(let def):
+        out[name] = ts
+        if let message = def.message {
+          walk?("\(name)_Message", message.schema)
+        }
+        if let parameters = def.parameters {
+          for (key, val) in parameters.properties {
+            let childname = "\(name)_\(key.titleCased())"
+            walk?(
+              childname,
+              TypeSchema(id: id, prefix: prefix, defName: childname, type: val))
+          }
+        }
       case .record(let def):
         let ts = TypeSchema(id: ts.id, prefix: ts.prefix, defName: "", type: .record(def))
         out[name] = ts
@@ -492,6 +505,8 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .procedure(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .query(let def):
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
+    case .subscription(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .permissionSet(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
