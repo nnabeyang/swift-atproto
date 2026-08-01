@@ -445,14 +445,24 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                     LabeledExprSyntax(
                       label: .identifier("input"),
                       colon: .colonToken(),
-                      expression: ExprSyntax(
-                        FunctionCallExprSyntax(
-                          callee: ExprSyntax(
+                      expression: {
+                        // Route through the validating factory whenever the
+                        // Lexicon puts constraints on the parameters, so an
+                        // out-of-range value fails before the request is sent.
+                        let callee: ExprSyntax =
+                          def.paramsHaveConstraints
+                          ? ExprSyntax(
+                            MemberAccessExprSyntax(
+                              parts: prefixIdentifiers + [
+                                .identifier(typeName), .identifier("Input"), .identifier("Query"), .identifier("make"),
+                              ]
+                            ))
+                          : ExprSyntax(
                             MemberAccessExprSyntax(
                               period: .periodToken(),
                               declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))
                             ))
-                        ) {
+                        let call = FunctionCallExprSyntax(callee: callee) {
                           if let properties = def.parameters?.sortedProperties {
                             for (name, _) in properties {
                               LabeledExprSyntax(
@@ -463,7 +473,8 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                             }
                           }
                         }
-                      )
+                        return def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+                      }()
                     )
                   }
                 )
