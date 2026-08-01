@@ -123,9 +123,8 @@ Add `"module": "Sources/Lexicon"` (or the path of your choice) to the same JSON 
 
 ## Apps Using
 
-<p float="left">
-    <a href="https://apps.apple.com/app/soyokaze/id6738971639"><img src="https://raw.githubusercontent.com/nnabeyang/swift-atproto/refs/heads/main/.github/assets/soyokaze.png" height="65"></a>
-</p>
+- [Soyokaze](https://apps.apple.com/app/soyokaze/id6738971639) — Bluesky client for iOS
+- [tng](https://tangled.org/nnabeyang.tngl.sh/swift-tangled) — CLI for Tangled
 
 ## License
 
