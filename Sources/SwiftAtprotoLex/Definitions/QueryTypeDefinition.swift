@@ -36,6 +36,13 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     try container.encodeIfPresent(errors, forKey: .errors)
   }
 
+  /// Whether any query parameter carries a Lexicon constraint. Drives both the
+  /// generation of `Input.Query.make(...)` and every call site that must route
+  /// through it, so the two can never disagree.
+  var paramsHaveConstraints: Bool {
+    (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
+  }
+
   private func queries(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [PatternBindingSyntax] {
     var queries = [PatternBindingSyntax]()
     guard let parameters else { return queries }
@@ -277,7 +284,6 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
           )
         }
         let requiredParams = Set(parameters?.required ?? [])
-        let paramsHaveConstraints = (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
         InitializerDeclSyntax(
           leadingTrivia: [.newlines(2)],
           modifiers: [DeclModifierSyntax(name: .keyword(.public))],

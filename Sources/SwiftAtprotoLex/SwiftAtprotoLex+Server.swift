@@ -727,9 +727,8 @@ extension Lex {
           initializer: InitializerClauseSyntax(
             equal: .equalToken(),
             value: {
-              let paramsHaveConstraints = (def.parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
               let callee: ExprSyntax =
-                paramsHaveConstraints
+                def.paramsHaveConstraints
                 ? ExprSyntax(
                   MemberAccessExprSyntax(
                     parts: prefix.lexIdentifierSegments + [
@@ -753,7 +752,7 @@ extension Lex {
                   )
                 }
               }
-              return paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+              return def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
             }()
           )
         )
