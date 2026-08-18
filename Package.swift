@@ -37,7 +37,7 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/nnabeyang/swift-cbor.git", exact: "0.1.0"),
-    .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.0.1"),
+    .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.2.2"),
     .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.2.3"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"604.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMajor(from: "1.3.1")),
