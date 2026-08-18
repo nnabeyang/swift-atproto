@@ -1,5 +1,5 @@
 {
-  "originHash" : "2686acabf92d4a88b2088deb3bd3c13cead01bc7bc1aa1f957f503a58105fe12",
+  "originHash" : "c88911f4d330bbe35eabe8b8b77cb1ceb990021af0aa1423348b6555220afab6",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swift-libp2p/swift-cid",
       "state" : {
-        "revision" : "f2eb18409e87c0da057624b550a6c4a3e08de5c4",
-        "version" : "0.0.1"
+        "revision" : "4c38c05f6e6c3e67a518d00f9bd9188d5ab2baf2",
+        "version" : "0.2.2"
       }
     },
     {
