@@ -6,6 +6,19 @@ import Testing
 
 @Suite("DRISL-CBOR profile")
 struct DRISLCBORTests {
+  @Test("LexLink round-trips with DAG-CBOR tag 42")
+  func lexLinkRoundTrip() throws {
+    let original = try LexLink("bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e")
+    let encoder = CborEncoder(allowedTags: [42])
+    let encoded = try encoder.encode(original)
+
+    #expect(Array(encoded.prefix(2)) == [0xd8, 0x2a])
+
+    let decoded = try CborDecoder(allowedTags: [42]).decode(LexLink.self, from: encoded)
+    #expect(decoded == original)
+    #expect(decoded.toBaseEncodedString == original.toBaseEncodedString)
+  }
+
   @Test("prefix decoding reports consumed bytes")
   func prefixDecode() throws {
     let decoder = ATProtoCbor.decoder()
