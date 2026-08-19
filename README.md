@@ -123,6 +123,8 @@ Add `"module": "Sources/Lexicon"` (or the path of your choice) to the same JSON 
 
 - [Soyokaze](https://apps.apple.com/app/soyokaze/id6738971639) — Bluesky client for iOS
 - [tng](https://tangled.org/nnabeyang.tngl.sh/swift-tangled) — CLI for Tangled
+- [spindle-agent](https://tangled.org/nnabeyang.tngl.sh/spindle-agent) — External macOS worker for Tangled Spindle
+- [atproto-oauth-tmb](https://tangled.org/nnabeyang.tngl.sh/atproto-oauth-tmb) — A single-tenant AT Protocol OAuth Token-Mediating Backend in Swift
 
 ## License
 
