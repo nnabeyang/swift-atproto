@@ -71,7 +71,6 @@ The same `.atproto.json` schema serves both the `ATProtoGenerator` build tool pl
       "location": "https://github.com/bluesky-social/atproto.git",
       "lexicons": [
         {
-          "prefix": "app.bsky",
           "path": "lexicons/app/bsky",
           "nsIds": [
             "app.bsky.actor.defs",
@@ -92,7 +91,6 @@ The same `.atproto.json` schema serves both the `ATProtoGenerator` build tool pl
           ]
         },
         {
-          "prefix": "com.atproto",
           "path": "lexicons/com/atproto",
           "nsIds": [
             "com.atproto.label.defs",
