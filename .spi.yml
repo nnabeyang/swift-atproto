@@ -12,3 +12,4 @@ builder:
     - documentation_targets:
         - SwiftAtproto
         - ATProtoCrypto
+        - swift-atproto

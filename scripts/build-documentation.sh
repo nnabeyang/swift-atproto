@@ -173,11 +173,70 @@ else
   mkdir -p "${archives_directory}"
 fi
 
+# A target's directory and its module name do not follow from its name: the
+# `swift-atproto` executable lives in `CommandLineTool` and compiles as the
+# module `swift_atproto`. Both come from the package manifest.
+package_description="$(swift package describe --package-path "${repository_root}")"
+
+# Prints "<module name>\t<path relative to the package root>" for one target.
+target_metadata() {
+  local target="$1"
+  printf '%s\n' "${package_description}" | awk -v target="${target}" '
+    /^[[:space:]]*Name:[[:space:]]/ {
+      name = $0
+      sub(/^[[:space:]]*Name:[[:space:]]*/, "", name)
+      module = ""
+      path = ""
+      next
+    }
+    /^[[:space:]]*C99name:[[:space:]]/ {
+      module = $0
+      sub(/^[[:space:]]*C99name:[[:space:]]*/, "", module)
+      next
+    }
+    /^[[:space:]]*Path:[[:space:]]/ {
+      path = $0
+      sub(/^[[:space:]]*Path:[[:space:]]*/, "", path)
+      next
+    }
+    name == target && module != "" && path != "" {
+      print module "\t" path
+      found = 1
+      exit
+    }
+    END {
+      if (!found && name == target && module != "" && path != "") {
+        print module "\t" path
+      }
+    }
+  '
+}
+
+module_name_for() {
+  local metadata
+  metadata="$(target_metadata "$1")"
+  printf '%s\n' "${metadata%%$'\t'*}"
+}
+
+catalog_path_for() {
+  local metadata
+  metadata="$(target_metadata "$1")"
+  local path="${metadata#*$'\t'}"
+  [[ -n "${path}" && "${path}" != "${metadata}" ]] || return 1
+  printf '%s/%s/Documentation.docc\n' "${repository_root}" "${path}"
+}
+
 # Emits the symbol graphs for one target and copies just that module's graphs
 # into a directory of its own. A single build directory also collects the
 # graphs of every dependency, which DocC would otherwise document as well.
 symbol_graph_directory_for() {
   local target="$1"
+  local module
+  module="$(module_name_for "${target}")"
+  if [[ -z "${module}" ]]; then
+    printf 'error: %s is not a target of this package\n' "${target}" >&2
+    return 1
+  fi
   local build_directory="${temporary_directory}/symbol-graph-build/${target}"
   local module_directory="${temporary_directory}/symbol-graphs/${target}"
   mkdir -p "${build_directory}" "${module_directory}"
@@ -190,14 +249,14 @@ symbol_graph_directory_for() {
     -Xswiftc -emit-symbol-graph-dir -Xswiftc "${build_directory}" \
     >&2
 
-  if [[ ! -f "${build_directory}/${target}.symbols.json" ]]; then
+  if [[ ! -f "${build_directory}/${module}.symbols.json" ]]; then
     printf 'error: no symbol graph was emitted for %s\n' "${target}" >&2
     return 1
   fi
 
   local graph_path
-  for graph_path in "${build_directory}/${target}.symbols.json" \
-    "${build_directory}/${target}@"*.symbols.json; do
+  for graph_path in "${build_directory}/${module}.symbols.json" \
+    "${build_directory}/${module}@"*.symbols.json; do
     [[ -f "${graph_path}" ]] || continue
     cp "${graph_path}" "${module_directory}/"
   done
@@ -224,7 +283,7 @@ if [[ -n "${preview_target}" ]]; then
   done < <(docc_options_for "${preview_target}" "${symbol_graph_directory}")
 
   exec "${docc_command[@]}" preview \
-    "${repository_root}/Sources/${preview_target}/Documentation.docc" \
+    "$(catalog_path_for "${preview_target}")" \
     --port "${preview_port}" \
     --output-path "${archives_directory}/${preview_target}.doccarchive" \
     "${options[@]}"
@@ -232,7 +291,11 @@ fi
 
 failed_targets=()
 for target in "${targets[@]}"; do
-  catalog_path="${repository_root}/Sources/${target}/Documentation.docc"
+  if ! catalog_path="$(catalog_path_for "${target}")"; then
+    printf 'error: %s is not a target of this package\n' "${target}" >&2
+    failed_targets+=("${target}")
+    continue
+  fi
   if [[ ! -d "${catalog_path}" ]]; then
     printf 'error: documentation catalog is missing: %s\n' "${catalog_path}" >&2
     failed_targets+=("${target}")
