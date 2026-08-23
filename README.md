@@ -121,8 +121,16 @@ Add `"module": "Sources/Lexicon"` (or the path of your choice) to the same JSON 
 
 ## Documentation
 
-API documentation is built and hosted by the Swift Package Index, for the
-default branch as well as for releases.
+API documentation for the `main` branch is built and hosted by the Swift
+Package Index:
+
+- [SwiftAtproto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/swiftatproto)
+  — the XRPC runtime: the protocols generated code conforms to, the wire
+  representations, and the Lexicon string formats.
+- [ATProtoCrypto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/atprotocrypto)
+  — signing keys, their `did:key` encodings, and DID documents.
+- [swift-atproto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/swift_atproto)
+  — the code generation executable the package plugins invoke.
 
 Each target's articles and landing page live in its `Documentation.docc`
 catalog (for example `Sources/SwiftAtproto/Documentation.docc`), and the target
