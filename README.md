@@ -119,6 +119,29 @@ Add `"module": "Sources/Lexicon"` (or the path of your choice) to the same JSON 
 }
 ```
 
+## Documentation
+
+API documentation is built and hosted by the Swift Package Index, for the
+default branch as well as for releases.
+
+Each target's articles and landing page live in its `Documentation.docc`
+catalog (for example `Sources/SwiftAtproto/Documentation.docc`), and the target
+list the index publishes is declared in `.spi.yml`.
+
+To build the same documentation locally, reading its target list and parameters
+from `.spi.yml`:
+
+```bash
+# Build every published target; --strict treats DocC warnings as errors.
+./scripts/build-documentation.sh --strict
+
+# Browse one target while editing it.
+./scripts/build-documentation.sh --preview SwiftAtproto
+```
+
+The generated documentation is not committed; the Swift Package Index rebuilds
+it from source.
+
 ## Apps Using
 
 - [Soyokaze](https://apps.apple.com/app/soyokaze/id6738971639) — Bluesky client for iOS
