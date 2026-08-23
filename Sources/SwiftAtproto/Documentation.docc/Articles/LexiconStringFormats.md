@@ -46,15 +46,21 @@ createdAt.typedLenient      // Date?, accepts the relaxed spelling
 
 ``LexiconStringFormat`` has two initializers. `init(string:)` is always strict.
 `init(string:strict:)` defaults to calling the strict one, so identifier formats
-that have no relaxed reading — ``DID``, ``Handle``, ``NSID``, ``TID``,
-``RecordKey`` — behave identically either way.
+that have no relaxed reading — ``DID``, ``Handle``, ``NSID``, ``TID`` — behave
+identically either way.
 
-`Date` is the format where the distinction matters. The AT Protocol datetime
+`Date` is the format where the distinction is widest. The AT Protocol datetime
 grammar is narrower than ISO 8601: strict parsing requires the full form the
 spec mandates, while lenient parsing accepts the older spellings that existing
 records contain. Because decoding a response uses
 ``LexiconDecodingMode/permissive``, a value that only parses leniently still
 arrives intact and is yours to interpret.
+
+``RecordKey`` relaxes too, dropping its length and character limits and keeping
+only what AT URI path syntax requires. ``SpaceRef`` carries that relaxation into
+its space key and ``ATURI`` into both key segments, the latter additionally
+accepting a trailing slash, a query string, and a malformed percent-escape in a
+fragment.
 
 ## Validation is about shape
 
