@@ -63,6 +63,7 @@ let posts = try await client.call(
 - ``ATURI``
 - ``TID``
 - ``RecordKey``
+- ``SpaceRef``
 - ``URI``
 - ``Language``
 - ``AtprotoDatetimeFormatStyle``

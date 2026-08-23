@@ -7,3 +7,9 @@ func isLowerAlpha(_ b: UInt8) -> Bool { (UInt8(ascii: "a")...UInt8(ascii: "z")).
 func isUpperAlpha(_ b: UInt8) -> Bool { (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(b) }
 func isAlpha(_ b: UInt8) -> Bool { isLowerAlpha(b) || isUpperAlpha(b) }
 func isAlphanumeric(_ b: UInt8) -> Bool { isAlpha(b) || isDigit(b) }
+
+private let uriAllowedPunct = Set(#"._~:@!$&'()*+,;=%/\[]#?-"#.utf8)
+
+func isAllowedURIByte(_ b: UInt8) -> Bool {
+  isAlphanumeric(b) || uriAllowedPunct.contains(b)
+}
