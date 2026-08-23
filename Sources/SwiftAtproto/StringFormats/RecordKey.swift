@@ -1,14 +1,14 @@
 import Foundation
 
-// Type for the lexicon `record-key` string format: the opaque trailing segment of an AT URI per
-// the AT Protocol Record Key spec (https://atproto.com/specs/record-key).
-//
-// Strict mode (the default `init(string:)`): 1–512 byte ASCII alnum / `_~.:-`, excluding the
-// special forbidden values `"."` and `".."`. A lenient mode is also available via
-// `init(string:strict: false)`; see that initializer for the relaxed grammar and the resulting
-// type-invariant trade-off.
+/// Type for the lexicon `record-key` string format: the opaque trailing segment of an AT URI per
+/// the AT Protocol Record Key spec (https://atproto.com/specs/record-key).
+///
+/// Strict mode (the default `init(string:)`): 1–512 byte ASCII alnum / `_~.:-`, excluding the
+/// special forbidden values `"."` and `".."`. A lenient mode is also available via
+/// `init(string:strict: false)`; see that initializer for the relaxed grammar and the resulting
+/// type-invariant trade-off.
 public struct RecordKey: LexiconStringFormat {
-  // The original wire string, kept verbatim.
+  /// The original wire string, kept verbatim.
   public let rawValue: String
 
   public init(string: String) throws {
@@ -18,11 +18,11 @@ public struct RecordKey: LexiconStringFormat {
     rawValue = string
   }
 
-  // Opt-in lenient parsing. Accepts wire strings that violate the strict record-key spec
-  // (`.` / `..` / over 512 byte / chars outside `[a-zA-Z0-9_~.:-]`) as long as the value is
-  // non-empty and contains no `/`, `?`, or `#`. Caller takes responsibility: a lenient instance
-  // can hold values the strict spec rejects, so type invariants weaken when this overload is
-  // used explicitly.
+  /// Opt-in lenient parsing. Accepts wire strings that violate the strict record-key spec
+  /// (`.` / `..` / over 512 byte / chars outside `[a-zA-Z0-9_~.:-]`) as long as the value is
+  /// non-empty and contains no `/`, `?`, or `#`. Caller takes responsibility: a lenient instance
+  /// can hold values the strict spec rejects, so type invariants weaken when this overload is
+  /// used explicitly.
   public init(string: String, strict: Bool) throws {
     let valid = strict ? RecordKey.isValid(string) : RecordKey.isValidLenient(string)
     guard valid else {

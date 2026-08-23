@@ -1,5 +1,9 @@
 import Foundation
 
+/// A value that violates a constraint its Lexicon declares.
+///
+/// Thrown only while decoding in ``LexiconDecodingMode/strict``; see
+/// <doc:DecodingLexiconRecords>. Each case names the field it applies to.
 public enum LexiconConstraintError: Error {
   case stringTooLong(_ field: String, limit: Int)
   case stringTooShort(_ field: String, minimum: Int)

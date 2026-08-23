@@ -1,12 +1,23 @@
 import Foundation
 
+/// The scope strings that are not structured resources.
+///
+/// Both are broad grants: ``ScopesSet`` treats them as prerequisites for any
+/// structured check, and ``transitionGeneric`` satisfies most checks outright.
+/// See <doc:OAuthScopes>.
 public enum OAuthScope {
+  /// The base scope every AT Protocol OAuth session carries.
   public static let atproto = "atproto"
+  /// The transitional scope granting broad access, retained for compatibility
+  /// with sessions issued before granular scopes.
   public static let transitionGeneric = "transition:generic"
 }
 
+/// One repository write a procedure performs, checked against `repo` scope.
 public struct RepoWriteRequirement: Hashable, Sendable {
+  /// The NSID of the collection being written.
   public let collection: String
+  /// The kind of write.
   public let action: LexPermissionAction
 
   public init(collection: String, action: LexPermissionAction) {
@@ -15,10 +26,21 @@ public struct RepoWriteRequirement: Hashable, Sendable {
   }
 }
 
+/// A procedure input that declares the repository writes it performs.
+///
+/// A client with an OAuth session checks these against the granted `repo`
+/// scope before sending the request. An input that does not conform is not
+/// repo-checked. See <doc:OAuthScopes>.
 public protocol RepoWriteOperationDescribing: Sendable {
+  /// One requirement per collection and action this operation writes.
   var repoWriteRequirements: [RepoWriteRequirement] { get }
 }
 
+/// A scope string that could not be parsed, or a call the granted scopes do
+/// not permit.
+///
+/// The `insufficient*` cases are thrown by the client before a request is sent;
+/// the rest come from parsing scopes or expanding an ``IncludeScope``.
 public enum OAuthScopeError: Error, Hashable, Sendable {
   case invalidSyntax(String)
   case invalidResource(String)
@@ -33,8 +55,12 @@ public enum OAuthScopeError: Error, Hashable, Sendable {
   case insufficientBlobScope(mime: String)
 }
 
+/// An `rpc` scope: permission to call specific methods against a specific
+/// audience.
 public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
+  /// The service this scope applies to, or `*` for any.
   public let aud: String
+  /// The method NSIDs this scope permits, or `*` for any.
   public let lxm: [String]
 
   public init(aud: String, lxm: [String]) throws {
@@ -125,8 +151,11 @@ public struct RpcScope: CustomStringConvertible, Hashable, Sendable {
   }
 }
 
+/// A `repo` scope: permission to write specific collections.
 public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
+  /// The collection NSIDs this scope permits, or `*` for any.
   public let collection: [String]
+  /// The write actions this scope permits.
   public let action: [LexPermissionAction]
 
   public static let defaultActions: [LexPermissionAction] = [.create, .update, .delete]
@@ -223,7 +252,10 @@ public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
   }
 }
 
+/// A `blob` scope: permission to upload specific MIME types.
 public struct BlobScope: CustomStringConvertible, Hashable, Sendable {
+  /// The accepted MIME patterns, which may use a `*` subtype such as
+  /// `image/*`.
   public let accept: [String]
 
   public init(accept: [String]) throws {
@@ -275,6 +307,7 @@ public struct BlobScope: CustomStringConvertible, Hashable, Sendable {
     return OAuthScopeSyntax(prefix: "blob", params: params).description
   }
 
+  /// Whether this scope accepts the given MIME type.
   public func allows(mime: String) -> Bool {
     guard Self.isValidMime(mime) else {
       return false
@@ -342,8 +375,16 @@ public struct BlobScope: CustomStringConvertible, Hashable, Sendable {
   }
 }
 
+/// An `include` scope: a reference to a permission set rather than a list of
+/// permissions.
+///
+/// ``ScopesSet`` expands each include at construction, adding the resulting
+/// `rpc` and `repo` scopes. An include may only grant permissions under its own
+/// authority. See <doc:OAuthScopes>.
 public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
+  /// The NSID of the permission set being included.
   public let nsid: String
+  /// The audience the expanded permissions apply to, when the include pins one.
   public let aud: String?
 
   public init(nsid: String, aud: String? = nil) throws {
@@ -405,6 +446,7 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
     return OAuthScopeSyntax(prefix: "include", positional: nsid, params: params).description
   }
 
+  /// Whether `otherNsid` falls under this include's namespace authority.
   public func isParentAuthorityOf(_ otherNsid: String) -> Bool {
     if otherNsid == "*" { return false }
     guard let groupPrefixEnd = nsid.lastIndex(of: ".") else {
@@ -423,6 +465,10 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
     return true
   }
 
+  /// Expands a permission set type into the scope strings it grants.
+  ///
+  /// - Throws: ``OAuthScopeError/nsidOutsideAuthority(parent:other:)`` when a
+  ///   permission names an NSID outside this include's authority.
   public func expand<PS: LexPermissionSet>(_ permissionSet: PS.Type) throws -> [String] {
     guard PS.id == nsid else {
       throw OAuthScopeError.invalidSyntax(
@@ -431,6 +477,7 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
     return try expand(permissionSet.permissions)
   }
 
+  /// Expands permissions into the scope strings they grant.
   public func expand(_ permissions: [LexPermission]) throws -> [String] {
     var scopes: [String] = []
     for permission in permissions {
@@ -486,13 +533,28 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
   }
 }
 
+/// The scopes granted to an OAuth session, parsed into structured resources.
+///
+/// Constructing this expands every ``IncludeScope`` against the permission sets
+/// passed in. See <doc:OAuthScopes>.
 public struct ScopesSet: Hashable, Sendable {
+  /// The granted `rpc` scopes, including those from expanded includes.
   public let rpcScopes: [RpcScope]
+  /// The granted `repo` scopes, including those from expanded includes.
   public let repoScopes: [RepoScope]
+  /// The granted `blob` scopes.
   public let blobScopes: [BlobScope]
+  /// The `include` scopes as written, before expansion.
   public let includeScopes: [IncludeScope]
+  /// Granted scopes that are not structured resources, such as
+  /// ``OAuthScope/atproto``.
   public let rawOther: Set<String>
 
+  /// Parses granted scopes, rejecting any that are malformed.
+  ///
+  /// Use this to validate scopes you control. For a token issued by a server
+  /// that may use scopes this library does not know, use
+  /// ``init(rawScopes:permissionSets:)``.
   public init(_ scopes: [String], permissionSets: [any LexPermissionSet.Type] = []) throws {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
@@ -525,6 +587,7 @@ public struct ScopesSet: Hashable, Sendable {
     self.rawOther = other
   }
 
+  /// Parses granted scopes, silently dropping any that cannot be parsed.
   public init(rawScopes scopes: [String], permissionSets: [any LexPermissionSet.Type] = []) {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
@@ -585,14 +648,18 @@ public struct ScopesSet: Hashable, Sendable {
     }
   }
 
+  /// Whether the base ``OAuthScope/atproto`` scope was granted, which every
+  /// structured check requires.
   public var hasAtprotoScope: Bool {
     rawOther.contains(OAuthScope.atproto)
   }
 
+  /// Whether the broad ``OAuthScope/transitionGeneric`` scope was granted.
   public var hasTransitionGeneric: Bool {
     rawOther.contains(OAuthScope.transitionGeneric)
   }
 
+  /// Whether this session may call `lxm` against the service `aud`.
   public func allowsRpc(lxm: String, aud: String) -> Bool {
     guard hasAtprotoScope || hasTransitionGeneric else {
       return false
@@ -610,6 +677,7 @@ public struct ScopesSet: Hashable, Sendable {
     return false
   }
 
+  /// Whether this session may perform `action` on `collection`.
   public func allowsRepo(collection: String, action: LexPermissionAction) -> Bool {
     guard hasAtprotoScope || hasTransitionGeneric else {
       return false
@@ -627,6 +695,7 @@ public struct ScopesSet: Hashable, Sendable {
     return false
   }
 
+  /// Whether this session may upload a blob of type `mime`.
   public func allowsBlob(mime: String) -> Bool {
     guard hasAtprotoScope || hasTransitionGeneric else {
       return false

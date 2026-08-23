@@ -8,16 +8,26 @@ import secp256k1
   import Foundation
 #endif
 
+/// A signing algorithm an AT Protocol identity can use.
+///
+/// The raw values are the W3C verification method type names that appear
+/// verbatim in a DID document, so a document's `type` field maps straight onto
+/// a case. See <doc:SigningAndVerifying>.
 public enum KeyType: String {
   case secp256k1 = "EcdsaSecp256k1VerificationKey2019"
   case p256 = "EcdsaSecp256r1VerificationKey2019"
   case ed25519 = "Ed25519VerificationKey2020"
 }
 
+/// A signing key.
+///
+/// See <doc:SigningAndVerifying>.
 public struct PrivateKey {
+  /// The algorithm this key signs with.
   public let type: KeyType
   let raw: Raw
 
+  /// Generates a new key of the given type.
   public init(type: KeyType) throws {
     self.type = type
     switch type {
@@ -30,6 +40,9 @@ public struct PrivateKey {
     }
   }
 
+  /// Restores a key from bytes previously read from ``rawRepresentation``.
+  ///
+  /// The type is not encoded in the bytes, so it has to be supplied separately.
   public init(type: KeyType, rawValue: Data) throws {
     self.type = type
     switch type {
@@ -42,6 +55,8 @@ public struct PrivateKey {
     }
   }
 
+  /// The key material, in the form to persist and pass back to
+  /// ``init(type:rawValue:)``.
   public var rawRepresentation: Data {
     switch raw {
     case .ed25519(let raw):
@@ -53,6 +68,7 @@ public struct PrivateKey {
     }
   }
 
+  /// The public half of this key.
   public var publicKey: PublicKey {
     switch raw {
     case .ed25519(let raw):
@@ -64,6 +80,10 @@ public struct PrivateKey {
     }
   }
 
+  /// Signs `data`.
+  ///
+  /// The result is a compact 64-byte ECDSA signature for ``KeyType/secp256k1``
+  /// and ``KeyType/p256``, and the Ed25519 signature for ``KeyType/ed25519``.
   public func sign(_ data: Data) throws -> Data {
     switch raw {
     case .ed25519(let raw):
@@ -82,16 +102,25 @@ public struct PrivateKey {
   }
 }
 
+/// A failure to decode the multicodec varint prefix of a multibase key.
 public enum VarintError: Error {
   case overflow
   case notMinimalFound
   case underflow
 }
 
+/// A verification key, obtained from a ``PrivateKey`` or decoded from what a
+/// DID document publishes.
+///
+/// See <doc:SigningAndVerifying>.
 public struct PublicKey {
   let type: KeyType
   let raw: Raw
 
+  /// Wraps an already-decoded key.
+  ///
+  /// Prefer ``publicKeyFromMultibaseString(string:)`` or
+  /// ``PrivateKey/publicKey``.
   public init(type: KeyType, raw: Raw) {
     self.type = type
     self.raw = raw
@@ -108,10 +137,15 @@ public struct PublicKey {
     }
   }
 
+  /// The base58btc multibase encoding of this key, prefixed with the
+  /// multicodec code for its curve.
+  ///
+  /// This is the value a DID document publishes as `publicKeyMultibase`.
   public var multibaseString: String {
     BaseEncoding.base58btc.encode(data: varEncode(pref: prefix, body: rawBytes))
   }
 
+  /// The key material, compressed for ``KeyType/secp256k1``.
   public var rawBytes: Data {
     switch raw {
     case .ed25519(let key):
@@ -182,6 +216,11 @@ public struct PublicKey {
     }
   }
 
+  /// Decodes a key from its multibase form, taking the curve from the
+  /// multicodec prefix.
+  ///
+  /// A `secp256k1` key is accepted in either compressed or uncompressed form
+  /// and is normalized to compressed.
   public static func publicKeyFromMultibaseString(string: String) throws -> PublicKey {
     let data = try Multibase.BaseEncoding.decode(string).data
     let (prefix, raw) = try varDecode(buf: data)
@@ -204,6 +243,10 @@ public struct PublicKey {
     }
   }
 
+  /// Whether `signature` is a valid signature of `message` under this key.
+  ///
+  /// A `secp256k1` signature is normalized to low-S before verification.
+  /// Returns `false` rather than throwing when the signature is malformed.
   public func isValidSignature(signature: any DataProtocol, for message: any DataProtocol) -> Bool {
     switch raw {
     case .ed25519(let raw):
@@ -218,6 +261,7 @@ public struct PublicKey {
     }
   }
 
+  /// The `did:key:` identifier for this key.
   public var did: String {
     "did:key:\(multibaseString)"
   }

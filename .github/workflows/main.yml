@@ -32,8 +32,10 @@ jobs:
               - 'Package.swift'
               - 'Package.resolved'
               - '.github/workflows/**'
+              - '.spi.yml'
               - '.swift-format'
               - 'format.sh'
+              - 'scripts/**'
 
   test-apple-platforms:
     needs: changes
@@ -89,13 +91,33 @@ jobs:
       - name: Run SwiftPM tests
         run: swift test
 
+  # Builds the DocC catalogs the Swift Package Index publishes, so a broken
+  # catalog or an unresolvable documentation link fails here rather than
+  # silently degrading the hosted documentation.
+  documentation:
+    needs: changes
+    if: >-
+      needs.changes.outputs.code == 'true'
+      || github.event_name == 'push'
+      || github.event_name == 'workflow_dispatch'
+    name: Build documentation
+    runs-on: macOS-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Build DocC documentation
+        run: ./scripts/build-documentation.sh --strict
+
   # Single always-running umbrella check. Set this as the only required
   # status check in branch protection so docs-only PRs (which skip the
   # test jobs) can still merge. Renaming this job requires updating
   # branch protection in the GitHub UI.
   ci-required:
     name: CI Required
-    needs: [test-apple-platforms, test-linux]
+    needs: [test-apple-platforms, test-linux, documentation]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -103,9 +125,11 @@ jobs:
         run: |
           apple="${{ needs.test-apple-platforms.result }}"
           linux="${{ needs.test-linux.result }}"
+          docs="${{ needs.documentation.result }}"
           echo "test-apple-platforms: $apple"
           echo "test-linux: $linux"
-          for r in "$apple" "$linux"; do
+          echo "documentation: $docs"
+          for r in "$apple" "$linux" "$docs"; do
             case "$r" in
               success|skipped) ;;
               *) echo "Required job did not pass (result=$r)"; exit 1 ;;

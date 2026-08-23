@@ -1,26 +1,26 @@
 import Foundation
 
-// Type for the lexicon `language` string format: a range-based BCP-47 (RFC 5646) parser whose
-// `rawValue` keeps the wire string verbatim and acts as the single source of truth — parsed
-// `Components` are never re-serialized back to an identifier.
-//
-// Scope: the canonical BCP-47 langtag grammar plus the RFC 5646 §2.2.8 grandfathered/irregular
-// whitelist, in strict mode. The parser only validates grammar — it does not consult any subtag
-// registry. Lenient mode is still syntax-only BCP-47 parsing: it does not accept `_` separators
-// or perform canonicalization, but it skips RFC 5646 §4.1 duplicate-subtag value checks.
+/// Type for the lexicon `language` string format: a range-based BCP-47 (RFC 5646) parser whose
+/// `rawValue` keeps the wire string verbatim and acts as the single source of truth — parsed
+/// `Components` are never re-serialized back to an identifier.
+///
+/// Scope: the canonical BCP-47 langtag grammar plus the RFC 5646 §2.2.8 grandfathered/irregular
+/// whitelist, in strict mode. The parser only validates grammar — it does not consult any subtag
+/// registry. Lenient mode is still syntax-only BCP-47 parsing: it does not accept `_` separators
+/// or perform canonicalization, but it skips RFC 5646 §4.1 duplicate-subtag value checks.
 public struct Language: LexiconStringFormat {
-  // The original wire string, kept verbatim (no normalization).
+  /// The original wire string, kept verbatim (no normalization).
   public let rawValue: String
-  // The BCP-47 parsed components (or grandfathered match).
+  /// The BCP-47 parsed components (or grandfathered match).
   public let components: Components
 
   public init(string: String) throws {
     try self.init(string: string, strict: true)
   }
 
-  // When `strict == false`, skips RFC 5646 §4.1 duplicate variant / extension-singleton
-  // rejection; grammar, length cap, and ASCII charset gates still apply. Lenient instances
-  // may therefore hold duplicate subtags — an invariant strict-parsed values never violate.
+  /// When `strict == false`, skips RFC 5646 §4.1 duplicate variant / extension-singleton
+  /// rejection; grammar, length cap, and ASCII charset gates still apply. Lenient instances
+  /// may therefore hold duplicate subtags — an invariant strict-parsed values never violate.
   public init(string: String, strict: Bool) throws {
     guard let components = Language.parse(string, strict: strict) else {
       throw LexiconStringFormatError.invalid(format: "language", value: string)
@@ -31,7 +31,7 @@ public struct Language: LexiconStringFormat {
 }
 
 extension Language {
-  // BCP-47 primary language subtag: 2-3 ALPHA, or 4 ALPHA (reserved), or 5-8 ALPHA (registered).
+  /// BCP-47 primary language subtag: 2-3 ALPHA, or 4 ALPHA (reserved), or 5-8 ALPHA (registered).
   public struct LanguageCode: Hashable, Sendable, Codable, RawRepresentable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -39,7 +39,7 @@ extension Language {
     public func encode(to encoder: any Encoder) throws { try rawValue.encode(to: encoder) }
   }
 
-  // BCP-47 script subtag: 4 ALPHA, e.g. `Latn`, `Hant`.
+  /// BCP-47 script subtag: 4 ALPHA, e.g. `Latn`, `Hant`.
   public struct Script: Hashable, Sendable, Codable, RawRepresentable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -47,7 +47,7 @@ extension Language {
     public func encode(to encoder: any Encoder) throws { try rawValue.encode(to: encoder) }
   }
 
-  // BCP-47 region subtag: 2 ALPHA (e.g. `US`) or 3 DIGIT (e.g. `419`).
+  /// BCP-47 region subtag: 2 ALPHA (e.g. `US`) or 3 DIGIT (e.g. `419`).
   public struct Region: Hashable, Sendable, Codable, RawRepresentable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -55,7 +55,7 @@ extension Language {
     public func encode(to encoder: any Encoder) throws { try rawValue.encode(to: encoder) }
   }
 
-  // BCP-47 variant subtag: 5-8 alphanum, or DIGIT + 3 alphanum (e.g. `1901`, `rozaj`).
+  /// BCP-47 variant subtag: 5-8 alphanum, or DIGIT + 3 alphanum (e.g. `1901`, `rozaj`).
   public struct Variant: Hashable, Sendable, Codable, RawRepresentable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -65,43 +65,43 @@ extension Language {
 }
 
 extension Language {
-  // The parsed BCP-47 components: languageCode / script / region, plus the langtag fields the
-  // lexicon needs to model verbatim (variants, extensions, privateUse) and the §2.2.8
-  // grandfathered match.
-  //
-  // `Components` is created by the `Language.init(string:)` parser; callers do not construct it
-  // directly. Sub-tag fields preserve the wire case verbatim (no normalization).
+  /// The parsed BCP-47 components: languageCode / script / region, plus the langtag fields the
+  /// lexicon needs to model verbatim (variants, extensions, privateUse) and the §2.2.8
+  /// grandfathered match.
+  ///
+  /// `Components` is created by the `Language.init(string:)` parser; callers do not construct it
+  /// directly. Sub-tag fields preserve the wire case verbatim (no normalization).
   public struct Components: Hashable, Sendable {
-    // The primary language subtag. nil when the wire string is a grandfathered/irregular tag
-    // or a private-use-only tag (`x-…`).
+    /// The primary language subtag. nil when the wire string is a grandfathered/irregular tag
+    /// or a private-use-only tag (`x-…`).
     public let languageCode: LanguageCode?
-    // BCP-47 §2.2.2 extended language subtags. Up to 3 `3ALPHA` subtags, only present when
-    // the primary language is 2-3 ALPHA. Empty for tags without extlang. RFC 5646 discourages
-    // the extlang form (`zh-cmn`) in favor of the primary subtag directly (`cmn`); the parser
-    // accepts both forms verbatim and leaves canonicalization to the consumer.
-    // The 3-ALPHA constraint is enforced by the parser (`isExtendedLanguageSubtag`), not by
-    // the element type, which reuses `LanguageCode` (2-8 ALPHA) for shape parity.
+    /// BCP-47 §2.2.2 extended language subtags. Up to 3 `3ALPHA` subtags, only present when
+    /// the primary language is 2-3 ALPHA. Empty for tags without extlang. RFC 5646 discourages
+    /// the extlang form (`zh-cmn`) in favor of the primary subtag directly (`cmn`); the parser
+    /// accepts both forms verbatim and leaves canonicalization to the consumer.
+    /// The 3-ALPHA constraint is enforced by the parser (`isExtendedLanguageSubtag`), not by
+    /// the element type, which reuses `LanguageCode` (2-8 ALPHA) for shape parity.
     public let extendedLanguageSubtags: [LanguageCode]
     public let script: Script?
     public let region: Region?
     public let variants: [Variant]
     public let extensions: [Extension]
     public let privateUse: [String]
-    // Per RFC 5646 §2.2.8, grandfathered tags are atomic: only inputs that match a registered
-    // tag exactly (case-insensitive) populate this field. Adding any suffix (e.g.,
-    // `zh-min-nan-x-foo`) demotes the tag to a normal langtag parse where this is nil.
+    /// Per RFC 5646 §2.2.8, grandfathered tags are atomic: only inputs that match a registered
+    /// tag exactly (case-insensitive) populate this field. Adding any suffix (e.g.,
+    /// `zh-min-nan-x-foo`) demotes the tag to a normal langtag parse where this is nil.
     public let grandfathered: Grandfathered?
   }
 
-  // A BCP-47 extension: a singleton (ALPHA / DIGIT except `x`) followed by 1+ subtags of
-  // length 2-8 alphanumeric, e.g. `u-co-phonebk`. Subtags preserve the wire case verbatim.
+  /// A BCP-47 extension: a singleton (ALPHA / DIGIT except `x`) followed by 1+ subtags of
+  /// length 2-8 alphanumeric, e.g. `u-co-phonebk`. Subtags preserve the wire case verbatim.
   public struct Extension: Hashable, Sendable {
     public let singleton: Character
     public let subtags: [String]
   }
 
-  // RFC 5646 §2.2.8 grandfathered/irregular language tags. The parser matches these
-  // case-insensitively but the canonical wire form (as listed below) is the `rawValue`.
+  /// RFC 5646 §2.2.8 grandfathered/irregular language tags. The parser matches these
+  /// case-insensitively but the canonical wire form (as listed below) is the `rawValue`.
   public enum Grandfathered: String, Hashable, Sendable, Codable, CaseIterable {
     // Irregular
     case enGBOed = "en-GB-oed"

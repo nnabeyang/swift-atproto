@@ -1,9 +1,9 @@
 import Foundation
 
-// Type for the lexicon `at-identifier` string format: either a DID or a Handle. Per the AT
-// Protocol Identifier spec (https://atproto.com/specs/at-identifier), inputs starting with `did:`
-// are validated as DIDs; everything else is validated as a Handle. Wire bytes round-trip via
-// `rawValue` byte-for-byte.
+/// Type for the lexicon `at-identifier` string format: either a DID or a Handle. Per the AT
+/// Protocol Identifier spec (https://atproto.com/specs/at-identifier), inputs starting with `did:`
+/// are validated as DIDs; everything else is validated as a Handle. Wire bytes round-trip via
+/// `rawValue` byte-for-byte.
 public enum AtIdentifier: LexiconStringFormat {
   case did(DID)
   case handle(Handle)

@@ -1,0 +1,15 @@
+# Swift Package Index manifest.
+#
+# `documentation_targets` makes the Swift Package Index build and host this
+# package's DocC documentation. The first entry is the landing (default)
+# target. See https://swiftpackageindex.com/swiftpackageindex/spimanifest/documentation/spimanifest/commonusecases
+#
+# `scripts/build-documentation.sh` reads this file so that a local build uses
+# the same target list and documentation parameters as the index does.
+version: 1
+builder:
+  configs:
+    - documentation_targets:
+        - SwiftAtproto
+        - ATProtoCrypto
+        - swift-atproto

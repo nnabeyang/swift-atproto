@@ -1,5 +1,10 @@
 import Foundation
 
+/// A JSON value of unknown shape, decoded without losing anything.
+///
+/// Used for a Lexicon `unknown` value that carries no `$type`, and for the
+/// unrecognized fields of an ``UnknownRecord``, so both re-encode as they
+/// arrived. See <doc:DecodingLexiconRecords>.
 public struct AnyCodable: @unchecked Sendable {
   enum BoxType {
     case encodable(_AnyBaseBox)
@@ -203,6 +208,7 @@ extension _ConcreateCodableBox: _AnyHashableBox where Base: Encodable & Hashable
   }
 }
 
+/// A coding key for keys that are not known ahead of time.
 public struct AnyCodingKeys: CodingKey {
   public var stringValue: String
   public var intValue: Int?

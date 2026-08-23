@@ -1,15 +1,15 @@
 import Foundation
 
-// Type for the lexicon `tid` string format: AT Protocol Timestamp Identifier per the AT Protocol
-// TID spec (https://atproto.com/specs/tid).
-//
-// Wire-shape validation only: a 13-character base32-sortable token. The first character is from
-// `[234567abcdefghij]` (the high bit of the encoded timestamp is always zero in the foreseeable
-// future, restricting the leading character to the lower 16 of the 32-char alphabet). The
-// remaining 12 characters are from the full base32-sortable alphabet
-// `[234567abcdefghijklmnopqrstuvwxyz]`.
+/// Type for the lexicon `tid` string format: AT Protocol Timestamp Identifier per the AT Protocol
+/// TID spec (https://atproto.com/specs/tid).
+///
+/// Wire-shape validation only: a 13-character base32-sortable token. The first character is from
+/// `[234567abcdefghij]` (the high bit of the encoded timestamp is always zero in the foreseeable
+/// future, restricting the leading character to the lower 16 of the 32-char alphabet). The
+/// remaining 12 characters are from the full base32-sortable alphabet
+/// `[234567abcdefghijklmnopqrstuvwxyz]`.
 public struct TID: LexiconStringFormat {
-  // The original wire string, kept verbatim.
+  /// The original wire string, kept verbatim.
   public let rawValue: String
 
   public init(string: String) throws {
@@ -30,28 +30,28 @@ extension TID {
     return true
   }
 
-  // Microsecond timestamp since the UNIX epoch. The top 53 bits of the 64-bit encoded value
-  // per the TID spec. Returns 0 if `rawValue` cannot be decoded (unreachable for instances
-  // produced by `init(string:)`, since the parser guarantees a valid base32-sortable form).
+  /// Microsecond timestamp since the UNIX epoch. The top 53 bits of the 64-bit encoded value
+  /// per the TID spec. Returns 0 if `rawValue` cannot be decoded (unreachable for instances
+  /// produced by `init(string:)`, since the parser guarantees a valid base32-sortable form).
   public var timestamp: UInt64 {
     (decodeBase32Sortable(rawValue) ?? 0) >> 10
   }
 
-  // 10-bit clock identifier (0...1023) per the TID spec. Returns 0 on a decode failure
-  // (unreachable in practice — see `timestamp`).
+  /// 10-bit clock identifier (0...1023) per the TID spec. Returns 0 on a decode failure
+  /// (unreachable in practice — see `timestamp`).
   public var clockId: UInt16 {
     UInt16((decodeBase32Sortable(rawValue) ?? 0) & 0x3FF)
   }
 
-  // Generate a new TID with a monotonic guarantee. Same-millisecond calls receive an
-  // incrementing per-millisecond counter so consecutive TIDs never collide; clock skew
-  // (system clock going backward) is absorbed by taking `max(now, lastTimestamp)`. If `prev`
-  // is supplied and the freshly generated TID is not newer, the timestamp is bumped to
-  // `prev.timestamp + 1` for additional safety across generator instances.
-  //
-  // Wire-shape correctness is guaranteed by construction: the encoded base32-sortable form is
-  // always 13 characters from the allowed alphabet, so the validator inside `init(string:)`
-  // never throws here.
+  /// Generate a new TID with a monotonic guarantee. Same-millisecond calls receive an
+  /// incrementing per-millisecond counter so consecutive TIDs never collide; clock skew
+  /// (system clock going backward) is absorbed by taking `max(now, lastTimestamp)`. If `prev`
+  /// is supplied and the freshly generated TID is not newer, the timestamp is bumped to
+  /// `prev.timestamp + 1` for additional safety across generator instances.
+  ///
+  /// Wire-shape correctness is guaranteed by construction: the encoded base32-sortable form is
+  /// always 13 characters from the allowed alphabet, so the validator inside `init(string:)`
+  /// never throws here.
   public static func next(prev: TID? = nil) -> TID {
     let nowMs = UInt64(Date().timeIntervalSince1970 * 1_000)
     let micros = tidClockState.advanceTimestamp(nowMs: nowMs)

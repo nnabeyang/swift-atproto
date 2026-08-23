@@ -1,14 +1,14 @@
 import Foundation
 
-// Type for the lexicon `did` string format: Decentralized Identifier per W3C DID spec
-// (https://www.w3.org/TR/did-core/) with atproto restrictions per the AT Protocol DID spec
-// (https://atproto.com/specs/did).
-//
-// Wire-shape validation only: ASCII grammar `^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$`,
-// total length <= 2048 byte. No `%xx` decoding (verbatim wire preservation). No semantic
-// resolution (registered-method resolvers live elsewhere — e.g. `ATProtoCrypto`).
+/// Type for the lexicon `did` string format: Decentralized Identifier per W3C DID spec
+/// (https://www.w3.org/TR/did-core/) with atproto restrictions per the AT Protocol DID spec
+/// (https://atproto.com/specs/did).
+///
+/// Wire-shape validation only: ASCII grammar `^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$`,
+/// total length <= 2048 byte. No `%xx` decoding (verbatim wire preservation). No semantic
+/// resolution (registered-method resolvers live elsewhere — e.g. `ATProtoCrypto`).
 public struct DID: LexiconStringFormat {
-  // The original wire string, kept verbatim.
+  /// The original wire string, kept verbatim.
   public let rawValue: String
 
   public init(string: String) throws {
@@ -18,9 +18,9 @@ public struct DID: LexiconStringFormat {
     rawValue = string
   }
 
-  // The DID method (the lowercase ASCII segment between the first two colons). For `did:plc:abc`
-  // this is `"plc"`; for `did:web:example.com` this is `"web"`. Always non-empty since `rawValue`
-  // was admitted by the parser.
+  /// The DID method (the lowercase ASCII segment between the first two colons). For `did:plc:abc`
+  /// this is `"plc"`; for `did:web:example.com` this is `"web"`. Always non-empty since `rawValue`
+  /// was admitted by the parser.
   public var method: String {
     let afterPrefix = rawValue.dropFirst(4)  // drop "did:"
     let end = afterPrefix.firstIndex(of: ":") ?? afterPrefix.endIndex
@@ -29,10 +29,10 @@ public struct DID: LexiconStringFormat {
 }
 
 extension DID {
-  // An open, extensible tag for the DID method. Use `switch` with `case .plc` / `case .web` /
-  // `default` for dispatch; unknown methods survive as `KnownMethod(rawValue:)` values so
-  // constructing a DID with a future or unregistered method never fails and never gets silently
-  // downgraded. `knownMethod.rawValue == method` always.
+  /// An open, extensible tag for the DID method. Use `switch` with `case .plc` / `case .web` /
+  /// `default` for dispatch; unknown methods survive as `KnownMethod(rawValue:)` values so
+  /// constructing a DID with a future or unregistered method never fails and never gets silently
+  /// downgraded. `knownMethod.rawValue == method` always.
   public struct KnownMethod: RawRepresentable, Hashable, Sendable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }

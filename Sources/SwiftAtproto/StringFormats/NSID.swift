@@ -1,14 +1,14 @@
 import Foundation
 
-// Type for the lexicon `nsid` string format: AT Protocol Namespaced Identifier per the AT Protocol
-// NSID spec (https://atproto.com/specs/nsid).
-//
-// Wire-shape validation only: a reverse-DNS authority followed by a name segment, with at least
-// three dot-separated segments. Each segment is 1–63 byte ASCII alnum / hyphen with no edge
-// hyphen; the first segment cannot start with a digit; the name (last segment) is alnum-only and
-// cannot start with a digit. Total length <= 317 byte.
+/// Type for the lexicon `nsid` string format: AT Protocol Namespaced Identifier per the AT Protocol
+/// NSID spec (https://atproto.com/specs/nsid).
+///
+/// Wire-shape validation only: a reverse-DNS authority followed by a name segment, with at least
+/// three dot-separated segments. Each segment is 1–63 byte ASCII alnum / hyphen with no edge
+/// hyphen; the first segment cannot start with a digit; the name (last segment) is alnum-only and
+/// cannot start with a digit. Total length <= 317 byte.
 public struct NSID: LexiconStringFormat {
-  // The original wire string, kept verbatim.
+  /// The original wire string, kept verbatim.
   public let rawValue: String
 
   public init(string: String) throws {
@@ -18,14 +18,14 @@ public struct NSID: LexiconStringFormat {
     rawValue = string
   }
 
-  // The reverse-DNS authority portion: all segments except the last one, re-ordered into a
-  // forward domain. For `com.example.foo` this is `"example.com"`; for `org.4chan.lex.getThing`
-  // it is `"lex.4chan.org"`.
+  /// The reverse-DNS authority portion: all segments except the last one, re-ordered into a
+  /// forward domain. For `com.example.foo` this is `"example.com"`; for `org.4chan.lex.getThing`
+  /// it is `"lex.4chan.org"`.
   public var authority: String {
     rawValue.split(separator: ".").dropLast().reversed().joined(separator: ".")
   }
 
-  // The name segment (last dot-separated component). For `com.example.foo` this is `"foo"`.
+  /// The name segment (last dot-separated component). For `com.example.foo` this is `"foo"`.
   public var name: String {
     String(rawValue.split(separator: ".").last ?? "")
   }
