@@ -22,6 +22,7 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
   case subscription(SubscriptionDefinition)
   case record(RecordDefinition)
   case permissionSet(PermissionSetTypeDefinition)
+  case space(SpaceTypeDefinition)
   private enum CodingKeys: String, CodingKey {
     case type
   }
@@ -83,6 +84,8 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
       self = try .record(RecordDefinition(from: decoder, configuration: configuration))
     case .permissionSet:
       self = try .permissionSet(PermissionSetTypeDefinition(from: decoder))
+    case .space:
+      self = try .space(SpaceTypeDefinition(from: decoder))
     }
   }
 
@@ -125,6 +128,8 @@ enum FieldTypeDefinition: Encodable, DecodableWithConfiguration, Sendable {
     case .record(let def):
       try def.encode(to: encoder)
     case .permissionSet(let def):
+      try def.encode(to: encoder)
+    case .space(let def):
       try def.encode(to: encoder)
     }
   }
@@ -194,6 +199,7 @@ extension FieldTypeDefinition: CustomStringConvertible {
     case .subscription: "subscription"
     case .record: "record"
     case .permissionSet: "permissionSet"
+    case .space: "space"
     }
   }
 }

@@ -130,6 +130,8 @@ final class Schema: Encodable, Decodable, Sendable {
         out[name] = ts
       case .permissionSet:
         out[name] = ts
+      case .space:
+        out[name] = ts
       default:
         break
       }
@@ -521,6 +523,8 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     case .permissionSet(let def):
       def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
+    case .space(let def):
+      def.generateDeclaration(leadingTrivia: leadingTrivia, ts: self, name: name, type: typeName, defMap: defMap, generate: generate)
     default:
       fatalError()
     }
@@ -564,6 +568,7 @@ enum FieldType: String, Codable {
   case subscription
   case record
   case permissionSet = "permission-set"
+  case space
 }
 
 enum AtpType {

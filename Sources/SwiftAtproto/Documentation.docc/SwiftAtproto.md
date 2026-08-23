@@ -86,6 +86,11 @@ let posts = try await client.call(
 - ``RepoWriteOperationDescribing``
 - ``RepoWriteRequirement``
 
+### Space type declarations
+
+- ``LexSpace``
+- ``LexRecordKeyType``
+
 ### Event streams
 
 - <doc:Subscriptions>
