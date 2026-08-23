@@ -109,10 +109,12 @@ let posts = try await client.call(
 
 ### Identity documents
 
+- <doc:SpaceAuthorities>
 - ``DIDDocument``
 - ``DocService``
 - ``DocVerificationMethod``
 - ``DIDHandleResolver``
+- ``ServiceIdentifier``
 
 ### Errors
 
