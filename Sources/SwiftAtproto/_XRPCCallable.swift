@@ -5,11 +5,30 @@ extension HTTPField.Name {
   static var atprotoProxy: Self { .init("atproto-proxy")! }
 }
 
+/// The minimum a client has to provide in order to make XRPC calls.
+///
+/// Implement `response(_:)`; the protocol extension implements both `call`
+/// overloads on top of it, which is what makes every generated method callable.
+/// See <doc:MakingXRPCCalls>.
+///
+/// This protocol is infrastructure shared with generated code. Conform to
+/// ``ATPClientProtocol`` instead of using it directly.
 public protocol _XRPCCallable: Sendable {
+  /// The OAuth session whose granted scopes gate outgoing calls, or `nil` to
+  /// skip scope enforcement entirely. Defaults to `nil`.
   var oauthSession: (any OAuthSession)? { get }
+  /// The service to proxy this method to via the `atproto-proxy` header, or
+  /// `nil` to send it to the client's own endpoint.
   func getProxy(nsid: String) -> String?
+  /// Sends a prepared request and returns the raw response payload.
+  ///
+  /// This is the only transport-specific requirement. Throw
+  /// ``UnExpectedError`` for a failure the method's Lexicon does not describe;
+  /// it is converted into the method's own error type.
   func response(_ requestComponents: XRPCRequestComponents) async throws -> Data
+  /// Calls a query, encoding `input` as query items.
   func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query) async throws -> X.ResponseBody
+  /// Calls a procedure, encoding `input` into the request body.
   func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody
 }
 
@@ -133,6 +152,8 @@ extension _XRPCCallable {
     )
   }
 
+  /// Renders parameters as percent-encoded query items, dropping `nil` values
+  /// and expanding arrays into repeated items.
   public static func makeParameters(params: Parameters) -> [URLQueryItem] {
     var items = [URLQueryItem]()
     for (key, value) in params {

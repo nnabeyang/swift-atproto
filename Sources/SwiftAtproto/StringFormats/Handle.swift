@@ -1,14 +1,14 @@
 import Foundation
 
-// Type for the lexicon `handle` string format: a DNS-like atproto handle per the AT Protocol
-// Handle spec (https://atproto.com/specs/handle).
-//
-// Wire-shape validation only: each label is 1–63 byte ASCII alnum / hyphen with no edge hyphen,
-// the trailing TLD starts with a letter, the whole string is dot-separated with at least two
-// labels, and total length is <= 253 byte. Punycode (`xn--…`) labels pass the same byte test —
-// IDN canonicalization is intentionally not performed.
+/// Type for the lexicon `handle` string format: a DNS-like atproto handle per the AT Protocol
+/// Handle spec (https://atproto.com/specs/handle).
+///
+/// Wire-shape validation only: each label is 1–63 byte ASCII alnum / hyphen with no edge hyphen,
+/// the trailing TLD starts with a letter, the whole string is dot-separated with at least two
+/// labels, and total length is <= 253 byte. Punycode (`xn--…`) labels pass the same byte test —
+/// IDN canonicalization is intentionally not performed.
 public struct Handle: LexiconStringFormat {
-  // The original wire string, kept verbatim.
+  /// The original wire string, kept verbatim.
   public let rawValue: String
 
   public init(string: String) throws {
@@ -20,9 +20,9 @@ public struct Handle: LexiconStringFormat {
 }
 
 extension Handle {
-  // Sentinel returned by handle-verification paths (e.g. `DIDDocument.Verified`) when the handle
-  // cannot be confirmed against the DID. Well-formed per `isValid`, so it never fails to
-  // construct at runtime.
+  /// Sentinel returned by handle-verification paths (e.g. `DIDDocument.Verified`) when the handle
+  /// cannot be confirmed against the DID. Well-formed per `isValid`, so it never fails to
+  /// construct at runtime.
   public static let invalid: Handle = try! Handle(string: "handle.invalid")
 }
 

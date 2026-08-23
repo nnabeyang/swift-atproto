@@ -1,34 +1,34 @@
 import Foundation
 
-// A dedicated AT URI type for the lexicon `at-uri` string format. There is no natural Foundation type
-// (`URL` rejects the `at://` scheme and normalizes), so this is a self-contained, range-based parser.
-//
-// Scope: this implements ONLY the *restricted* (Lexicon) AT URI syntax in strict mode, per the
-// AT Protocol AT URI spec (https://atproto.com/specs/at-uri-scheme):
-//
-//   AT-URI     = "at://" AUTHORITY [ "/" COLLECTION [ "/" RKEY ] ] [ "#" FRAGMENT ]
-//   AUTHORITY  = HANDLE | DID
-//   COLLECTION = NSID
-//   RKEY       = RECORD-KEY
-//
-// This is the form used by lexicon `at-uri` fields and covers essentially all real AT URIs. The
-// general AT URI syntax (multi-segment paths, query strings) is intentionally NOT supported. A parse
-// mode for the lenient variant (relaxed record key, trailing slash, query) may be added to this same
-// type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
-// separate addition if a concrete need arises.
-//
-// DID / Handle / NSID / RecordKey / AtIdentifier component validators live in their dedicated
-// identifier-type files. Only the JSON Pointer fragment validator remains here.
+/// A dedicated AT URI type for the lexicon `at-uri` string format. There is no natural Foundation type
+/// (`URL` rejects the `at://` scheme and normalizes), so this is a self-contained, range-based parser.
+///
+/// Scope: this implements ONLY the *restricted* (Lexicon) AT URI syntax in strict mode, per the
+/// AT Protocol AT URI spec (https://atproto.com/specs/at-uri-scheme):
+///
+///   AT-URI     = "at://" AUTHORITY [ "/" COLLECTION [ "/" RKEY ] ] [ "#" FRAGMENT ]
+///   AUTHORITY  = HANDLE | DID
+///   COLLECTION = NSID
+///   RKEY       = RECORD-KEY
+///
+/// This is the form used by lexicon `at-uri` fields and covers essentially all real AT URIs. The
+/// general AT URI syntax (multi-segment paths, query strings) is intentionally NOT supported. A parse
+/// mode for the lenient variant (relaxed record key, trailing slash, query) may be added to this same
+/// type later (`init(string:strict:)` / `typedLenient`); a fully permissive/general parser would be a
+/// separate addition if a concrete need arises.
+///
+/// DID / Handle / NSID / RecordKey / AtIdentifier component validators live in their dedicated
+/// identifier-type files. Only the JSON Pointer fragment validator remains here.
 public struct ATURI: LexiconStringFormat {
-  // The original wire string, kept verbatim (no normalization).
+  /// The original wire string, kept verbatim (no normalization).
   public let rawValue: String
-  // Required authority: a DID or a handle, dispatched via `AtIdentifier`.
+  /// Required authority: a DID or a handle, dispatched via `AtIdentifier`.
   public let authority: AtIdentifier
-  // Optional collection NSID.
+  /// Optional collection NSID.
   public let collection: NSID?
-  // Optional record key (trailing path segment).
+  /// Optional record key (trailing path segment).
   public let rkey: RecordKey?
-  // Optional JSON Pointer fragment (without the leading "#").
+  /// Optional JSON Pointer fragment (without the leading "#").
   public let fragment: String?
 
   public init(string: String) throws {

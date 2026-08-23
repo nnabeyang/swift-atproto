@@ -1,3 +1,7 @@
+/// A W3C DID document describing an AT Protocol identity.
+///
+/// Resolving one is how a handle is confirmed against a DID and how an
+/// account's PDS endpoint and signing keys are discovered.
 public struct DIDDocument: Codable, Sendable, Hashable {
   public let context: [String]
   public let did: FormatString<DID>
@@ -28,6 +32,7 @@ public struct DIDDocument: Codable, Sendable, Hashable {
   }
 }
 
+/// A public key published by a ``DIDDocument``.
 public struct DocVerificationMethod: Codable, Sendable, Hashable {
   public let id: String
   public let type: String
@@ -42,6 +47,8 @@ public struct DocVerificationMethod: Codable, Sendable, Hashable {
   }
 }
 
+/// A service endpoint published by a ``DIDDocument``, such as the account's
+/// PDS.
 public struct DocService: Codable, Sendable, Hashable {
   public let id: String
   public let type: String

@@ -1,31 +1,31 @@
 import Foundation
 
-// Type for the lexicon `uri` string format: a lenient parser that keeps the wire string
-// verbatim and exposes best-effort typed accessors for known schemes (`url: URL?` and
-// `atUri: ATURI?`).
-//
-// Scope: atproto lexicon `uri` is "flexible to any URI schema" per RFC 3986
-// (https://atproto.com/specs/lexicon). This parser only enforces the wire-level shape:
-//   - RFC 3986 §3.1 scheme grammar (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )) followed by ":"
-//   - optional "//"
-//   - non-empty body whose first byte is neither "/" nor ASCII whitespace, and whose remaining
-//     bytes contain no ASCII whitespace / control characters
-//   - total length <= 8 KiB (per spec)
-// Non-ASCII bytes in the body are accepted verbatim (per the spec's "any scheme" stance);
-// canonicalization is left to the consumer.
-//
-// `URL` is intentionally NOT used as the conformance: `URL(string:)` silently re-encodes
-// wire characters (spaces → `%20`, IDN → punycode, etc.), and even
-// `URL(string:encodingInvalidCharacters: false)` is too strict for our lenient wire
-// admission (rejects inputs the lexicon `uri` format may carry, e.g. raw non-ASCII bytes)
-// while still rejecting `at://did:plc:…` (the DID authority's embedded colon collides with
-// port grammar). `URL` is offered as a best-effort derived accessor instead, exposing the
-// `encodingInvalidCharacters:` toggle so callers choose between best-effort (silent
-// re-encoding) and strict wire-faithful (nil for inputs needing encoding).
+/// Type for the lexicon `uri` string format: a lenient parser that keeps the wire string
+/// verbatim and exposes best-effort typed accessors for known schemes (`url: URL?` and
+/// `atUri: ATURI?`).
+///
+/// Scope: atproto lexicon `uri` is "flexible to any URI schema" per RFC 3986
+/// (https://atproto.com/specs/lexicon). This parser only enforces the wire-level shape:
+///   - RFC 3986 §3.1 scheme grammar (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )) followed by ":"
+///   - optional "//"
+///   - non-empty body whose first byte is neither "/" nor ASCII whitespace, and whose remaining
+///     bytes contain no ASCII whitespace / control characters
+///   - total length <= 8 KiB (per spec)
+/// Non-ASCII bytes in the body are accepted verbatim (per the spec's "any scheme" stance);
+/// canonicalization is left to the consumer.
+///
+/// `URL` is intentionally NOT used as the conformance: `URL(string:)` silently re-encodes
+/// wire characters (spaces → `%20`, IDN → punycode, etc.), and even
+/// `URL(string:encodingInvalidCharacters: false)` is too strict for our lenient wire
+/// admission (rejects inputs the lexicon `uri` format may carry, e.g. raw non-ASCII bytes)
+/// while still rejecting `at://did:plc:…` (the DID authority's embedded colon collides with
+/// port grammar). `URL` is offered as a best-effort derived accessor instead, exposing the
+/// `encodingInvalidCharacters:` toggle so callers choose between best-effort (silent
+/// re-encoding) and strict wire-faithful (nil for inputs needing encoding).
 public struct URI: LexiconStringFormat {
-  // The original wire string, kept verbatim (no normalization).
+  /// The original wire string, kept verbatim (no normalization).
   public let rawValue: String
-  // The URI scheme (before the colon), preserved verbatim (no lowercase canonicalization).
+  /// The URI scheme (before the colon), preserved verbatim (no lowercase canonicalization).
   public let scheme: String
   public let kind: Kind
 
@@ -44,25 +44,25 @@ public struct URI: LexiconStringFormat {
     kind = URI.classify(string)
   }
 
-  // Best-effort `URL` projection. The `encodingInvalidCharacters` parameter is forwarded to
-  // `URL(string:encodingInvalidCharacters:)`:
-  //   - `true` (default, matching Foundation's historical `URL(string:)` behavior): silently
-  //     re-encodes wire characters that need encoding (spaces → `%20`, IDN → punycode, etc.)
-  //     and converts the result to a usable URL when possible. `absoluteString` may diverge
-  //     from `rawValue`.
-  //   - `false`: returns nil for wire forms that would require any re-encoding. When
-  //     non-nil, the URL's `absoluteString` matches `rawValue` byte-for-byte (wire-faithful).
-  //
-  // Returns nil in either mode for inputs `URL` cannot parse — notably any URI whose
-  // authority contains a colon followed by non-numeric bytes (port grammar violation, e.g.
-  // `at://did:plc:abc` or `at://example.com:notaport/path`). Non-nil does NOT imply the URL
-  // is semantically loadable (e.g. `https:///x` parses but has no host).
+  /// Best-effort `URL` projection. The `encodingInvalidCharacters` parameter is forwarded to
+  /// `URL(string:encodingInvalidCharacters:)`:
+  ///   - `true` (default, matching Foundation's historical `URL(string:)` behavior): silently
+  ///     re-encodes wire characters that need encoding (spaces → `%20`, IDN → punycode, etc.)
+  ///     and converts the result to a usable URL when possible. `absoluteString` may diverge
+  ///     from `rawValue`.
+  ///   - `false`: returns nil for wire forms that would require any re-encoding. When
+  ///     non-nil, the URL's `absoluteString` matches `rawValue` byte-for-byte (wire-faithful).
+  ///
+  /// Returns nil in either mode for inputs `URL` cannot parse — notably any URI whose
+  /// authority contains a colon followed by non-numeric bytes (port grammar violation, e.g.
+  /// `at://did:plc:abc` or `at://example.com:notaport/path`). Non-nil does NOT imply the URL
+  /// is semantically loadable (e.g. `https:///x` parses but has no host).
   public func url(encodingInvalidCharacters: Bool = true) -> URL? {
     URL(string: rawValue, encodingInvalidCharacters: encodingInvalidCharacters)
   }
 
-  // Best-effort AT-URI projection. Non-nil only when the wire string is a valid restricted-form
-  // AT URI (scheme=at, authority=DID/handle, …).
+  /// Best-effort AT-URI projection. Non-nil only when the wire string is a valid restricted-form
+  /// AT URI (scheme=at, authority=DID/handle, …).
   public var atUri: ATURI? { try? ATURI(string: rawValue) }
 }
 

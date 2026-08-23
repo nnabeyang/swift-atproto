@@ -5,11 +5,21 @@ import Multicodec
 import Multihash
 import SwiftCbor
 
+/// The response body of a method that returns no data.
+///
+/// Decoding is short-circuited for this type, so a method declaring it never
+/// parses the response payload.
 public struct EmptyResponse: Codable, Sendable, Hashable {
   public init() {}
 }
 
+/// A record type generated from a Lexicon record schema.
+///
+/// The generated conformance encodes ``nsId`` as the record's `$type`, which is
+/// what lets ``UnknownATPValueProtocol`` dispatch a decoded value back to its
+/// concrete type.
 public protocol ATProtoRecord: Codable, Sendable, Hashable {
+  /// The NSID of the Lexicon this record was generated from.
   static var nsId: String { get }
 }
 
@@ -17,41 +27,79 @@ enum TypeCodingKeys: String, CodingKey {
   case type = "$type"
 }
 
+/// A single XRPC method, generated from a Lexicon query or procedure.
+///
+/// Conforming types are generated; you call them through
+/// `_XRPCCallable.call(_:input:)` rather than constructing requests directly.
+/// See <doc:MakingXRPCCalls>.
 public protocol XRPCRequest: Sendable {
+  /// The type the response payload decodes into.
   associatedtype ResponseBody: Codable & Sendable & Hashable
+  /// The error type the method's Lexicon declares.
   associatedtype Error: XRPCError
 
+  /// The NSID of the method, used as the `/xrpc/` path component.
   static var id: String { get }
 }
 
 extension XRPCRequest {
+  /// The Lexicon method identifier checked against a session's `rpc` scope.
+  ///
+  /// Defaults to ``id``. See <doc:OAuthScopes>.
   public static func requiredRpcLxm() -> String { id }
 }
 
+/// An XRPC method whose input travels in the query string, sent as `GET`.
 public protocol XRPCQuery: XRPCRequest {
+  /// The generated wrapper around this method's parameters.
   associatedtype Input: XRPCQueryInput
 }
 
+/// The input of an ``XRPCQuery``, wrapping its parameters.
 public protocol XRPCQueryInput: Sendable & Hashable {
+  /// The parameter type that renders itself as query items.
   associatedtype Query: XRPCInputQuery
 
+  /// The parameters to send.
   var query: Query { get }
 }
 
+/// A parameter set that can be rendered as URL query items.
 public protocol XRPCInputQuery: Sendable, Hashable {
+  /// The parameters to encode, or `nil` when the method takes none.
+  ///
+  /// `nil` values inside the returned ``Parameters`` are omitted rather than
+  /// sent empty.
   var asParameters: Parameters? { get }
 }
 
+/// An XRPC method whose input travels in the request body, sent as `POST`.
+///
+/// The body is the JSON encoding of ``RequestBody``, except when the input is
+/// raw `Data` or an ``XRPCBlobUpload``, which are sent unchanged.
 public protocol XRPCProcedure: XRPCRequest {
+  /// The type encoded into the request body.
   associatedtype RequestBody: Codable & Sendable & Hashable
+  /// The `Content-Type` to send, unless an ``XRPCBlobUpload`` overrides it.
   static var contentType: String { get }
 }
 
+/// The generated enum that decodes a Lexicon `unknown` field.
+///
+/// Code generation emits one conforming type per module, mapping every `$type`
+/// it knows to the matching ``ATProtoRecord``. A `$type` that is not in
+/// ``allTypes`` decodes into ``UnknownRecord`` so the value still re-encodes
+/// unchanged. See <doc:DecodingLexiconRecords>.
 public protocol UnknownATPValueProtocol: Codable, Sendable, Hashable {
+  /// Wraps a decoded record.
   static func record(_: any ATProtoRecord) -> Self
+  /// Wraps a value that carried no `$type`.
   static func any(_: any Codable & Sendable & Hashable) -> Self
+  /// The `$type` of the wrapped value, or `nil` when it carried none.
   var type: String? { get }
+  /// The wrapped value.
   var val: any Codable & Hashable & Sendable { get }
+  /// Every record type this module can dispatch to, keyed by `$type`.
   static var allTypes: [String: any ATProtoRecord.Type] { get }
 }
 
@@ -125,7 +173,9 @@ extension String {
   }
 }
 
+/// A Lexicon `cid-link`: a content identifier pointing at another block.
 public struct LexLink: Sendable, Hashable, Codable, CborCodable, CustomStringConvertible {
+  /// The content identifier this link resolves to.
   public var cid: CID
 
   public init(_ cid: CID) {
@@ -288,10 +338,16 @@ public struct LexLink: Sendable, Hashable, Codable, CborCodable, CustomStringCon
   }
 }
 
+/// A Lexicon `blob`: a reference to binary data, not the bytes themselves.
+///
+/// Uploading the bytes is a separate procedure call; see ``XRPCBlobUpload``.
 public struct LexBlob: Codable, Sendable, Hashable {
   public let type = "blob"
+  /// The content identifier of the uploaded data.
   public let ref: LexLink
+  /// The MIME type the blob was uploaded with.
   public let mimeType: String
+  /// The size of the blob in bytes.
   public let size: UInt
 
   public init(original: Self, mimeType: String) {
@@ -328,6 +384,10 @@ public struct LexBlob: Codable, Sendable, Hashable {
   }
 }
 
+/// One query parameter value.
+///
+/// A `nil` payload means the parameter is omitted rather than sent empty; an
+/// ``array(_:)`` is expanded into one query item per element.
 public enum ParamElement {
   case string(String?)
   case bool(Bool?)
@@ -335,7 +395,9 @@ public enum ParamElement {
   case array([any CustomStringConvertible]?)
 }
 
+/// The query parameters of an ``XRPCQuery``, keyed by parameter name.
 public final class Parameters: ExpressibleByDictionaryLiteral {
+  /// The parameters to encode.
   public let dictionary: [String: ParamElement]
   public init(dictionary: [String: ParamElement]) {
     self.dictionary = dictionary

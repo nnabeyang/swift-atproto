@@ -1,18 +1,37 @@
 import Foundation
 
+/// A client that talks to one AT Protocol service.
+///
+/// Refines the callable infrastructure with the endpoint and session hooks a
+/// transport needs. Implementing `response(_:)` is still the only
+/// transport-specific work; see <doc:MakingXRPCCalls>.
 public protocol ATPClientProtocol: _XRPCCallable {
+  /// The service base URL that `/xrpc/<nsid>` is appended to.
   var serviceEndpoint: URL { get }
+  /// The decoder used for response payloads.
   var decoder: JSONDecoder { get }
 
+  /// Whether this error means the access token needs refreshing, so the call
+  /// can be retried after ``refreshSession()``.
   func tokenIsExpired(error: some XRPCError) -> Bool
+  /// The `Authorization` header value to send for this method, or `nil` for an
+  /// unauthenticated call.
   func getAuthorization(endpoint: String) -> String?
 
+  /// Refreshes the session, returning whether it succeeded.
   func refreshSession() async -> Bool
 }
 
+/// A client backed by mutable session credentials.
+///
+/// This protocol is infrastructure shared with generated code and with the
+/// deprecated `@XRPCClient` macro. Prefer the `XRPCClientProtocol` emitted by
+/// code generation, which also carries the XRPC method requirements.
 public protocol _XRPCClientProtocol: ATPClientProtocol {
+  /// The credentials this client sends.
   var auth: any XRPCAuth { get set }
 
+  /// Discards the current session.
   func signout()
 }
 
@@ -44,9 +63,17 @@ extension ATPClientProtocol where Self: XRPCSubscriptionCallable {
   }
 }
 
+/// An error payload declared by a Lexicon method.
+///
+/// One conforming type is generated per method. A failure the Lexicon does not
+/// describe arrives as ``UnExpectedError`` and is converted through
+/// ``init(error:)``.
 public protocol XRPCError: Error, LocalizedError, Decodable, Sendable {
+  /// The machine-readable error name returned by the service.
   var error: String? { get }
+  /// The human-readable message returned by the service.
   var message: String? { get }
+  /// Wraps a failure that the method's Lexicon does not describe.
   init(error: UnExpectedError)
 }
 
@@ -56,6 +83,8 @@ extension XRPCError {
   }
 }
 
+/// A failure that no Lexicon error case describes, such as a transport error
+/// or an unrecognized status.
 public final class UnExpectedError: XRPCError {
   public let error: String?
   public let message: String?
@@ -70,6 +99,10 @@ public final class UnExpectedError: XRPCError {
   }
 }
 
+/// A record whose `$type` this module was not generated against.
+///
+/// The unrecognized fields are kept in `_unknownValues` so the record
+/// re-encodes exactly as it arrived. See <doc:DecodingLexiconRecords>.
 public struct UnknownRecord: Identifiable, ATProtoRecord {
   public static let nsId = "unknown"
   public let type: String

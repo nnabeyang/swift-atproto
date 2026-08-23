@@ -1,5 +1,11 @@
 import Foundation
 
+/// Parses an AT Protocol `datetime` string into a `Date`.
+///
+/// The grammar is narrower than ISO 8601. Strict parsing requires the form the
+/// spec mandates; ``lenient`` parsing also accepts the older spellings that
+/// existing records contain. Reach it as `.atprotoDatetime` or
+/// `.atprotoDatetimeLenient` rather than constructing it directly.
 public struct AtprotoDatetimeParseStrategy: ParseStrategy {
   static let maxLength = 64
 

@@ -1,8 +1,8 @@
 import Foundation
 
-// Canonical AT Protocol datetime: UTC, millisecond precision; lossy for sub-millisecond instants and
-// zone offsets. Formatted in the proleptic Gregorian calendar (consistent with parsing) rather than
-// via `ISO8601Format`, which applies the Julian cutover before 1582.
+/// Canonical AT Protocol datetime: UTC, millisecond precision; lossy for sub-millisecond instants and
+/// zone offsets. Formatted in the proleptic Gregorian calendar (consistent with parsing) rather than
+/// via `ISO8601Format`, which applies the Julian cutover before 1582.
 public struct AtprotoDatetimeFormatStyle: FormatStyle {
   public init() {}
 

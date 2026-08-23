@@ -80,6 +80,12 @@ extension DIDDocument {
   }
 }
 
+/// Resolves a handle to the DID that claims it.
+///
+/// Confirming a handle requires both directions: the ``DIDDocument`` has to
+/// list the handle in `alsoKnownAs`, and resolving the handle has to lead back
+/// to the same DID.
 public protocol DIDHandleResolver: Sendable {
+  /// Returns the DID `handle` resolves to.
   func resolveDID(handle: Handle) async throws -> DID
 }

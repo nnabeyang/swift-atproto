@@ -1,5 +1,9 @@
 import Foundation
 
+/// One permission declared by a Lexicon permission set.
+///
+/// Expanding an ``IncludeScope`` turns these into the `rpc` and `repo` scope
+/// strings they grant. See <doc:OAuthScopes>.
 public struct LexPermission: Codable, Hashable, Sendable {
   public let resource: LexPermissionResource
   public let aud: String?
@@ -25,6 +29,7 @@ public struct LexPermission: Codable, Hashable, Sendable {
   }
 }
 
+/// The resource kind a ``LexPermission`` applies to: `rpc`, `repo`, or `blob`.
 public struct LexPermissionResource: RawRepresentable, Codable, Hashable, Sendable {
   public let rawValue: String
 
@@ -46,6 +51,7 @@ public struct LexPermissionResource: RawRepresentable, Codable, Hashable, Sendab
   public static let blob = Self(rawValue: "blob")
 }
 
+/// A repository write action: `create`, `update`, or `delete`.
 public struct LexPermissionAction: RawRepresentable, Codable, Hashable, Sendable {
   public let rawValue: String
 
@@ -67,9 +73,17 @@ public struct LexPermissionAction: RawRepresentable, Codable, Hashable, Sendable
   public static let delete = Self(rawValue: "delete")
 }
 
+/// A named set of permissions, generated from a Lexicon `permission-set`.
+///
+/// Pass conforming types to ``ScopesSet/init(_:permissionSets:)`` so an
+/// ``IncludeScope`` naming ``id`` can be expanded. See <doc:OAuthScopes>.
 public protocol LexPermissionSet {
+  /// The NSID an ``IncludeScope`` refers to this set by.
   static var id: String { get }
+  /// A short human-readable name, for a consent screen.
   static var title: String? { get }
+  /// A longer human-readable description, for a consent screen.
   static var detail: String? { get }
+  /// The permissions this set grants.
   static var permissions: [LexPermission] { get }
 }
