@@ -157,7 +157,4 @@ extension ATURI {
 
 private let slash = UInt8(ascii: "/")
 
-private let uriAllowedPunct = Set(#"._~:@!$&'()*+,;=%/\[]#?-"#.utf8)
 private let pointerPunct = Set("._~:@!$&')(*+,;=%[]/-".utf8)
-
-private func isAllowedURIByte(_ b: UInt8) -> Bool { isAlphanumeric(b) || uriAllowedPunct.contains(b) }

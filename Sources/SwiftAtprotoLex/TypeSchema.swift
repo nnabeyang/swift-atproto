@@ -607,6 +607,7 @@ struct StringFormat: Codable, RawRepresentable {
   static let language: Self = .init("language")
   static let tid: Self = .init("tid")
   static let recordKey: Self = .init("record-key")
+  static let spaceRef: Self = .init("space-ref")
 
   var swiftFormatTypeName: String? {
     switch rawValue {
@@ -621,6 +622,7 @@ struct StringFormat: Codable, RawRepresentable {
     case "tid": "TID"
     case "record-key": "RecordKey"
     case "at-identifier": "AtIdentifier"
+    case "space-ref": "SpaceRef"
     default: nil
     }
   }
