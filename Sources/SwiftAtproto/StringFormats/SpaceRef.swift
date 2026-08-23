@@ -14,9 +14,10 @@ import Foundation
 /// A query string or fragment is rejected, because a space ref names a space and nothing within
 /// it. Both fall out of the segment validators, which admit neither `?` nor `#`.
 ///
-/// This parser is self-contained rather than layered on ``ATURI``: the lexicon `at-uri` grammar
-/// admits at most two path segments below the authority, so it cannot carry a space ref. The
-/// six-segment record URI form and its conversion to this type are a separate addition.
+/// This parser is self-contained rather than layered on ``ATURI``, which accepts the record URI
+/// form as well and therefore has to keep a query, a fragment, and an optional record tail in
+/// view. Going the other way is supported: ``ATURI/spaceRef`` yields the space a URI belongs to,
+/// whether it names the space itself or a record within it.
 public struct SpaceRef: LexiconStringFormat {
   /// The original wire string, kept verbatim (no normalization).
   public let rawValue: String
