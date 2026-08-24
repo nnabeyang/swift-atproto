@@ -314,6 +314,13 @@ extension P256K.Signing.PublicKey {
   // The uncompressed SEC 1 encoding: a `0x04` prefix followed by the two 32-byte
   // coordinates. `dataRepresentation` is the compressed form, which carries only
   // `x` and a parity bit, so the JWK coordinates cannot be read off it directly.
+  //
+  // This re-parses from `dataRepresentation` rather than serializing
+  // `rawRepresentation` directly, matching how `compressed` above works around
+  // the same issue: `secp256k1_pubkey`'s internal layout is documented as
+  // implementation-defined and not portable across libsecp256k1 versions. The
+  // library's own `uncompressedRepresentation` (added in 0.19.0) still copies
+  // `rawRepresentation` directly, so it isn't used here.
   var uncompressedBytes: Data {
     get throws {
       let format = P256K.Format.uncompressed
