@@ -97,16 +97,20 @@ func collectLexiconJSONFiles(under baseURL: URL) throws -> [URL] {
   return results.sorted { $0.path < $1.path }
 }
 
-// Extract the top-level `id` string from a lexicon JSON without materializing
-// the full Codable graph — SourceControl doesn't own the lexicon schema, so we
-// keep the read defensive and skip files where `id` is missing or not a string.
-func readLexiconNSID(at url: URL) throws -> NSID? {
+// Only `id` is read, so the rest of the schema stays out of SourceControl,
+// which doesn't own it.
+private struct LexiconIdentity: Decodable {
+  let id: String
+}
+
+// Read the NSID a lexicon declares. `id` is required — the Lexicon spec makes it
+// mandatory and SwiftAtprotoLex's own Schema decodes it the same way — so a file
+// without one is not a lexicon and this throws rather than reporting it as an
+// absence. Deciding what to do about that is the caller's, not this function's.
+func readLexiconNSID(at url: URL) throws -> NSID {
   let data = try Data(contentsOf: url)
-  let object = try? JSONSerialization.jsonObject(with: data)
-  guard let dict = object as? [String: Any], let id = dict["id"] as? String else {
-    return nil
-  }
-  return NSID(rawValue: id)
+  let identity = try JSONDecoder().decode(LexiconIdentity.self, from: data)
+  return NSID(rawValue: identity.id)
 }
 
 // Reject `..`, `.`, and absolute paths in any lexicon-supplied sub-path so a
@@ -273,11 +277,16 @@ public func main(configurationURL: URL, outdir: String?) throws -> LexiconConfig
       // migration on the caller's side.
       var idIndex: [String: URL] = [:]
       for srcURL in try collectLexiconJSONFiles(under: srcBaseURL) {
-        guard let nsId = try readLexiconNSID(at: srcURL) else {
+        let nsId: NSID
+        do {
+          nsId = try readLexiconNSID(at: srcURL)
+        } catch {
+          // `path` is walked for every `*.json`, so a file that was never a
+          // lexicon can legitimately turn up here. Skip it rather than failing
+          // the install, but carry the error: without it a malformed lexicon
+          // and an unrelated file produce the same silent warning.
           FileHandle.standardError.write(
-            Data(
-              "warning: skipping \(srcURL.path()): JSON does not carry a top-level `id` string.\n"
-                .utf8))
+            Data("warning: skipping \(srcURL.path()): \(error)\n".utf8))
           continue
         }
         idIndex[nsId.rawValue] = srcURL

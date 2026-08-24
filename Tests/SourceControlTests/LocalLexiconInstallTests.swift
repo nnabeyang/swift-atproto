@@ -378,6 +378,72 @@
       let attrs = try FileManager.default.attributesOfItem(atPath: installed.path)
       #expect(attrs[.type] as? FileAttributeType == .typeSymbolicLink)
     }
+
+    // MARK: - Reading the declared NSID
+
+    @Test func readsTheDeclaredNSID() throws {
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let lexFile = root.appendingPathComponent("post.json")
+      try Self.writeLexicon(at: lexFile, id: "com.example.feed.post")
+
+      #expect(try readLexiconNSID(at: lexFile).rawValue == "com.example.feed.post")
+    }
+
+    // `id` is required by the Lexicon spec, so each of these is a malformed
+    // lexicon rather than a lexicon that happens to lack an id. Reporting them
+    // as an absence would make them indistinguishable from an unrelated file.
+    @Test(arguments: [
+      #"{"lexicon":1,"defs":{}}"#,
+      #"{"lexicon":1,"id":42,"defs":{}}"#,
+      #"{"lexicon":1,"id":null,"defs":{}}"#,
+      #"["com.example.feed.post"]"#,
+      #"{"lexicon":1,"id":"#,
+    ])
+    func rejectsJSONThatDoesNotDeclareAnNSID(_ json: String) throws {
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let lexFile = root.appendingPathComponent("candidate.json")
+      try Data(json.utf8).write(to: lexFile)
+
+      #expect(throws: (any Error).self) {
+        try readLexiconNSID(at: lexFile)
+      }
+    }
+
+    @Test func skipsUnreadableJSONWithoutFailingTheInstall() throws {
+      // `path` is walked for every `*.json`, so a file that is not a lexicon can
+      // sit alongside the ones that are. It gets skipped with a warning and the
+      // rest still install.
+      let root = try Self.makeTempRoot()
+      defer { try? FileManager.default.removeItem(at: root) }
+      let project = root.appendingPathComponent("proj", isDirectory: true)
+      let source = root.appendingPathComponent("lex-src", isDirectory: true)
+      try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+      try Self.writeLexicon(at: source.appendingPathComponent("lexicons/com/example/feed/post.json"), id: "com.example.feed.post")
+      let stray = source.appendingPathComponent("lexicons/com/example/feed/notes.json")
+      try Data(#"{"note":"not a lexicon"}"#.utf8).write(to: stray)
+
+      let configURL = project.appendingPathComponent(".atproto.json")
+      let body = """
+        {
+          "generate": ["client"],
+          "dependencies": [{
+            "location": "file://\(source.path)",
+            "lexicons": [{ "path": "lexicons" }],
+            "state": { "tag": "local" }
+          }]
+        }
+        """
+      try body.write(to: configURL, atomically: true, encoding: .utf8)
+
+      _ = try main(configurationURL: configURL, outdir: nil)
+
+      let installed = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/post.json")
+      #expect(FileManager.default.fileExists(atPath: installed.path))
+      let strayInstalled = project.appendingPathComponent(".lexicons/lexicons/com/example/feed/notes.json")
+      #expect(!FileManager.default.fileExists(atPath: strayInstalled.path))
+    }
   }
 
 #endif
