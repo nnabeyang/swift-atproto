@@ -42,7 +42,7 @@ let package = Package(
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"604.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMajor(from: "1.3.1")),
     .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.0.0")),
-    .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.18.0"..<"0.20.0"),
+    .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.23.0"..<"0.24.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.0"),
   ],
   targets: [
@@ -58,7 +58,8 @@ let package = Package(
       name: "ATProtoCrypto",
       dependencies: [
         .product(name: "Crypto", package: "swift-crypto"),
-        .product(name: "secp256k1", package: "swift-secp256k1"),
+        .product(name: "P256K", package: "swift-secp256k1"),
+        .product(name: "libsecp256k1", package: "swift-secp256k1"),
         .product(name: "Multibase", package: "swift-multibase"),
       ]
     ),
