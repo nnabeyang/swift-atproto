@@ -1,5 +1,8 @@
 # swift-atproto
 
+[![Swift versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fnnabeyang%2Fswift-atproto%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/nnabeyang/swift-atproto)
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fnnabeyang%2Fswift-atproto%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/nnabeyang/swift-atproto)
+
 swift-atproto is a atproto library.
 
 ## Installation
@@ -13,7 +16,7 @@ let package = Package(
     // name, platforms, products, etc.
     dependencies: [
         // other dependencies
-        .package(url: "https://github.com/nnabeyang/swift-atproto", from: "0.43.2"),
+        .package(url: "https://github.com/nnabeyang/swift-atproto", from: "0.43.3"),
     ],
     targets: [
         .executableTarget(name: "<executable-target-name>", dependencies: [
@@ -121,8 +124,16 @@ Add `"module": "Sources/Lexicon"` (or the path of your choice) to the same JSON 
 
 ## Documentation
 
-API documentation is built and hosted by the Swift Package Index, for the
-default branch as well as for releases.
+API documentation for the `main` branch is built and hosted by the Swift
+Package Index:
+
+- [SwiftAtproto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/swiftatproto)
+  — the XRPC runtime: the protocols generated code conforms to, the wire
+  representations, and the Lexicon string formats.
+- [ATProtoCrypto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/atprotocrypto)
+  — signing keys, their `did:key` encodings, and DID documents.
+- [swift-atproto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/swift_atproto)
+  — the code generation executable the package plugins invoke.
 
 Each target's articles and landing page live in its `Documentation.docc`
 catalog (for example `Sources/SwiftAtproto/Documentation.docc`), and the target
