@@ -74,6 +74,27 @@ private enum RawBinaryProcedure: XRPCProcedure {
   typealias Error = UnExpectedError
 }
 
+// The wire form is the point, so `$bytes` stays a `String` here. Decoding it
+// through `xrpcDecoder()` would turn it back into `Data` and hide the encoding
+// under test.
+private struct EncodedBytesRecord: Decodable, Equatable {
+  let type: String
+  let tag: EncodedBytes
+
+  struct EncodedBytes: Decodable, Equatable {
+    let bytes: String
+
+    enum CodingKeys: String, CodingKey {
+      case bytes = "$bytes"
+    }
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case type = "$type"
+    case tag
+  }
+}
+
 private final class BytesRequestRecorder: @unchecked Sendable {
   var lastRequest: XRPCRequestComponents?
 }
@@ -200,12 +221,9 @@ struct LexiconBytesTests {
 
     let request = try #require(recorder.lastRequest)
     let body = try #require(request.body)
-    let requestObject = try #require(
-      JSONSerialization.jsonObject(with: body) as? [String: Any]
-    )
-    let requestTag = try #require(requestObject["tag"] as? [String: String])
-    #expect(requestObject["$type"] as? String == "com.example.repo.artifact")
-    #expect(requestTag == ["$bytes": "AQID"])
+    let sent = try JSONDecoder().decode(EncodedBytesRecord.self, from: body)
+    #expect(sent.type == GeneratedBytesRecord.nsId)
+    #expect(sent.tag == EncodedBytesRecord.EncodedBytes(bytes: "AQID"))
     #expect(response.tag == Data([0x04, 0x05, 0x06]))
   }
 
