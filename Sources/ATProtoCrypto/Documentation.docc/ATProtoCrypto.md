@@ -29,6 +29,11 @@ key.publicKey.did                                                   // "did:key:
 - ``PrivateKey``
 - ``PublicKey``
 
+### Credentials
+
+- <doc:ClientAttestations>
+- ``ClientAttestation``
+
 ### Identifiers
 
 - ``DID``
