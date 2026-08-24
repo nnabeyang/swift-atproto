@@ -1,6 +1,7 @@
 import Crypto
 import Multibase
-import secp256k1
+import P256K
+import libsecp256k1
 
 #if !canImport(Darwin)
   import FoundationEssentials
@@ -36,7 +37,7 @@ public struct PrivateKey {
     case .p256:
       raw = .p256(P256.Signing.PrivateKey())
     case .secp256k1:
-      raw = try .secp256k1(secp256k1.Signing.PrivateKey())
+      raw = try .secp256k1(P256K.Signing.PrivateKey())
     }
   }
 
@@ -51,7 +52,7 @@ public struct PrivateKey {
     case .p256:
       raw = try .p256(P256.Signing.PrivateKey(rawRepresentation: rawValue))
     case .secp256k1:
-      raw = try .secp256k1(secp256k1.Signing.PrivateKey(dataRepresentation: rawValue))
+      raw = try .secp256k1(P256K.Signing.PrivateKey(dataRepresentation: rawValue))
     }
   }
 
@@ -91,14 +92,14 @@ public struct PrivateKey {
     case .p256(let raw):
       try raw.signature(for: data).rawRepresentation
     case .secp256k1(let raw):
-      try raw.signature(for: data).compactRepresentation
+      raw.signature(for: data).compactRepresentation
     }
   }
 
   public enum Raw {
     case ed25519(Curve25519.Signing.PrivateKey)
     case p256(P256.Signing.PrivateKey)
-    case secp256k1(secp256k1.Signing.PrivateKey)
+    case secp256k1(P256K.Signing.PrivateKey)
   }
 }
 
@@ -237,8 +238,8 @@ public struct PublicKey {
       let raw = try P256.Signing.PublicKey(rawRepresentation: raw)
       return PublicKey(type: keyType, raw: .p256(raw))
     case .secp256k1:
-      let format: secp256k1.Format = raw.count == secp256k1.Format.compressed.length ? .compressed : .uncompressed
-      let pubKey = try secp256k1.Signing.PublicKey(dataRepresentation: raw, format: format)
+      let format: P256K.Format = raw.count == P256K.Format.compressed.length ? .compressed : .uncompressed
+      let pubKey = try P256K.Signing.PublicKey(dataRepresentation: raw, format: format)
       return try PublicKey(type: keyType, raw: .secp256k1(pubKey.compressed))
     }
   }
@@ -252,7 +253,7 @@ public struct PublicKey {
     case .ed25519(let raw):
       return raw.isValidSignature(signature, for: message)
     case .secp256k1(let raw):
-      guard let signature = try? secp256k1.Signing.ECDSASignature(compactRepresentation: signature).normalize else { return false }
+      guard let signature = try? P256K.Signing.ECDSASignature(compactRepresentation: signature).normalize else { return false }
       let hash = SHA256.hash(data: message)
       return raw.isValidSignature(signature, for: hash)
     case .p256(let raw):
@@ -269,18 +270,18 @@ public struct PublicKey {
   public enum Raw {
     case ed25519(Curve25519.Signing.PublicKey)
     case p256(P256.Signing.PublicKey)
-    case secp256k1(secp256k1.Signing.PublicKey)
+    case secp256k1(P256K.Signing.PublicKey)
   }
 }
 
-extension secp256k1.Signing.PublicKey {
+extension P256K.Signing.PublicKey {
   var compressed: Self {
     get throws {
       guard format != .compressed else {
         return self
       }
-      let format = secp256k1.Format.compressed
-      let context = secp256k1.Context.rawRepresentation
+      let format = P256K.Format.compressed
+      let context = P256K.Context.rawRepresentation
       var pubKeyLen = format.length
       var combinedKey = secp256k1_pubkey()
       var combinedBytes = [UInt8](repeating: 0, count: pubKeyLen)
@@ -309,10 +310,10 @@ extension secp256k1.Signing.PublicKey {
   }
 }
 
-extension secp256k1.Signing.ECDSASignature {
-  fileprivate var normalize: secp256k1.Signing.ECDSASignature {
+extension P256K.Signing.ECDSASignature {
+  fileprivate var normalize: P256K.Signing.ECDSASignature {
     get throws {
-      let context = secp256k1.Context.rawRepresentation
+      let context = P256K.Context.rawRepresentation
       var signature = secp256k1_ecdsa_signature()
       var resultSignature = secp256k1_ecdsa_signature()
 
@@ -328,7 +329,13 @@ extension secp256k1.Signing.ECDSASignature {
         return self
       }
 
-      return try secp256k1.Signing.ECDSASignature(dataRepresentation: resultSignature.dataValue)
+      // `resultSignature` carries no public accessor for its bytes; serialize
+      // it through the C API instead of reaching into vendor internals.
+      var compact = [UInt8](repeating: 0, count: 64)
+      guard secp256k1_ecdsa_signature_serialize_compact(context, &compact, &resultSignature) != 0 else {
+        throw secp256k1Error.underlyingCryptoError
+      }
+      return try P256K.Signing.ECDSASignature(compactRepresentation: compact)
     }
   }
 }
