@@ -310,6 +310,35 @@ extension P256K.Signing.PublicKey {
   }
 }
 
+extension P256K.Signing.PublicKey {
+  // The uncompressed SEC 1 encoding: a `0x04` prefix followed by the two 32-byte
+  // coordinates. `dataRepresentation` is the compressed form, which carries only
+  // `x` and a parity bit, so the JWK coordinates cannot be read off it directly.
+  var uncompressedBytes: Data {
+    get throws {
+      let format = P256K.Format.uncompressed
+      let context = P256K.Context.rawRepresentation
+      var pubKeyLen = format.length
+      var bytes = [UInt8](repeating: 0, count: pubKeyLen)
+      var pubkey = secp256k1_pubkey()
+      let parsed = dataRepresentation.withUnsafeBytes { (rawPtr: UnsafeRawBufferPointer) in
+        secp256k1_ec_pubkey_parse(
+          context,
+          &pubkey,
+          rawPtr.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          dataRepresentation.count
+        )
+      }
+      guard parsed == 1,
+        secp256k1_ec_pubkey_serialize(context, &bytes, &pubKeyLen, &pubkey, format.rawValue) > 0
+      else {
+        throw secp256k1Error.underlyingCryptoError
+      }
+      return Data(bytes)
+    }
+  }
+}
+
 extension P256K.Signing.ECDSASignature {
   fileprivate var normalize: P256K.Signing.ECDSASignature {
     get throws {

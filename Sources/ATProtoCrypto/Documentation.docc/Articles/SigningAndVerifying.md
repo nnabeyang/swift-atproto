@@ -58,6 +58,16 @@ and "not a signature at all".
 reading the multicodec prefix to decide the curve. `secp256k1` keys are accepted
 in both compressed and uncompressed form and are normalized to compressed.
 
+## Thumbprints
+
+``PublicKey/jwkThumbprint`` is the RFC 7638 JWK thumbprint, base64url-encoded
+without padding. It digests the key material alone — the curve, the key type, and
+the coordinates — so the two `secp256k1` encodings above give the same
+thumbprint, and neither the multibase form nor a `kid` affects it.
+
+A token bound to a key names it this way: comparing a `cnf.jkt` claim against the
+thumbprint of a key you hold tells you whether that token was issued for it.
+
 ## Reading a key out of a DID document
 
 ``Document`` is the parsed DID document. ``Document/getPublicKey(id:)`` finds a
