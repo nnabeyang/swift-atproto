@@ -91,6 +91,13 @@ let posts = try await client.call(
 - ``LexSpace``
 - ``LexRecordKeyType``
 
+### Space credentials
+
+- <doc:SpaceCredentials>
+- ``UnverifiedSpaceCredential``
+- ``UnverifiedSpaceDelegationToken``
+- ``UnverifiedClientAttestation``
+
 ### Event streams
 
 - <doc:Subscriptions>
@@ -129,4 +136,5 @@ let posts = try await client.call(
 - ``LexiconConstraintError``
 - ``LexiconStringFormatError``
 - ``OAuthScopeError``
+- ``SpaceTokenError``
 - ``XRPCSubscriptionStreamError``
