@@ -4,7 +4,7 @@ import Testing
 @testable import SwiftAtproto
 
 private struct GeneratedBytesRecord: ATProtoRecord {
-  static let nsId = "sh.tangled.repo.artifact"
+  static let nsId = "com.example.repo.artifact"
 
   let type: String
   let tag: Data
@@ -59,7 +59,7 @@ private struct ConstrainedBytesRecord: Codable, Hashable, Sendable {
 }
 
 private enum BytesProcedure: XRPCProcedure {
-  static let id = "sh.tangled.repo.putArtifact"
+  static let id = "com.example.repo.putArtifact"
   static let contentType = "application/json"
   typealias RequestBody = GeneratedBytesRecord
   typealias ResponseBody = GeneratedBytesRecord
@@ -157,7 +157,7 @@ struct LexiconBytesTests {
 
     #expect(
       String(decoding: encoded, as: UTF8.self)
-        == #"{"$type":"sh.tangled.repo.artifact","tag":{"$bytes":"AQID"}}"#
+        == #"{"$type":"com.example.repo.artifact","tag":{"$bytes":"AQID"}}"#
     )
     #expect(try xrpcDecoder().decode(GeneratedBytesRecord.self, from: encoded) == record)
   }
@@ -186,7 +186,7 @@ struct LexiconBytesTests {
 
   @Test func xrpcRequestAndResponseUseCanonicalBytesForm() async throws {
     let responseJSON =
-      #"{"$type":"sh.tangled.repo.artifact","tag":{"$bytes":"BAUG"}}"#
+      #"{"$type":"com.example.repo.artifact","tag":{"$bytes":"BAUG"}}"#
     let recorder = BytesRequestRecorder()
     let client = BytesTestClient(
       responseData: Data(responseJSON.utf8),
@@ -204,7 +204,7 @@ struct LexiconBytesTests {
       JSONSerialization.jsonObject(with: body) as? [String: Any]
     )
     let requestTag = try #require(requestObject["tag"] as? [String: String])
-    #expect(requestObject["$type"] as? String == "sh.tangled.repo.artifact")
+    #expect(requestObject["$type"] as? String == "com.example.repo.artifact")
     #expect(requestTag == ["$bytes": "AQID"])
     #expect(response.tag == Data([0x04, 0x05, 0x06]))
   }

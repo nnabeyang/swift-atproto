@@ -6,17 +6,17 @@ import XCTest
 final class SchemaPrefixTests: XCTestCase {
   func testDerivePrefixKeepsAuthorityForFourSegmentIds() {
     XCTAssertEqual(Schema.derivePrefix(from: "com.atproto.repo.strongRef"), "com.atproto")
-    XCTAssertEqual(Schema.derivePrefix(from: "app.bsky.feed.like"), "app.bsky")
-    XCTAssertEqual(Schema.derivePrefix(from: "sh.tangled.repo.knots"), "sh.tangled")
+    XCTAssertEqual(Schema.derivePrefix(from: "org.example.feed.like"), "org.example")
+    XCTAssertEqual(Schema.derivePrefix(from: "com.example.repo.knots"), "com.example")
   }
 
   func testDerivePrefixDropsSingleSegmentForShortIds() {
-    XCTAssertEqual(Schema.derivePrefix(from: "sh.tangled.string"), "sh.tangled")
+    XCTAssertEqual(Schema.derivePrefix(from: "com.example.string"), "com.example")
     XCTAssertEqual(Schema.derivePrefix(from: "com.example"), "com")
   }
 
   func testDerivePrefixDropsTwoSegmentsForDeeperIds() {
-    XCTAssertEqual(Schema.derivePrefix(from: "sh.tangled.git.temp.getEntry"), "sh.tangled.git")
+    XCTAssertEqual(Schema.derivePrefix(from: "com.example.git.temp.getEntry"), "com.example.git")
   }
 
   func testDerivePrefixHandlesShortIds() {
