@@ -18,6 +18,15 @@ struct PermissionedRepoCARTests {
 
     #expect(car.signedCommitBlock.bytes == fixture.commitPayload)
     #expect(car.repositoryIndexBlock.bytes == fixture.indexPayload)
+    #expect(
+      car.repository
+        == RepoCommit(
+          records: [
+            RepoRecord(
+              collection: try NSID(string: "com.example.record"),
+              recordKey: try RecordKey(string: "first"),
+              cid: try Fixture.cid(for: fixture.recordPayloads[0]))
+          ]))
     #expect(source.snapshot == .init(pullCount: 3, isCancelled: false))
 
     var iterator = car.recordBlocks.makeAsyncIterator()

@@ -131,6 +131,9 @@ public enum RepoVerificationError: Error, Hashable, Sendable {
 
   /// The local LtHash digest did not match the authenticated commit hash.
   case setHashMismatch
+
+  /// An incremental response tried to replace a newer durable checkpoint.
+  case staleCommitRevision(checkpoint: TID, commit: TID)
 }
 
 /// The identity and revision bound into a Permissioned Data signed commit.
