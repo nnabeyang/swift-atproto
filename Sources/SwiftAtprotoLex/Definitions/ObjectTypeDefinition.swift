@@ -61,11 +61,13 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       required[key] = false
     }
     let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
-    let repoWriteAction = Self.repoWriteAction(nsid: ts.id, inputName: name)
+    let repoWriteActions = Self.repoWriteActions(nsid: ts.id, inputName: name)
+    let isRepoApplyWritesInput =
+      ts.id == "com.atproto.repo.applyWrites" && name.hasSuffix("_Input")
     let inheritedNames: [String] = {
       if ts.isRecord { return ["ATProtoRecord"] }
       var names = ["Codable", "Hashable", "Sendable"]
-      if repoWriteAction != nil {
+      if repoWriteActions != nil || isRepoApplyWritesInput {
         names.append("RepoWriteOperationDescribing")
       }
       return names
@@ -160,8 +162,11 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
           .with(\.leadingTrivia, .newlines(2))
       }
-      if let actionRaw = repoWriteAction {
-        Self.repoWriteRequirementsAccessor(actionRaw: actionRaw)
+      if let actionRaws = repoWriteActions {
+        Self.repoWriteRequirementsAccessor(actionRaws: actionRaws)
+          .with(\.leadingTrivia, .newlines(2))
+      } else if isRepoApplyWritesInput {
+        Self.applyWritesRequirementsAccessor()
           .with(\.leadingTrivia, .newlines(2))
       }
       if !enumCaseIsEmpty {
@@ -923,17 +928,132 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
   }
 
-  private static func repoWriteAction(nsid: String, inputName: String) -> String? {
+  private static func repoWriteActions(nsid: String, inputName: String) -> [String]? {
     guard inputName.hasSuffix("_Input") else { return nil }
     switch nsid {
-    case "com.atproto.repo.createRecord": return "create"
-    case "com.atproto.repo.putRecord": return "update"
-    case "com.atproto.repo.deleteRecord": return "delete"
+    case "com.atproto.repo.createRecord": return ["create"]
+    case "com.atproto.repo.putRecord": return ["create", "update"]
+    case "com.atproto.repo.deleteRecord": return ["delete"]
     default: return nil
     }
   }
 
-  private static func repoWriteRequirementsAccessor(actionRaw: String) -> VariableDeclSyntax {
+  private static func repoWriteRequirementsAccessor(actionRaws: [String]) -> VariableDeclSyntax {
+    repoWriteRequirementsAccessor(
+      ArrayExprSyntax {
+        for actionRaw in actionRaws {
+          ArrayElementSyntax(expression: repoWriteRequirement(actionRaw: actionRaw))
+        }
+      })
+  }
+
+  private static func applyWritesRequirementsAccessor() -> VariableDeclSyntax {
+    repoWriteRequirementsAccessor(
+      FunctionCallExprSyntax(
+        callee: MemberAccessExprSyntax(
+          base: DeclReferenceExprSyntax(baseName: .identifier("writes")),
+          name: .identifier("map")
+        ),
+        trailingClosure: ClosureExprSyntax(signaturesBuilder: {
+          ClosureShorthandParameterSyntax(name: .identifier("write"))
+        }) {
+          SwitchExprSyntax(subject: DeclReferenceExprSyntax(baseName: .identifier("write"))) {
+            applyWritesCase(name: "repoApplyWritesCreate", actionRaw: "create")
+            applyWritesCase(name: "repoApplyWritesUpdate", actionRaw: "update")
+            applyWritesCase(name: "repoApplyWritesDelete", actionRaw: "delete")
+            SwitchCaseSyntax(
+              label: .case(
+                .init(caseItems: [
+                  .init(
+                    pattern: ExpressionPatternSyntax(
+                      expression: FunctionCallExprSyntax(
+                        callee: MemberAccessExprSyntax(name: .identifier("_other"))
+                      ) {
+                        LabeledExprSyntax(
+                          expression: PatternExprSyntax(
+                            pattern: WildcardPatternSyntax(wildcard: .wildcardToken())
+                          ))
+                      }
+                    ))
+                ])
+              )
+            ) {
+              FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("RepoWriteRequirement"))) {
+                LabeledExprSyntax(
+                  label: .identifier("collection"), colon: .colonToken(),
+                  expression: StringLiteralExprSyntax(content: "unsupported"),
+                  trailingComma: .commaToken())
+                LabeledExprSyntax(
+                  label: .identifier("action"), colon: .colonToken(),
+                  expression: FunctionCallExprSyntax(
+                    callee: DeclReferenceExprSyntax(baseName: .identifier("LexPermissionAction"))
+                  ) {
+                    LabeledExprSyntax(
+                      label: .identifier("rawValue"), colon: .colonToken(),
+                      expression: StringLiteralExprSyntax(content: "unsupported"))
+                  })
+              }
+            }
+          }
+        }
+      ))
+  }
+
+  private static func applyWritesCase(name: String, actionRaw: String) -> SwitchCaseSyntax {
+    SwitchCaseSyntax(
+      label: .case(
+        .init(caseItems: [
+          .init(
+            pattern: ExpressionPatternSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(name: .identifier(name))
+              ) {
+                LabeledExprSyntax(
+                  expression: PatternExprSyntax(
+                    pattern: ValueBindingPatternSyntax(
+                      bindingSpecifier: .keyword(.let),
+                      pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
+                    )))
+              }
+            ))
+        ])
+      )
+    ) {
+      repoWriteRequirement(actionRaw: actionRaw, collectionBase: "value")
+    }
+  }
+
+  private static func repoWriteRequirement(
+    actionRaw: String, collectionBase: String? = nil
+  ) -> FunctionCallExprSyntax {
+    let collectionBaseExpr: ExprSyntax =
+      if let collectionBase {
+        ExprSyntax(
+          MemberAccessExprSyntax(
+            base: DeclReferenceExprSyntax(baseName: .identifier(collectionBase)),
+            name: .identifier("collection")))
+      } else {
+        ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("collection")))
+      }
+    let collection = MemberAccessExprSyntax(
+      base: collectionBaseExpr,
+      name: .identifier("rawValue")
+    )
+    return FunctionCallExprSyntax(
+      callee: DeclReferenceExprSyntax(baseName: .identifier("RepoWriteRequirement"))
+    ) {
+      LabeledExprSyntax(
+        label: .identifier("collection"), colon: .colonToken(),
+        expression: collection, trailingComma: .commaToken())
+      LabeledExprSyntax(
+        label: .identifier("action"), colon: .colonToken(),
+        expression: MemberAccessExprSyntax(name: .identifier(actionRaw)))
+    }
+  }
+
+  private static func repoWriteRequirementsAccessor(
+    _ expression: some ExprSyntaxProtocol
+  ) -> VariableDeclSyntax {
     VariableDeclSyntax(
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
       bindingSpecifier: .keyword(.var),
@@ -942,55 +1062,13 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           pattern: IdentifierPatternSyntax(identifier: .identifier("repoWriteRequirements")),
           typeAnnotation: TypeAnnotationSyntax(
             type: ArrayTypeSyntax(
-              element: IdentifierTypeSyntax(name: .identifier("RepoWriteRequirement"))
-            )
-          ),
+              element: IdentifierTypeSyntax(name: .identifier("RepoWriteRequirement")))),
           accessorBlock: AccessorBlockSyntax(
-            leftBrace: .leftBraceToken(),
-            accessors: AccessorBlockSyntax.Accessors([
-              CodeBlockItemSyntax(
-                item: CodeBlockItemSyntax.Item(
-                  ArrayExprSyntax(
-                    leftSquare: .leftSquareToken(),
-                    elements: ArrayElementListSyntax([
-                      ArrayElementSyntax(
-                        expression: FunctionCallExprSyntax(
-                          calledExpression: DeclReferenceExprSyntax(
-                            baseName: .identifier("RepoWriteRequirement")),
-                          leftParen: .leftParenToken(),
-                          arguments: LabeledExprListSyntax([
-                            LabeledExprSyntax(
-                              label: .identifier("collection"),
-                              colon: .colonToken(),
-                              expression: MemberAccessExprSyntax(
-                                base: DeclReferenceExprSyntax(baseName: .identifier("collection")),
-                                period: .periodToken(),
-                                declName: DeclReferenceExprSyntax(baseName: .identifier("rawValue"))
-                              ),
-                              trailingComma: .commaToken()
-                            ),
-                            LabeledExprSyntax(
-                              label: .identifier("action"),
-                              colon: .colonToken(),
-                              expression: MemberAccessExprSyntax(
-                                period: .periodToken(),
-                                name: .identifier(actionRaw)
-                              )
-                            ),
-                          ]),
-                          rightParen: .rightParenToken()
-                        )
-                      )
-                    ]),
-                    rightSquare: .rightSquareToken()
-                  )
-                )
-              )
-            ]),
-            rightBrace: .rightBraceToken()
-          )
-        )
-      ]
-    )
+            accessors: .getter(
+              CodeBlockItemListSyntax {
+                expression
+              })))
+      ])
   }
+
 }
