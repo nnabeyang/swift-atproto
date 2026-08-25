@@ -61,11 +61,11 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       required[key] = false
     }
     let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
-    let repoWriteAction = Self.repoWriteAction(nsid: ts.id, inputName: name)
+    let repoWriteKind = Self.repoWriteKind(nsid: ts.id, inputName: name)
     let inheritedNames: [String] = {
       if ts.isRecord { return ["ATProtoRecord"] }
       var names = ["Codable", "Hashable", "Sendable"]
-      if repoWriteAction != nil {
+      if repoWriteKind != nil {
         names.append("RepoWriteOperationDescribing")
       }
       return names
@@ -160,9 +160,15 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
           .with(\.leadingTrivia, .newlines(2))
       }
-      if let actionRaw = repoWriteAction {
-        Self.repoWriteRequirementsAccessor(actionRaw: actionRaw)
-          .with(\.leadingTrivia, .newlines(2))
+      if let repoWriteKind {
+        switch repoWriteKind {
+        case .single(let actionRaw):
+          Self.repoWriteRequirementsAccessor(actionRaw: actionRaw)
+            .with(\.leadingTrivia, .newlines(2))
+        case .applyWrites:
+          Self.applyWritesRequirementsAccessor()
+            .with(\.leadingTrivia, .newlines(2))
+        }
       }
       if !enumCaseIsEmpty {
         EnumDeclSyntax(
@@ -923,14 +929,43 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
   }
 
-  private static func repoWriteAction(nsid: String, inputName: String) -> String? {
+  private enum RepoWriteKind {
+    case single(actionRaw: String)
+    case applyWrites
+  }
+
+  private static func repoWriteKind(nsid: String, inputName: String) -> RepoWriteKind? {
     guard inputName.hasSuffix("_Input") else { return nil }
     switch nsid {
-    case "com.atproto.repo.createRecord": return "create"
-    case "com.atproto.repo.putRecord": return "update"
-    case "com.atproto.repo.deleteRecord": return "delete"
+    case "com.atproto.repo.createRecord": return .single(actionRaw: "create")
+    case "com.atproto.repo.putRecord": return .single(actionRaw: "update")
+    case "com.atproto.repo.deleteRecord": return .single(actionRaw: "delete")
+    case "com.atproto.repo.applyWrites": return .applyWrites
     default: return nil
     }
+  }
+
+  private static func applyWritesRequirementsAccessor() -> DeclSyntax {
+    DeclSyntax(
+      stringLiteral: """
+        public var repoWriteRequirements: [RepoWriteRequirement] {
+          writes.map { write in
+            switch write {
+            case .repoApplyWritesCreate(let value):
+              RepoWriteRequirement(collection: value.collection.rawValue, action: .create)
+            case .repoApplyWritesUpdate(let value):
+              RepoWriteRequirement(collection: value.collection.rawValue, action: .update)
+            case .repoApplyWritesDelete(let value):
+              RepoWriteRequirement(collection: value.collection.rawValue, action: .delete)
+            case ._other(let value):
+              RepoWriteRequirement(
+                collection: value.type,
+                action: LexPermissionAction(rawValue: "unsupported")
+              )
+            }
+          }
+        }
+        """)
   }
 
   private static func repoWriteRequirementsAccessor(actionRaw: String) -> VariableDeclSyntax {

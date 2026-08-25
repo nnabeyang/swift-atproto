@@ -550,24 +550,45 @@ struct RepoScopeGuardEnforcementTests {
   }
 
   @Test func multipleRequirementsAllChecked() async throws {
+    let recorder = RequestRecorder()
     let session = try sampleSession(scopes: [
       "atproto",
       "repo:com.example.post?action=create",
     ])
-    let client = MockClient(session: session)
+    let client = OAuthOnlyCallable(session: session, recorder: recorder)
     await #expect(
       throws: OAuthScopeError.insufficientRepoScope(
         collection: "com.example.other",
-        action: .create
+        action: .update
       )
     ) {
       _ = try await client.call(
         StubRepoBatchProcedure.self,
         input: StubRepoBatchInput(items: [
           .init(collection: "com.example.post", action: "create"),
-          .init(collection: "com.example.other", action: "create"),
+          .init(collection: "com.example.other", action: "update"),
         ]))
     }
+    #expect(recorder.lastRequest == nil)
+  }
+
+  @Test func multipleRequirementsAllAllowed() async throws {
+    let recorder = RequestRecorder()
+    let session = try sampleSession(scopes: [
+      "atproto",
+      "repo:com.example.post?action=create",
+      "repo:com.example.other?action=update",
+    ])
+    let client = OAuthOnlyCallable(session: session, recorder: recorder)
+
+    _ = try await client.call(
+      StubRepoBatchProcedure.self,
+      input: StubRepoBatchInput(items: [
+        .init(collection: "com.example.post", action: "create"),
+        .init(collection: "com.example.other", action: "update"),
+      ]))
+
+    #expect(recorder.lastRequest != nil)
   }
 }
 
