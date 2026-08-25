@@ -34,7 +34,8 @@ attach credentials and retry once after a refresh.
 ## Build the request
 
 ``XRPCRequestComponents`` is the whole request in transport-neutral form: the
-NSID, query items, `HTTPFields` headers, method, and an optional body. Its
+NSID, query items, `HTTPFields` headers, method, an optional body, and an
+optional ``XRPCRequestDestination``. Its
 ``XRPCRequestComponents/relativePath`` is `/xrpc/<nsid>`, which you join to your
 service endpoint.
 
@@ -46,6 +47,41 @@ except for two cases that pass through unchanged — a `Data` input, and an
 Responses are decoded with the AT Protocol data encoding strategy and with
 ``LexiconDecodingMode/permissive``, so a server that exceeds an authoring
 constraint does not break decoding. See <doc:DecodingLexiconRecords>.
+
+## Route to repo and space hosts
+
+Permissioned data has no relay, so one client may need to call its default PDS,
+a space authority's host, and each member's repository host. Implement
+``DIDDocumentResolver/resolveDIDDocument(for:)`` and use its host helpers to
+derive a destination from the appropriate DID:
+
+```swift
+let repoHost = try await resolver.resolveRepoHost(for: memberDID)
+let repo = try await client.call(
+  ComAtprotoSpaceGetRepo.self,
+  input: input,
+  destination: repoHost
+)
+```
+
+``DIDDocumentResolver/resolveRepoHost(for:)`` derives the endpoint from
+``DIDDocument/pdsUrl``. ``DIDDocumentResolver/resolveSpaceHost(for:)`` uses
+``DIDDocument/spaceHostUrl``, including its PDS fallback. The destination keeps
+the logical host kind and DID even when both resolve to the same URL, allowing a
+request authorizer to select the appropriate credential.
+
+The destination arrives unchanged in `response(_:)`. A transport that also
+conforms to ``ATPClientProtocol`` chooses its base URL without changing the
+existing default path:
+
+```swift
+let endpoint = requestComponents.destination?.serviceEndpoint ?? serviceEndpoint
+```
+
+Calls that omit `destination` leave it `nil`, so generated method signatures and
+single-host clients continue to use ``ATPClientProtocol/serviceEndpoint``.
+Resolver implementations own caching and invalidation of DID documents or
+resolved destinations.
 
 ## Route through a proxy
 

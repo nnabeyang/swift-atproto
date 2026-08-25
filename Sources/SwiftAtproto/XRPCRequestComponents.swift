@@ -18,18 +18,23 @@ public struct XRPCRequestComponents: Sendable {
   public var method: HTTPRequest.Method
   /// The encoded request body, or `nil` for a query.
   public var body: Data?
+  /// An explicitly resolved host for this request, or `nil` to use the
+  /// client's default service endpoint.
+  public var destination: XRPCRequestDestination?
 
   public init(
     nsId: String,
     queryItems: [URLQueryItem],
     headers: HTTPFields,
     method: HTTPRequest.Method,
-    body: Data? = nil
+    body: Data? = nil,
+    destination: XRPCRequestDestination? = nil
   ) {
     self.nsId = nsId
     self.queryItems = queryItems
     self.headers = headers
     self.method = method
     self.body = body
+    self.destination = destination
   }
 }

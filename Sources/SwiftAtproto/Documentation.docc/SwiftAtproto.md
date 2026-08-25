@@ -41,6 +41,7 @@ let posts = try await client.call(
 - ``XRPCInputQuery``
 - ``XRPCProcedure``
 - ``XRPCRequestComponents``
+- ``XRPCRequestDestination``
 - ``XRPCBlobUpload``
 - ``EmptyResponse``
 - ``Parameters``
@@ -127,6 +128,7 @@ let posts = try await client.call(
 - ``DocService``
 - ``DocVerificationMethod``
 - ``DIDHandleResolver``
+- ``DIDDocumentResolver``
 - ``ServiceIdentifier``
 
 ### Errors
