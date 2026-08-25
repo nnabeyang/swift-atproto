@@ -52,6 +52,12 @@ public struct PermissionedRepoCAR: Sendable {
   /// The block matching the CAR's second, repository-index root.
   public let repositoryIndexBlock: PermissionedRepoCARBlock
 
+  /// The complete repository state reconstructed from the index entries.
+  ///
+  /// Authenticate this state against the decoded signed commit before treating
+  /// its paths and CIDs as an author claim.
+  public let repository: RepoCommit
+
   /// The remaining CID-verified record blocks.
   public let recordBlocks: RecordBlocks
 
@@ -88,6 +94,7 @@ public struct PermissionedRepoCAR: Sendable {
       return Self(
         signedCommitBlock: signedCommit,
         repositoryIndexBlock: repositoryIndex,
+        repository: RepoCommit(records: index.records),
         recordBlocks: RecordBlocks(
           reader: reader,
           records: index.records,

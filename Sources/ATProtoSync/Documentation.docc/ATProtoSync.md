@@ -16,17 +16,22 @@ needs, so a consumer can pass generated values directly to ``RepoCommit`` and
 ``SignedRepoCommitVerifier``.
 
 ```swift
-var repository = RepoCommit()
-for operation in response.ops {
-  try repository.apply(operation)
-}
+let checkpoint = try RepoSyncCheckpoint(revision: persistedRevision, state: persistedState)
+var update = RepoIncrementalSync(checkpoint: checkpoint)
+try update.apply(response.ops)
 
 if let commit = response.commit {
-  try repository.verify(
+  let result = try update.finish(
     commit,
     context: RepoCommitContext(space: space, author: author, revision: revision),
     publicKey: authorKey
   )
+  switch result {
+  case .synchronized(let replacement):
+    // Persist replacement.revision and replacement.state atomically.
+  case .fullStateRecoveryRequired:
+    // Discard the candidate and restart from getRepo.
+  }
 }
 ```
 
@@ -43,13 +48,12 @@ let commit = try SignedRepoCommitVerifier.decode(
   Com.Atproto.SpaceDefs_SignedCommit.self,
   fromDRISL: car.signedCommitBlock.bytes
 )
-let repository = try RepoCommit(drislIndex: car.repositoryIndexBlock.bytes)
 let context = RepoCommitContext(
   space: expectedSpace,
   author: repositoryAuthor,
   revision: try TID(string: commit.permissionedRepoCommitRevision.rawValue)
 )
-try repository.verify(
+try car.repository.verify(
   commit,
   context: context,
   publicKey: authorPublicKey
@@ -58,6 +62,12 @@ try repository.verify(
 for try await record in car.recordBlocks {
   // Map the index-verified path and CID-verified value into consumer-owned storage.
 }
+let replacement = try car.repository.verifiedCheckpoint(
+  commit,
+  context: context,
+  publicKey: authorPublicKey
+)
+// Replace records and persist replacement only after the record stream reaches its end.
 ```
 
 The internal BLAKE3 implementation is upstream BLAKE3 1.8.7, distributed
@@ -73,6 +83,10 @@ see `THIRD_PARTY_NOTICES.md` in the package repository.
 - ``RepoCommit``
 - ``RepoRecord``
 - ``RepoOperation``
+- ``RepoSyncCheckpoint``
+- ``RepoIncrementalSync``
+- ``RepoIncrementalSyncResult``
+- ``RepoFullStateRecoveryReason``
 
 ### Full-state recovery
 
