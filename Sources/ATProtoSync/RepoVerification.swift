@@ -6,6 +6,12 @@ import SwiftCbor
 
 /// Resource limits applied while decoding and verifying Permissioned Data repositories.
 public struct RepoVerificationLimits: Hashable, Sendable {
+  /// The largest encoded CAR header accepted by the streaming reader.
+  public var maximumCARHeaderBytes: Int
+
+  /// The largest record block payload accepted by the streaming reader.
+  public var maximumCARBlockBytes: Int
+
   /// The largest encoded signed commit accepted by the DRISL decoder.
   public var maximumCommitBytes: Int
 
@@ -23,12 +29,16 @@ public struct RepoVerificationLimits: Hashable, Sendable {
 
   /// Creates verification limits suitable for client-side repository sync.
   public init(
+    maximumCARHeaderBytes: Int = 64 * 1024,
+    maximumCARBlockBytes: Int = 64 * 1024 * 1024,
     maximumCommitBytes: Int = 64 * 1024,
     maximumIndexBytes: Int = 64 * 1024 * 1024,
     maximumIndexEntries: Int = 100_000,
     maximumNestingDepth: Int = 16,
     maximumSignatureBytes: Int = 256
   ) {
+    self.maximumCARHeaderBytes = maximumCARHeaderBytes
+    self.maximumCARBlockBytes = maximumCARBlockBytes
     self.maximumCommitBytes = maximumCommitBytes
     self.maximumIndexBytes = maximumIndexBytes
     self.maximumIndexEntries = maximumIndexEntries
@@ -41,6 +51,47 @@ public struct RepoVerificationLimits: Hashable, Sendable {
 public enum RepoVerificationError: Error, Hashable, Sendable {
   /// An encoded input exceeded its configured byte limit.
   case inputTooLarge(limit: Int, actual: Int)
+
+  /// A CAR header could not be decoded.
+  case malformedCARHeader
+
+  /// A CAR header declared an unsupported version.
+  case unsupportedCARVersion(Int)
+
+  /// A Permissioned Data CAR did not declare signed-commit and index roots.
+  case invalidCARRootCount(actual: Int)
+
+  /// A CAR section length used an invalid unsigned varint encoding.
+  case malformedCARVarint
+
+  /// A CAR ended before the current header or block was complete.
+  case truncatedCAR
+
+  /// A CAR block did not contain a valid AT Protocol DAG-CBOR CID.
+  case malformedCARCID
+
+  /// A leading CAR block did not match its declared root.
+  case unexpectedCARRootBlock(expected: LexLink, actual: LexLink)
+
+  /// A CAR block's bytes did not match its CID digest.
+  case carBlockCIDMismatch(LexLink)
+
+  /// The record-block sequence was consumed more than once.
+  case carRecordBlocksAlreadyConsumed
+
+  /// A CAR contained more record blocks than its repository index declares.
+  case unexpectedCARRecordBlock
+
+  /// A value-bearing CAR ended before all indexed records were read.
+  case missingCARRecordBlocks(expected: Int, actual: Int)
+
+  /// A record block did not match the CID declared for its repository path.
+  case unexpectedCARRecordCID(
+    collection: NSID,
+    recordKey: RecordKey,
+    expected: LexLink,
+    actual: LexLink
+  )
 
   /// A persisted LtHash state had a size other than 2048 bytes.
   case invalidLtHashStateLength(actual: Int)
