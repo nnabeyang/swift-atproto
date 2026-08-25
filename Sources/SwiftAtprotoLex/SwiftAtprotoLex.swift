@@ -431,6 +431,14 @@ enum Lex {
           prefix: structNameFor(prefix: prefix),
           protocolRequirement: protocolRequirement
         )
+        if !protocolRequirement, method.value.hasBinaryOutput {
+          writeStreamingMethod(
+            typeName: Self.nameFromId(id: method.value.id, prefix: method.value.prefix),
+            typeSchema: method.value,
+            defMap: defMap,
+            prefix: structNameFor(prefix: prefix)
+          )
+        }
       }
     }
   }
@@ -441,6 +449,17 @@ enum Lex {
       ts.writeProcedure(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix, protocolRequirement: protocolRequirement)
     case .query(let def):
       ts.writeQuery(leadingTrivia: nil, def: def, typeName: typeName, defMap: defMap, prefix: prefix, protocolRequirement: protocolRequirement)
+    default:
+      fatalError()
+    }
+  }
+
+  static func writeStreamingMethod(typeName: String, typeSchema ts: TypeSchema, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
+    switch ts.type {
+    case .procedure(let def):
+      ts.writeStreamingProcedure(def: def, typeName: typeName, defMap: defMap, prefix: prefix)
+    case .query(let def):
+      ts.writeStreamingQuery(def: def, typeName: typeName, defMap: defMap, prefix: prefix)
     default:
       fatalError()
     }

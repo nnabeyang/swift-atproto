@@ -211,6 +211,9 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       name: .lexIdentifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQuery")))
+        if output?.isBinary == true {
+          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCBinaryResponseRequest")))
+        }
       }
     ) {
       VariableDeclSyntax(

@@ -407,6 +407,16 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
         })
   }
 
+  func writeStreamingProcedure(def: ProcedureTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
+    streamingFunction(
+      def: def,
+      typeName: typeName,
+      defMap: defMap,
+      prefix: prefix,
+      input: def.input == nil ? ExprSyntax(NilLiteralExprSyntax()) : ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("input")))
+    )
+  }
+
   func writeQuery(leadingTrivia: Trivia? = nil, def: QueryTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> DeclSyntaxProtocol {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
     let docTrivia: Trivia? = def.description.map { Trivia(pieces: [.docLineComment("/// \($0)"), .newlines(1)]) }
@@ -484,6 +494,83 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
           )
         }
     )
+  }
+
+  func writeStreamingQuery(def: QueryTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
+    let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
+    let callee: ExprSyntax =
+      def.paramsHaveConstraints
+      ? ExprSyntax(MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .identifier("Input"), .identifier("Query"), .identifier("make")]))
+      : ExprSyntax(MemberAccessExprSyntax(period: .periodToken(), declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))))
+    let call = FunctionCallExprSyntax(callee: callee) {
+      if let properties = def.parameters?.sortedProperties {
+        for (name, _) in properties {
+          LabeledExprSyntax(label: .lexIdentifier(name), colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(name)))
+        }
+      }
+    }
+    return streamingFunction(
+      def: def,
+      typeName: typeName,
+      defMap: defMap,
+      prefix: prefix,
+      input: def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+    )
+  }
+
+  private func streamingFunction(
+    def: any HTTPAPITypeDefinition,
+    typeName: String,
+    defMap: ExtDefMap,
+    prefix: String,
+    input: ExprSyntax
+  ) -> FunctionDeclSyntax {
+    let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
+    return FunctionDeclSyntax(
+      leadingTrivia: .newlines(2),
+      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+      name: .identifier("\(typeName)Streaming"),
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax {
+          def.rpcArguments(ts: self, fname: typeName, defMap: defMap, prefix: prefix, protocolRequirement: false)
+        },
+        effectSpecifiers: FunctionEffectSpecifiersSyntax(
+          asyncSpecifier: .keyword(.async),
+          throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+        ),
+        returnClause: ReturnClauseSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCStreamingResponseComponents")))
+      ),
+      genericWhereClause: GenericWhereClauseSyntax(
+        requirements: GenericRequirementListSyntax([
+          GenericRequirementSyntax(
+            requirement: .conformanceRequirement(
+              ConformanceRequirementSyntax(
+                leftType: IdentifierTypeSyntax(name: .keyword(.Self)),
+                colon: .colonToken(),
+                rightType: IdentifierTypeSyntax(name: .identifier("XRPCStreamingCallable"))
+              )))
+        ])
+      )
+    ) {
+      TryExprSyntax(
+        leadingTrivia: .newline,
+        expression: AwaitExprSyntax(
+          awaitKeyword: .keyword(.await),
+          expression: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("callStreaming"))) {
+            LabeledExprSyntax(expression: MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .keyword(.self)]))
+            LabeledExprSyntax(label: .identifier("input"), colon: .colonToken(), expression: input)
+          }
+        )
+      )
+    }
+  }
+
+  var hasBinaryOutput: Bool {
+    switch type {
+    case .procedure(let def): def.output?.isBinary == true
+    case .query(let def): def.output?.isBinary == true
+    default: false
+    }
   }
 
   func typeIdentifier(name: String, property: FieldTypeDefinition, defMap: ExtDefMap, key: String, isRequired: Bool, dropPrefix: Bool = true) -> TypeSyntax {
