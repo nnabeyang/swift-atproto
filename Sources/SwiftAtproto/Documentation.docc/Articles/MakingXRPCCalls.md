@@ -54,6 +54,31 @@ transport that wants the runtime to inspect a failure overrides
 `responseWithMetadata(_:)` and returns ``XRPCResponseComponents`` for success
 and failure responses alike. Network and transport failures still throw.
 
+## Stream binary responses
+
+CAR, CBOR, MP4, and other uninterpreted binary Lexicon outputs can be consumed
+without first buffering the complete response. A transport opts in by conforming
+to ``XRPCStreamingCallable`` and implementing
+``XRPCStreamingCallable/responseStreamWithMetadata(_:)``. Generated binary
+methods then include a `Streaming` variant that returns
+``XRPCStreamingResponseComponents``:
+
+```swift
+let response = try await client.GetRepoStreaming(did: memberDID)
+for try await chunk in response.body {
+  try await importer.write(chunk)
+}
+```
+
+``XRPCBody`` is a single-pass, pull-driven sequence of byte chunks, so the
+transport only produces the next chunk when its consumer advances. Call
+``XRPCBody/cancel()`` when abandoning a response early. Existing generated
+methods remain source-compatible and collect the same stream into `Data`.
+
+Successful responses remain unbuffered. Error responses are bounded while the
+runtime decodes their XRPC error payload and handles a possible DPoP nonce
+retry.
+
 ## Authorize the complete request
 
 ``XRPCRequestAuthorizer`` receives the complete request after any

@@ -42,6 +42,10 @@ let posts = try await client.call(
 - ``XRPCProcedure``
 - ``XRPCRequestComponents``
 - ``XRPCResponseComponents``
+- ``XRPCStreamingResponseComponents``
+- ``XRPCBody``
+- ``XRPCStreamingCallable``
+- ``XRPCBinaryResponseRequest``
 - ``XRPCRequestDestination``
 - ``XRPCRequestAuthorizer``
 - ``XRPCCredential``
