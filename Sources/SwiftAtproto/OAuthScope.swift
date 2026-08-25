@@ -252,6 +252,238 @@ public struct RepoScope: CustomStringConvertible, Hashable, Sendable {
   }
 }
 
+/// An operation whose authorization is evaluated against a ``SpaceScope``.
+public enum SpaceScopeOperation: Hashable, Sendable {
+  /// Read one repository in a space.
+  case read(repository: DID)
+  /// Request a delegation token for whole-space read access.
+  case delegationToken
+  /// Write a record in a collection.
+  case write(collection: NSID, action: LexPermissionAction)
+  /// Perform an implementation-defined space-management operation.
+  case manage(LexPermissionAction)
+}
+
+/// The target space and operation a consumer wants to authorize.
+public struct SpaceScopeRequirement: Hashable, Sendable {
+  /// The space being accessed or managed.
+  public let space: SpaceRef
+  /// The operation being performed.
+  public let operation: SpaceScopeOperation
+
+  /// Creates a requirement for one operation against one concrete space.
+  public init(space: SpaceRef, operation: SpaceScopeOperation) {
+    self.space = space
+    self.operation = operation
+  }
+}
+
+/// A `space` scope granting access to permissioned records and space
+/// management operations.
+///
+/// Collection defaults are intentionally not frozen into this value. Pass the
+/// current space declaration to ``ScopesSet/allowsSpace(_:grantedBy:spaceTypes:)``
+/// when evaluating a write that relies on its default collections.
+public struct SpaceScope: CustomStringConvertible, Hashable, Sendable {
+  /// The selected space-type NSID, or `*` for every type.
+  public let spaceType: String
+  /// The selected authority DID, `self`, or `*`.
+  public let authority: String
+  /// The selected space key, or `*`.
+  public let skey: String
+  /// Explicit write collections, or `nil` to use the current space declaration.
+  public let collection: [String]?
+  /// Granted record actions.
+  public let action: [LexPermissionAction]
+  /// Granted space-management operations.
+  public let manage: [LexPermissionAction]
+
+  /// The actions granted when an `action` parameter is omitted.
+  public static let defaultActions: [LexPermissionAction] = [.read, .create, .update, .delete]
+
+  /// Creates and validates a structured space grant.
+  ///
+  /// Pass `nil` for `collection` to resolve the current ``LexSpace``
+  /// declaration when a write is evaluated.
+  public init(
+    spaceType: String,
+    authority: String = "self",
+    skey: String = "*",
+    collection: [String]? = nil,
+    action: [LexPermissionAction] = Self.defaultActions,
+    manage: [LexPermissionAction] = []
+  ) throws {
+    guard spaceType == "*" || NSID.isValid(spaceType) else {
+      throw OAuthScopeError.invalidSyntax("invalid spaceType '\(spaceType)' in space scope")
+    }
+    guard authority == "self" || authority == "*" || (try? DID(string: authority)) != nil else {
+      throw OAuthScopeError.invalidSyntax("invalid authority '\(authority)' in space scope")
+    }
+    guard skey == "*" || RecordKey.isValid(skey) else {
+      throw OAuthScopeError.invalidSyntax("invalid skey '\(skey)' in space scope")
+    }
+    if let collection {
+      guard !collection.isEmpty else {
+        throw OAuthScopeError.missingRequired("collection")
+      }
+      for value in collection where value != "*" && !NSID.isValid(value) {
+        throw OAuthScopeError.invalidSyntax("invalid collection '\(value)' in space scope")
+      }
+    }
+    guard !action.isEmpty else {
+      throw OAuthScopeError.missingRequired("action")
+    }
+    for value in action where !Self.allowedActions.contains(value) {
+      throw OAuthScopeError.invalidSyntax("unknown action '\(value.rawValue)' in space scope")
+    }
+    for value in manage where !Self.allowedManage.contains(value) {
+      throw OAuthScopeError.invalidSyntax("unknown manage operation '\(value.rawValue)' in space scope")
+    }
+
+    self.spaceType = spaceType
+    self.authority = authority
+    self.skey = skey
+    self.collection = collection.map(Self.normalizeCollections)
+    self.action = Self.normalizeActions(action)
+    self.manage = Self.normalizeManage(manage)
+  }
+
+  /// Parses a `space:` scope string and applies its protocol defaults.
+  public init(string: String) throws {
+    let syntax = OAuthScopeSyntax.parse(string)
+    guard syntax.prefix == "space" else {
+      throw OAuthScopeError.invalidResource(syntax.prefix)
+    }
+    guard let spaceType = syntax.positional, !spaceType.isEmpty else {
+      throw OAuthScopeError.missingRequired("spaceType")
+    }
+
+    var authority: String?
+    var skey: String?
+    var collections: [String] = []
+    var actions: [LexPermissionAction] = []
+    var management: [LexPermissionAction] = []
+    var hasCollection = false
+    for parameter in syntax.params {
+      guard !parameter.value.isEmpty else {
+        throw OAuthScopeError.invalidSyntax("empty \(parameter.key) value in space scope")
+      }
+      switch parameter.key {
+      case "authority":
+        guard authority == nil else { throw OAuthScopeError.duplicateKey("authority") }
+        authority = parameter.value
+      case "skey":
+        guard skey == nil else { throw OAuthScopeError.duplicateKey("skey") }
+        skey = parameter.value
+      case "collection":
+        hasCollection = true
+        collections.append(parameter.value)
+      case "action":
+        actions.append(.init(rawValue: parameter.value))
+      case "manage":
+        management.append(.init(rawValue: parameter.value))
+      default:
+        throw OAuthScopeError.invalidSyntax("unknown key '\(parameter.key)' in space scope")
+      }
+    }
+
+    try self.init(
+      spaceType: spaceType,
+      authority: authority ?? "self",
+      skey: skey ?? "*",
+      collection: hasCollection ? collections : nil,
+      action: actions.isEmpty ? Self.defaultActions : actions,
+      manage: management
+    )
+  }
+
+  public var description: String {
+    var parameters: [OAuthScopeQueryParam] = []
+    if authority != "self" {
+      parameters.append(.init(key: "authority", value: authority))
+    }
+    if skey != "*" {
+      parameters.append(.init(key: "skey", value: skey))
+    }
+    if let collection {
+      parameters.append(contentsOf: collection.map { .init(key: "collection", value: $0) })
+    }
+    if action != Self.defaultActions {
+      parameters.append(contentsOf: action.map { .init(key: "action", value: $0.rawValue) })
+    }
+    parameters.append(contentsOf: manage.map { .init(key: "manage", value: $0.rawValue) })
+    return OAuthScopeSyntax(prefix: "space", positional: spaceType, params: parameters).description
+  }
+
+  fileprivate func allows(
+    _ requirement: SpaceScopeRequirement,
+    grantedBy: DID,
+    spaceTypes: [any LexSpace.Type]
+  ) -> Bool {
+    let space = requirement.space
+    guard spaceType == "*" || spaceType == space.spaceType.rawValue else { return false }
+    guard skey == "*" || skey == space.skey.rawValue else { return false }
+    switch authority {
+    case "*":
+      break
+    case "self":
+      guard space.spaceDid == grantedBy else { return false }
+    default:
+      guard authority == space.spaceDid.rawValue else { return false }
+    }
+
+    switch requirement.operation {
+    case .read(let repository):
+      return action.contains(.read) || (action.contains(.readSelf) && repository == grantedBy)
+    case .delegationToken:
+      return action.contains(.read)
+    case .write(let requiredCollection, let requiredAction):
+      guard Self.allowedManage.contains(requiredAction), action.contains(requiredAction) else {
+        return false
+      }
+      return effectiveCollections(for: space, spaceTypes: spaceTypes).contains {
+        $0 == "*" || $0 == requiredCollection.rawValue
+      }
+    case .manage(let requiredOperation):
+      return Self.allowedManage.contains(requiredOperation) && manage.contains(requiredOperation)
+    }
+  }
+
+  private func effectiveCollections(
+    for space: SpaceRef,
+    spaceTypes: [any LexSpace.Type]
+  ) -> [String] {
+    if let collection { return collection }
+    guard spaceType != "*",
+      let declaration = spaceTypes.first(where: { $0.id == space.spaceType.rawValue })
+    else {
+      return []
+    }
+    return declaration.collections.map(\.rawValue)
+  }
+
+  private static let allowedActions: [LexPermissionAction] = [
+    .readSelf, .read, .create, .update, .delete,
+  ]
+  private static let allowedManage: [LexPermissionAction] = [.create, .update, .delete]
+
+  private static func normalizeCollections(_ values: [String]) -> [String] {
+    if values.contains("*") { return ["*"] }
+    return Array(Set(values)).sorted()
+  }
+
+  private static func normalizeActions(_ values: [LexPermissionAction]) -> [LexPermissionAction] {
+    var seen = Set(values)
+    if seen.contains(.read) { seen.remove(.readSelf) }
+    return allowedActions.filter { seen.contains($0) }
+  }
+
+  private static func normalizeManage(_ values: [LexPermissionAction]) -> [LexPermissionAction] {
+    let seen = Set(values)
+    return allowedManage.filter { seen.contains($0) }
+  }
+}
+
 /// A `blob` scope: permission to upload specific MIME types.
 public struct BlobScope: CustomStringConvertible, Hashable, Sendable {
   /// The accepted MIME patterns, which may use a `*` subtype such as
@@ -379,7 +611,7 @@ public struct BlobScope: CustomStringConvertible, Hashable, Sendable {
 /// permissions.
 ///
 /// ``ScopesSet`` expands each include at construction, adding the resulting
-/// `rpc` and `repo` scopes. An include may only grant permissions under its own
+/// `rpc`, `repo`, and `space` scopes. An include may only grant permissions under its own
 /// authority. See <doc:OAuthScopes>.
 public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
   /// The NSID of the permission set being included.
@@ -486,6 +718,8 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
         scopes.append(try expandRpc(permission))
       case .repo:
         scopes.append(try expandRepo(permission))
+      case .space:
+        scopes.append(try expandSpace(permission))
       default:
         continue
       }
@@ -531,6 +765,28 @@ public struct IncludeScope: CustomStringConvertible, Hashable, Sendable {
     let actions = permission.action ?? RepoScope.defaultActions
     return try RepoScope(collection: collection, action: actions).description
   }
+
+  private func expandSpace(_ permission: LexPermission) throws -> String {
+    guard let spaceType = permission.spaceType else {
+      throw OAuthScopeError.missingRequired("spaceType in space permission")
+    }
+    guard spaceType != "*" else {
+      throw OAuthScopeError.forbiddenCombination(
+        "space permission in a permission-set cannot use spaceType=*"
+      )
+    }
+    guard isParentAuthorityOf(spaceType) else {
+      throw OAuthScopeError.nsidOutsideAuthority(parent: nsid, other: spaceType)
+    }
+    return try SpaceScope(
+      spaceType: spaceType,
+      authority: permission.authority ?? "self",
+      skey: permission.skey ?? "*",
+      collection: permission.collection,
+      action: permission.action ?? SpaceScope.defaultActions,
+      manage: permission.manage ?? []
+    ).description
+  }
 }
 
 /// The scopes granted to an OAuth session, parsed into structured resources.
@@ -544,6 +800,8 @@ public struct ScopesSet: Hashable, Sendable {
   public let repoScopes: [RepoScope]
   /// The granted `blob` scopes.
   public let blobScopes: [BlobScope]
+  /// The granted `space` scopes, including those from expanded includes.
+  public let spaceScopes: [SpaceScope]
   /// The `include` scopes as written, before expansion.
   public let includeScopes: [IncludeScope]
   /// Granted scopes that are not structured resources, such as
@@ -559,6 +817,7 @@ public struct ScopesSet: Hashable, Sendable {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
     var blob: [BlobScope] = []
+    var space: [SpaceScope] = []
     var include: [IncludeScope] = []
     var other: Set<String> = []
     for scope in scopes {
@@ -570,6 +829,8 @@ public struct ScopesSet: Hashable, Sendable {
         repo.append(try RepoScope(string: scope))
       case "blob":
         blob.append(try BlobScope(string: scope))
+      case "space":
+        space.append(try SpaceScope(string: scope))
       case "include":
         include.append(try IncludeScope(string: scope))
       default:
@@ -579,10 +840,12 @@ public struct ScopesSet: Hashable, Sendable {
         other.insert(scope)
       }
     }
-    try Self.expandIncludes(include, permissionSets: permissionSets, into: &rpc, repo: &repo)
+    try Self.expandIncludes(
+      include, permissionSets: permissionSets, into: &rpc, repo: &repo, space: &space)
     self.rpcScopes = rpc
     self.repoScopes = repo
     self.blobScopes = blob
+    self.spaceScopes = space
     self.includeScopes = include
     self.rawOther = other
   }
@@ -592,6 +855,7 @@ public struct ScopesSet: Hashable, Sendable {
     var rpc: [RpcScope] = []
     var repo: [RepoScope] = []
     var blob: [BlobScope] = []
+    var space: [SpaceScope] = []
     var include: [IncludeScope] = []
     var other: Set<String> = []
     for scope in scopes {
@@ -603,6 +867,8 @@ public struct ScopesSet: Hashable, Sendable {
         if let parsed = try? RepoScope(string: scope) { repo.append(parsed) }
       case "blob":
         if let parsed = try? BlobScope(string: scope) { blob.append(parsed) }
+      case "space":
+        if let parsed = try? SpaceScope(string: scope) { space.append(parsed) }
       case "include":
         if let parsed = try? IncludeScope(string: scope) { include.append(parsed) }
       default:
@@ -612,10 +878,12 @@ public struct ScopesSet: Hashable, Sendable {
         other.insert(scope)
       }
     }
-    try? Self.expandIncludes(include, permissionSets: permissionSets, into: &rpc, repo: &repo)
+    try? Self.expandIncludes(
+      include, permissionSets: permissionSets, into: &rpc, repo: &repo, space: &space)
     self.rpcScopes = rpc
     self.repoScopes = repo
     self.blobScopes = blob
+    self.spaceScopes = space
     self.includeScopes = include
     self.rawOther = other
   }
@@ -624,7 +892,8 @@ public struct ScopesSet: Hashable, Sendable {
     _ includes: [IncludeScope],
     permissionSets: [any LexPermissionSet.Type],
     into rpc: inout [RpcScope],
-    repo: inout [RepoScope]
+    repo: inout [RepoScope],
+    space: inout [SpaceScope]
   ) throws {
     guard !permissionSets.isEmpty, !includes.isEmpty else { return }
     let registry = Dictionary(
@@ -641,6 +910,8 @@ public struct ScopesSet: Hashable, Sendable {
           rpc.append(try RpcScope(string: scopeStr))
         case "repo":
           repo.append(try RepoScope(string: scopeStr))
+        case "space":
+          space.append(try SpaceScope(string: scopeStr))
         default:
           break
         }
@@ -707,6 +978,24 @@ public struct ScopesSet: Hashable, Sendable {
       return true
     }
     return false
+  }
+
+  /// Whether this session's OAuth scopes satisfy a permissioned-space
+  /// requirement.
+  ///
+  /// `grantedBy` resolves `authority=self` and identifies the repository that
+  /// a `read_self` grant may read. `spaceTypes` is consulted at evaluation time
+  /// when a scope omits `collection`, so declaration updates are not frozen
+  /// into the granted scope.
+  public func allowsSpace(
+    _ requirement: SpaceScopeRequirement,
+    grantedBy: DID,
+    spaceTypes: [any LexSpace.Type] = []
+  ) -> Bool {
+    guard hasAtprotoScope else { return false }
+    return spaceScopes.contains {
+      $0.allows(requirement, grantedBy: grantedBy, spaceTypes: spaceTypes)
+    }
   }
 }
 

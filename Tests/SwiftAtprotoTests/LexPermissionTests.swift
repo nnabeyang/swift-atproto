@@ -29,7 +29,7 @@ struct LexPermissionTests {
   @Test func actionKnownConstantsRoundTrip() throws {
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
-    for value in [LexPermissionAction.create, .update, .delete] {
+    for value in [LexPermissionAction.readSelf, .read, .create, .update, .delete] {
       let data = try encoder.encode(value)
       #expect(String(data: data, encoding: .utf8) == "\"\(value.rawValue)\"")
       let decoded = try decoder.decode(LexPermissionAction.self, from: data)
@@ -63,6 +63,35 @@ struct LexPermissionTests {
     let data = try JSONEncoder().encode(original)
     let decoded = try JSONDecoder().decode(LexPermission.self, from: data)
     #expect(decoded == original)
+  }
+
+  @Test func spacePermissionRoundTripPreservesOpenFields() throws {
+    let json = Data(
+      #"{"type":"permission","resource":"space","spaceType":"com.example.forum","authority":"*","skey":"default","collection":["net.external.thread"],"action":["read","create"],"manage":["update"],"futureFlag":true,"futureValues":["one",2,false]}"#.utf8
+    )
+
+    let permission = try JSONDecoder().decode(LexPermission.self, from: json)
+    #expect(permission.resource == .space)
+    #expect(permission.spaceType == "com.example.forum")
+    #expect(permission.authority == "*")
+    #expect(permission.skey == "default")
+    #expect(permission.manage == [.update])
+    #expect(permission.additionalFields["futureFlag"] == .boolean(true))
+    #expect(
+      permission.additionalFields["futureValues"]
+        == .array([.string("one"), .integer(2), .boolean(false)]))
+
+    let roundTrip = try JSONEncoder().encode(permission)
+    let decoded = try JSONDecoder().decode(LexPermission.self, from: roundTrip)
+    #expect(decoded == permission)
+  }
+
+  @Test func permissionRejectsNestedOpenArrays() {
+    let json = Data(
+      #"{"type":"permission","resource":"space","futureValues":[["nested"]]}"#.utf8)
+    #expect(throws: (any Error).self) {
+      try JSONDecoder().decode(LexPermission.self, from: json)
+    }
   }
 
   @Test func conformingTypeSatisfiesProtocol() {
