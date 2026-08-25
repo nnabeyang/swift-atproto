@@ -7,13 +7,25 @@ import SwiftSyntaxBuilder
   import SourceControl
 #endif
 
-public func main(outdir outdirBaseURL: URL, path: String, generate: GenerateOption, pluginSource: PluginSource = .command) async throws {
+public func main(
+  outdir outdirBaseURL: URL,
+  path: String,
+  generate: GenerateOption,
+  accessModifier: AccessModifier = .public,
+  pluginSource: PluginSource = .command
+) async throws {
   let url = URL(filePath: path)
 
   let fileURLs = collectJSONFileURLs(at: url)
   let schemasMap = try await decodeSchemasByPrefix(from: fileURLs)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
-  try await writeSchemaCode(for: schemasMap, with: defMap, to: outdirBaseURL, generate: generate, pluginSource: pluginSource)
+  try await writeSchemaCode(
+    for: schemasMap,
+    with: defMap,
+    to: outdirBaseURL,
+    generate: generate,
+    accessModifier: accessModifier,
+    pluginSource: pluginSource)
 }
 
 func collectJSONFileURLs(at baseURL: URL) -> [URL] {
@@ -116,17 +128,21 @@ func writeSchemaCode(
   with defMap: ExtDefMap,
   to baseURL: URL,
   generate: GenerateOption,
+  accessModifier: AccessModifier = .public,
   pluginSource: PluginSource
 ) async throws {
   let schemasArray = schemasMap.sorted { $0.key < $1.key }
   let (blocks, methods, requirements) = try await withThrowingTaskGroup(of: (DeclSyntax, MemberBlockItemListSyntax, MemberBlockItemListSyntax, Int).self) { group in
-    let src = Lex.genUnknownRecord(for: schemasMap)
+    let src = Lex.genUnknownRecord(for: schemasMap, accessModifier: accessModifier)
     let recordURL = baseURL.appending(path: "UnknownATPValue.swift")
     try src.write(to: recordURL, atomically: true, encoding: .utf8)
     let serverURL = baseURL.appending(path: "XRPCAPIProtocol.swift")
     switch (generate.contains(.server), pluginSource) {
     case (true, _):
-      let serverSrc = Lex.genXRPCAPIProtocolFile(for: schemasMap, defMap: defMap)
+      let serverSrc = Lex.genXRPCAPIProtocolFile(
+        for: schemasMap,
+        defMap: defMap,
+        accessModifier: accessModifier)
       try serverSrc.write(to: serverURL, atomically: true, encoding: .utf8)
     case (false, .build):
       // The build plugin pre-declares this file as an output at plan time, so
@@ -256,9 +272,7 @@ func writeSchemaCode(
     if !methods.isEmpty {
       ProtocolDeclSyntax(
         leadingTrivia: .newlines(2),
-        modifiers: [
-          DeclModifierSyntax(name: .keyword(.public))
-        ],
+        modifiers: [DeclModifierSyntax(name: .keyword(.public))],
         name: .identifier("XRPCCallable"),
         inheritanceClause: InheritanceClauseSyntax(
           typeNames: ["_XRPCCallable"])
@@ -270,7 +284,8 @@ func writeSchemaCode(
       }
     }
   }
-  let clientSrc: String = Lex.renderSourceFile(clientTree)
+  let clientSrc: String = Lex.renderSourceFile(
+    Lex.applyingAccessModifier(to: clientTree, accessModifier: accessModifier))
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
@@ -289,13 +304,11 @@ class EnumDeclSyntaxNode {
     let lt: Trivia? = depth > 0 ? .newline : leadingTrivia
     return EnumDeclSyntax(
       leadingTrivia: lt,
-      modifiers: [
-        DeclModifierSyntax(name: .keyword(.public))
-      ],
+      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
       name: .lexIdentifier(name)
     ) {
       for childKey in children.keys.sorted() {
-        children[childKey]!.generateEnums()
+        children[childKey]!.generateEnums(depth: depth + 1)
       }
     }
   }
@@ -366,6 +379,16 @@ enum Lex {
       .description
   }
 
+  static func applyingAccessModifier(
+    to source: SourceFileSyntax,
+    accessModifier: AccessModifier
+  ) -> SourceFileSyntax {
+    guard accessModifier != .public else { return source }
+    return AccessModifierRewriter(accessModifier: accessModifier)
+      .rewrite(source)
+      .cast(SourceFileSyntax.self)
+  }
+
   static var fileHeader: Trivia {
     Trivia(pieces: [
       .lineComment("//"),
@@ -423,7 +446,10 @@ enum Lex {
     }
   }
 
-  static func genUnknownRecord(for schemasMap: [String: [Schema]]) -> String {
+  static func genUnknownRecord(
+    for schemasMap: [String: [Schema]],
+    accessModifier: AccessModifier = .public
+  ) -> String {
     var recordTypes = [(key: String, value: TypeSchema)]()
     for schemas in schemasMap {
       for schema in schemas.value {
@@ -437,9 +463,7 @@ enum Lex {
         trailingTrivia: .newlines(2)
       )
       EnumDeclSyntax(
-        modifiers: [
-          DeclModifierSyntax(name: .keyword(.public))
-        ],
+        modifiers: [DeclModifierSyntax(name: .keyword(.public))],
         name: .identifier("UnknownATPValue"),
         inheritanceClause: InheritanceClauseSyntax(typeNames: ["UnknownATPValueProtocol"])
       ) {
@@ -726,7 +750,7 @@ enum Lex {
       }
     }
     .with(\.trailingTrivia, .newline)
-    return src.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
+    return renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
   }
 
   static func buildExtDefMap(schemasMap: [String: [Schema]]) -> ExtDefMap {
@@ -769,6 +793,35 @@ enum Lex {
     id.trim(prefix: "\(prefix).").components(separatedBy: CharacterSet(charactersIn: ".#")).enumerated().map {
       $0 == 0 ? $1 : $1.titleCased()
     }.joined()
+  }
+}
+
+private final class AccessModifierRewriter: SyntaxRewriter {
+  let accessModifier: AccessModifier
+
+  init(accessModifier: AccessModifier) {
+    self.accessModifier = accessModifier
+  }
+
+  override func visit(_ node: DeclModifierListSyntax) -> DeclModifierListSyntax {
+    switch accessModifier {
+    case .internal:
+      node.filter { $0.name.tokenKind != .keyword(.public) }
+    case .package:
+      DeclModifierListSyntax {
+        for modifier in node {
+          if modifier.name.tokenKind == .keyword(.public) {
+            modifier.with(
+              \.name,
+              .keyword(.package, trailingTrivia: modifier.name.trailingTrivia))
+          } else {
+            modifier
+          }
+        }
+      }
+    case .public:
+      node
+    }
   }
 }
 
