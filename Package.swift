@@ -101,6 +101,7 @@ let package = Package(
     .testTarget(
       name: "SwiftAtprotoTests",
       dependencies: [
+        "ATProtoCrypto",
         "SwiftAtproto",
         .product(name: "SwiftCbor", package: "swift-cbor"),
       ]

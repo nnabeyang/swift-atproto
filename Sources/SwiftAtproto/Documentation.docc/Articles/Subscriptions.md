@@ -28,8 +28,10 @@ and with a NIO-based client on Linux is the usual arrangement.
 ``ATPClientProtocol`` already implements
 ``XRPCSubscriptionCallable/prepareSubscriptionRequest(_:)`` for you: it appends
 `xrpc/<nsid>` to the service endpoint, rewrites the scheme from `https` to `wss`
-(or `http` to `ws`), attaches the query items, and adds the `Authorization`
-header from ``ATPClientProtocol/getAuthorization(endpoint:)``.
+(or `http` to `ws`), attaches the query items, and passes the handshake headers
+through ``XRPCRequestAuthorizer``. The default authorizer reads the raw token
+from ``ATPClientProtocol/getAuthorization(endpoint:)`` and sends it as a Bearer
+credential, matching ordinary XRPC calls.
 
 ## Frame handling
 
