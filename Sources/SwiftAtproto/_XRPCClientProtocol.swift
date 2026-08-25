@@ -5,7 +5,7 @@ import Foundation
 /// Refines the callable infrastructure with the endpoint and session hooks a
 /// transport needs. Implementing `response(_:)` is still the only
 /// transport-specific work; see <doc:MakingXRPCCalls>.
-public protocol ATPClientProtocol: _XRPCCallable {
+public protocol ATPClientProtocol: _XRPCCallable, XRPCRequestAuthorizer {
   /// The service base URL that `/xrpc/<nsid>` is appended to.
   var serviceEndpoint: URL { get }
   /// The decoder used for response payloads.
@@ -14,8 +14,12 @@ public protocol ATPClientProtocol: _XRPCCallable {
   /// Whether this error means the access token needs refreshing, so the call
   /// can be retried after ``refreshSession()``.
   func tokenIsExpired(error: some XRPCError) -> Bool
-  /// The `Authorization` header value to send for this method, or `nil` for an
+  /// The raw bearer token to send for this method, or `nil` for an
   /// unauthenticated call.
+  ///
+  /// The default request authorizer prefixes this value with `Bearer`. Override
+  /// ``XRPCRequestAuthorizer/authorize(_:serviceEndpoint:)`` to select
+  /// destination-specific credentials or add DPoP proofs.
   func getAuthorization(endpoint: String) -> String?
 
   /// Refreshes the session, returning whether it succeeded.
@@ -37,6 +41,24 @@ public protocol _XRPCClientProtocol: ATPClientProtocol {
 
 extension ATPClientProtocol {
   public func getProxy(nsid _: String) -> String? { nil }
+
+  public func authorize(
+    _ requestComponents: XRPCRequestComponents
+  ) async throws -> XRPCRequestComponents {
+    let endpoint = requestComponents.destination?.serviceEndpoint ?? serviceEndpoint
+    return try await authorize(requestComponents, serviceEndpoint: endpoint)
+  }
+
+  public func authorize(
+    _ requestComponents: XRPCRequestComponents,
+    serviceEndpoint _: URL
+  ) async throws -> XRPCRequestComponents {
+    var requestComponents = requestComponents
+    if let token = getAuthorization(endpoint: requestComponents.nsId) {
+      requestComponents.headers[.authorization] = "Bearer \(token)"
+    }
+    return requestComponents
+  }
 }
 
 extension ATPClientProtocol where Self: XRPCSubscriptionCallable {
@@ -55,11 +77,14 @@ extension ATPClientProtocol where Self: XRPCSubscriptionCallable {
     guard let url = urlComponents?.url else {
       throw URLError(.badURL)
     }
-    var headers = components.headers
-    if let authorization = getAuthorization(endpoint: components.nsId) {
-      headers[.authorization] = authorization
-    }
-    return XRPCWebSocketRequest(url: url, headers: headers)
+    let requestComponents = try await authorize(
+      XRPCRequestComponents(
+        nsId: components.nsId,
+        queryItems: components.queryItems,
+        headers: components.headers,
+        method: .get),
+      serviceEndpoint: serviceEndpoint)
+    return XRPCWebSocketRequest(url: url, headers: requestComponents.headers)
   }
 }
 

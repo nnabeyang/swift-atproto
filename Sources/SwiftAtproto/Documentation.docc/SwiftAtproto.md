@@ -42,6 +42,8 @@ let posts = try await client.call(
 - ``XRPCProcedure``
 - ``XRPCRequestComponents``
 - ``XRPCRequestDestination``
+- ``XRPCRequestAuthorizer``
+- ``XRPCCredential``
 - ``XRPCBlobUpload``
 - ``EmptyResponse``
 - ``Parameters``

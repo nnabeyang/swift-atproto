@@ -48,6 +48,50 @@ Responses are decoded with the AT Protocol data encoding strategy and with
 ``LexiconDecodingMode/permissive``, so a server that exceeds an authoring
 constraint does not break decoding. See <doc:DecodingLexiconRecords>.
 
+## Authorize the complete request
+
+``XRPCRequestAuthorizer`` receives the complete request after any
+`atproto-proxy` header has been applied. It also receives the resolved service
+endpoint, so it can combine that base URL with the request's relative path and
+build the absolute `htu` of a DPoP proof. Its `async throws` boundary allows the
+implementation to load a signing key and generate a fresh proof before every
+attempt.
+
+``ATPClientProtocol`` conforms to the authorizer protocol. Its default
+implementation preserves existing clients by reading the raw token from
+``ATPClientProtocol/getAuthorization(endpoint:)`` and applying it as
+`Authorization: Bearer <token>`. A client that needs permissioned data overrides
+the authorizer method and can select an ``XRPCCredential`` from both the logical
+destination and the NSID:
+
+```swift
+func authorize(
+  _ request: XRPCRequestComponents,
+  serviceEndpoint: URL
+) async throws -> XRPCRequestComponents {
+  var request = request
+  let credential = try await credentials.credential(for: request.destination)
+
+  switch credential {
+  case .spaceDelegationToken(let token):
+    request.headers[.authorization] = "Bearer \(token)"
+    request.headers[.dpop] = try await proof(for: request, at: serviceEndpoint)
+  case .spaceCredential(let token):
+    request.headers[.authorization] = "DPoP \(token)"
+    request.headers[.dpop] = try await proof(for: request, at: serviceEndpoint)
+  default:
+    break
+  }
+  return request
+}
+```
+
+The proof crosses this boundary as a `String`. It may come from
+`ATProtoCrypto`, an OAuth package, or another producer; `SwiftAtproto` does not
+depend on a cryptography implementation. A client attestation is also a
+distinct credential case, but it belongs in the `getSpaceCredential` request
+body rather than an authorization header.
+
 ## Route to repo and space hosts
 
 Permissioned data has no relay, so one client may need to call its default PDS,

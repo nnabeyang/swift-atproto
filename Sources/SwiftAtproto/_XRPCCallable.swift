@@ -3,6 +3,8 @@ import HTTPTypes
 
 extension HTTPField.Name {
   static var atprotoProxy: Self { .init("atproto-proxy")! }
+  /// A proof of possession for a DPoP-bound authorization credential.
+  public static var dpop: Self { .init("dpop")! }
 }
 
 /// The minimum a client has to provide in order to make XRPC calls.
@@ -17,6 +19,11 @@ public protocol _XRPCCallable: Sendable {
   /// The OAuth session whose granted scopes gate outgoing calls, or `nil` to
   /// skip scope enforcement entirely. Defaults to `nil`.
   var oauthSession: (any OAuthSession)? { get }
+  /// Applies credentials and proof headers after the request and proxy header
+  /// have been prepared. The default leaves the request unchanged.
+  func authorize(
+    _ requestComponents: XRPCRequestComponents
+  ) async throws -> XRPCRequestComponents
   /// The service to proxy this method to via the `atproto-proxy` header, or
   /// `nil` to send it to the client's own endpoint.
   func getProxy(nsid: String) -> String?
@@ -46,6 +53,12 @@ public protocol _XRPCCallable: Sendable {
 
 extension _XRPCCallable {
   public var oauthSession: (any OAuthSession)? { nil }
+
+  public func authorize(
+    _ requestComponents: XRPCRequestComponents
+  ) async throws -> XRPCRequestComponents {
+    requestComponents
+  }
 }
 
 extension _XRPCCallable {
@@ -72,6 +85,7 @@ extension _XRPCCallable {
     if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
+    request = try await authorize(request)
     return try await send(query, for: request)
   }
 
@@ -100,6 +114,7 @@ extension _XRPCCallable {
     if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
+    request = try await authorize(request)
     return try await send(procedure, for: request)
   }
 
