@@ -87,26 +87,7 @@ public struct RepoCommit: Hashable, Sendable {
     drislIndex data: Data,
     limits: RepoVerificationLimits = .init()
   ) throws {
-    guard data.count <= limits.maximumIndexBytes else {
-      throw RepoVerificationError.inputTooLarge(
-        limit: limits.maximumIndexBytes, actual: data.count)
-    }
-
-    let index: [String: LexLink]
-    do {
-      index = try drislDecoder(
-        maximumNestingDepth: limits.maximumNestingDepth,
-        maximumContainerElements: limits.maximumIndexEntries,
-        maximumStringBytes: 1024
-      ).decode([String: LexLink].self, from: data)
-    } catch {
-      throw RepoVerificationError.malformedRepositoryIndex
-    }
-
-    self.init()
-    for (path, cid) in index {
-      add(try Self.record(path: path, cid: cid))
-    }
+    self.init(records: try PermissionedRepoIndex(drisl: data, limits: limits).records)
   }
 
   /// Adds a complete record reference to the state.
@@ -194,23 +175,25 @@ public struct RepoCommit: Hashable, Sendable {
     return link
   }
 
-  private static func record(path: String, cid: LexLink) throws -> RepoRecord {
+  private static func element(for record: RepoRecord) -> String {
+    "\(record.collection.rawValue)/\(record.recordKey.rawValue)/\(record.cid.toBaseEncodedString)"
+  }
+}
+
+extension RepoRecord {
+  init(path: String, cid: LexLink) throws {
     guard let separator = path.firstIndex(of: "/") else {
       throw RepoVerificationError.malformedRecordPath(path)
     }
     let collectionRaw = String(path[..<separator])
     let recordKeyRaw = String(path[path.index(after: separator)...])
     do {
-      return RepoRecord(
+      self = RepoRecord(
         collection: try NSID(string: collectionRaw),
         recordKey: try RecordKey(string: recordKeyRaw),
         cid: cid)
     } catch {
       throw RepoVerificationError.malformedRecordPath(path)
     }
-  }
-
-  private static func element(for record: RepoRecord) -> String {
-    "\(record.collection.rawValue)/\(record.recordKey.rawValue)/\(record.cid.toBaseEncodedString)"
   }
 }
