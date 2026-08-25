@@ -48,6 +48,12 @@ Responses are decoded with the AT Protocol data encoding strategy and with
 ``LexiconDecodingMode/permissive``, so a server that exceeds an authoring
 constraint does not break decoding. See <doc:DecodingLexiconRecords>.
 
+The original `response(_:)` transport requirement returns only `Data` and
+remains sufficient for clients that handle HTTP failures themselves. A
+transport that wants the runtime to inspect a failure overrides
+`responseWithMetadata(_:)` and returns ``XRPCResponseComponents`` for success
+and failure responses alike. Network and transport failures still throw.
+
 ## Authorize the complete request
 
 ``XRPCRequestAuthorizer`` receives the complete request after any
@@ -91,6 +97,21 @@ The proof crosses this boundary as a `String`. It may come from
 depend on a cryptography implementation. A client attestation is also a
 distinct credential case, but it belongs in the `getSpaceCredential` request
 body rather than an authorization header.
+
+## Retry a DPoP nonce challenge
+
+When a metadata response is unsuccessful, carries the `use_dpop_nonce` error,
+and includes a nonempty `DPoP-Nonce` header, the runtime offers that nonce to
+``XRPCRequestAuthorizer/storeDPoPNonce(_:for:serviceEndpoint:)``. Returning
+`true` promises that the next authorization pass will build a new proof with
+the stored nonce. The runtime then authorizes the original request components
+again and sends one retry.
+
+A second challenge is returned as the method's error without another store or
+retry. Missing headers, unrelated errors, and authorizers that return `false`
+also stop after the first response. Procedure bodies are immutable `Data` in
+``XRPCRequestComponents``, so the retry reuses the exact encoded bytes only
+after the server has explicitly rejected the first proof.
 
 ## Route to repo and space hosts
 

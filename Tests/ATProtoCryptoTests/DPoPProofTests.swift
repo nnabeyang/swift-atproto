@@ -17,14 +17,16 @@ struct DPoPProofTests {
   private func proof(
     httpMethod: String = "GET",
     url: URL = DPoPProofTests.url,
-    credential: String? = nil
+    credential: String? = nil,
+    serverNonce: String? = nil
   ) -> DPoPProof {
     DPoPProof(
       httpMethod: httpMethod,
       url: url,
       issuedAt: Self.issuedAt,
       tokenID: Self.tokenID,
-      credential: credential)
+      credential: credential,
+      serverNonce: serverNonce)
   }
 
   // `KeyType` is not `Sendable`, so these iterate a local list rather than going
@@ -239,6 +241,24 @@ struct DPoPProofTests {
 
   // MARK: - Nonces
 
+  @Test func carriesAServerNonceOnlyWhenChallenged() throws {
+    let withoutNonce = try proof().signed(with: PrivateKey(type: .p256))
+    #expect(try payload(of: withoutNonce).nonce == nil)
+    #expect(!(try memberNames(of: withoutNonce, 1).contains("nonce")))
+
+    let withNonce = try proof(serverNonce: "server-secret-nonce")
+      .signed(with: PrivateKey(type: .p256))
+    #expect(try payload(of: withNonce).nonce == "server-secret-nonce")
+    #expect(try memberNames(of: withNonce, 1).contains("nonce"))
+    let challengedProof = proof(serverNonce: "server-secret-nonce")
+    #expect(!challengedProof.description.contains("server-secret-nonce"))
+    #expect(!String(reflecting: challengedProof).contains("server-secret-nonce"))
+    #expect(
+      !Mirror(reflecting: challengedProof).children.contains {
+        String(describing: $0.value).contains("server-secret-nonce")
+      })
+  }
+
   @Test func randomTokenIDIsHexAndDoesNotRepeat() {
     let tokenID = DPoPProof.randomTokenID()
     #expect(tokenID.count == 32)
@@ -267,6 +287,7 @@ struct DPoPProofTests {
     let htu: String
     let iat: Int
     let jti: String
+    let nonce: String?
   }
 
   private func header(of jwt: String) throws -> DecodedHeader {

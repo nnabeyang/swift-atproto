@@ -15,6 +15,27 @@ public protocol XRPCRequestAuthorizer: Sendable {
     _ requestComponents: XRPCRequestComponents,
     serviceEndpoint: URL
   ) async throws -> XRPCRequestComponents
+
+  /// Stores a server-provided DPoP nonce for the request's destination.
+  ///
+  /// Return `true` only when a later call to ``authorize(_:serviceEndpoint:)``
+  /// will use `nonce` to build a new proof. The default returns `false`, which
+  /// leaves the challenge response untouched and prevents a retry.
+  func storeDPoPNonce(
+    _ nonce: String,
+    for requestComponents: XRPCRequestComponents,
+    serviceEndpoint: URL
+  ) async throws -> Bool
+}
+
+extension XRPCRequestAuthorizer {
+  public func storeDPoPNonce(
+    _: String,
+    for _: XRPCRequestComponents,
+    serviceEndpoint _: URL
+  ) async throws -> Bool {
+    false
+  }
 }
 
 /// A credential selected for an XRPC request or permissioned-data exchange.

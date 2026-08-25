@@ -58,6 +58,13 @@ public struct DPoPProof: Sendable, Hashable {
   /// this has to track what the request actually carries.
   public let credential: String?
 
+  /// The server-provided nonce required after a `DPoP-Nonce` challenge.
+  ///
+  /// Leave this `nil` for the first attempt. When a service responds with
+  /// `use_dpop_nonce`, build a new proof with the response header's value and a
+  /// fresh ``tokenID``.
+  public let serverNonce: String?
+
   /// Describes a proof. Nothing is signed until ``signed(with:)``.
   ///
   /// Every claim is supplied by the caller, including the nonce: a proof is
@@ -67,13 +74,15 @@ public struct DPoPProof: Sendable, Hashable {
     url: URL,
     issuedAt: Date,
     tokenID: String,
-    credential: String? = nil
+    credential: String? = nil,
+    serverNonce: String? = nil
   ) {
     self.httpMethod = httpMethod
     self.url = url
     self.issuedAt = issuedAt
     self.tokenID = tokenID
     self.credential = credential
+    self.serverNonce = serverNonce
   }
 
   /// The `htu` this proof carries: ``url`` reduced to its origin and path.
@@ -130,7 +139,8 @@ public struct DPoPProof: Sendable, Hashable {
         htm: httpMethod,
         htu: httpTargetURI,
         iat: Int(issuedAt.timeIntervalSince1970),
-        jti: tokenID),
+        jti: tokenID,
+        nonce: serverNonce),
       signedWith: key)
   }
 
@@ -179,17 +189,28 @@ public struct DPoPProof: Sendable, Hashable {
     let htu: String
     let iat: Int
     let jti: String
+    let nonce: String?
   }
 }
 
-extension DPoPProof: CustomStringConvertible {
-  /// Withholds ``credential`` and ``tokenID``. The default reflected description
-  /// would print both, and a proof is most likely to be described while being
-  /// logged.
+extension DPoPProof: CustomStringConvertible, CustomDebugStringConvertible,
+  CustomReflectable
+{
+  /// Withholds ``credential``, ``tokenID``, and ``serverNonce``. The default
+  /// reflected description would print them, and a proof is most likely to be
+  /// described while being logged.
   public var description: String {
     """
     DPoPProof(httpMethod: \(httpMethod), url: \(url), issuedAt: \(issuedAt), \
     presentsCredential: \(credential != nil))
     """
+  }
+
+  /// Describes the proof without revealing credentials or nonce values.
+  public var debugDescription: String { description }
+
+  /// Prevents reflection-based logging from exposing credentials or nonces.
+  public var customMirror: Mirror {
+    Mirror(self, children: ["description": description], displayStyle: .struct)
   }
 }
