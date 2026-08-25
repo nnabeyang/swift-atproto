@@ -154,17 +154,6 @@ struct ClientAttestationTests {
 
   // MARK: - Helpers
 
-  // `ATProtoCrypto` only encodes base64url — reading a token back is the job of
-  // the introspection side, in `SwiftAtproto` — so the tests decode their own.
-  private func decodedSegment(_ jwt: String, _ index: Int) -> Data? {
-    let segments = jwt.split(separator: ".", omittingEmptySubsequences: false)
-    guard segments.indices.contains(index) else { return nil }
-    var base64 = segments[index].replacingOccurrences(of: "-", with: "+")
-      .replacingOccurrences(of: "_", with: "/")
-    base64 += String(repeating: "=", count: (4 - base64.count % 4) % 4)
-    return Data(base64Encoded: base64)
-  }
-
   private struct DecodedHeader: Decodable, Equatable {
     let typ: String
     let alg: String
@@ -186,28 +175,5 @@ struct ClientAttestationTests {
 
   private func payload(of jwt: String) throws -> DecodedPayload {
     try JSONDecoder().decode(DecodedPayload.self, from: #require(decodedSegment(jwt, 1)))
-  }
-
-  // The two decoders above ignore any member they do not name, so the member
-  // sets are checked separately. This reads the names alone rather than decoding
-  // the values as `Any`, which would compare JSON numbers through a box whose
-  // type differs between Darwin and swift-corelibs-foundation.
-  private struct MemberNames: Decodable {
-    let sorted: [String]
-
-    private struct AnyKey: CodingKey {
-      let stringValue: String
-      var intValue: Int? { nil }
-      init?(stringValue: String) { self.stringValue = stringValue }
-      init?(intValue: Int) { nil }
-    }
-
-    init(from decoder: any Decoder) throws {
-      sorted = try decoder.container(keyedBy: AnyKey.self).allKeys.map(\.stringValue).sorted()
-    }
-  }
-
-  private func memberNames(of jwt: String, _ index: Int) throws -> [String] {
-    try JSONDecoder().decode(MemberNames.self, from: #require(decodedSegment(jwt, index))).sorted
   }
 }

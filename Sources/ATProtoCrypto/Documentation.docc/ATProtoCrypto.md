@@ -33,6 +33,8 @@ key.publicKey.did                                                   // "did:key:
 
 - <doc:ClientAttestations>
 - ``ClientAttestation``
+- <doc:DPoPProofs>
+- ``DPoPProof``
 
 ### Identifiers
 
@@ -47,4 +49,5 @@ key.publicKey.did                                                   // "did:key:
 
 ### Errors
 
+- ``DPoPProofError``
 - ``VarintError``
