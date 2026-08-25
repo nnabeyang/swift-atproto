@@ -61,13 +61,13 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       required[key] = false
     }
     let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
-    let repoWriteAction = Self.repoWriteAction(nsid: ts.id, inputName: name)
+    let repoWriteActions = Self.repoWriteActions(nsid: ts.id, inputName: name)
     let isRepoApplyWritesInput =
       ts.id == "com.atproto.repo.applyWrites" && name.hasSuffix("_Input")
     let inheritedNames: [String] = {
       if ts.isRecord { return ["ATProtoRecord"] }
       var names = ["Codable", "Hashable", "Sendable"]
-      if repoWriteAction != nil || isRepoApplyWritesInput {
+      if repoWriteActions != nil || isRepoApplyWritesInput {
         names.append("RepoWriteOperationDescribing")
       }
       return names
@@ -162,8 +162,8 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
           .with(\.leadingTrivia, .newlines(2))
       }
-      if let actionRaw = repoWriteAction {
-        Self.repoWriteRequirementsAccessor(actionRaw: actionRaw)
+      if let actionRaws = repoWriteActions {
+        Self.repoWriteRequirementsAccessor(actionRaws: actionRaws)
           .with(\.leadingTrivia, .newlines(2))
       } else if isRepoApplyWritesInput {
         Self.applyWritesRequirementsAccessor()
@@ -928,20 +928,22 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
   }
 
-  private static func repoWriteAction(nsid: String, inputName: String) -> String? {
+  private static func repoWriteActions(nsid: String, inputName: String) -> [String]? {
     guard inputName.hasSuffix("_Input") else { return nil }
     switch nsid {
-    case "com.atproto.repo.createRecord": return "create"
-    case "com.atproto.repo.putRecord": return "update"
-    case "com.atproto.repo.deleteRecord": return "delete"
+    case "com.atproto.repo.createRecord": return ["create"]
+    case "com.atproto.repo.putRecord": return ["create", "update"]
+    case "com.atproto.repo.deleteRecord": return ["delete"]
     default: return nil
     }
   }
 
-  private static func repoWriteRequirementsAccessor(actionRaw: String) -> VariableDeclSyntax {
+  private static func repoWriteRequirementsAccessor(actionRaws: [String]) -> VariableDeclSyntax {
     repoWriteRequirementsAccessor(
       ArrayExprSyntax {
-        ArrayElementSyntax(expression: repoWriteRequirement(actionRaw: actionRaw))
+        for actionRaw in actionRaws {
+          ArrayElementSyntax(expression: repoWriteRequirement(actionRaw: actionRaw))
+        }
       })
   }
 

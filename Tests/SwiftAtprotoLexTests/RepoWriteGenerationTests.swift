@@ -6,6 +6,58 @@ import Testing
 
 @Suite("Repository write generation")
 struct RepoWriteGenerationTests {
+  @Test("putRecord requires create and update scopes")
+  func putRecordRequiresCreateAndUpdateScopes() async throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: "swift-atproto-put-record-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let input = root.appending(path: "input")
+    let output = root.appending(path: "output")
+    try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+    let fixture = """
+      {
+        "lexicon": 1,
+        "id": "com.atproto.repo.putRecord",
+        "defs": {
+          "main": {
+            "type": "procedure",
+            "input": {
+              "encoding": "application/json",
+              "schema": {
+                "type": "object",
+                "required": ["repo", "collection", "rkey", "record"],
+                "properties": {
+                  "repo": { "type": "string", "format": "at-identifier" },
+                  "collection": { "type": "string", "format": "nsid" },
+                  "rkey": { "type": "string", "format": "record-key" },
+                  "record": { "type": "unknown" }
+                }
+              }
+            }
+          }
+        }
+      }
+      """
+    try Data(fixture.utf8).write(to: input.appending(path: "putRecord.json"))
+
+    try await SwiftAtprotoLex.main(
+      outdir: output, path: input.path, generate: .client, pluginSource: .command)
+
+    let source = try String(
+      contentsOf: output.appending(path: "XRPCAPIClient.swift"), encoding: .utf8)
+    #expect(!Parser.parse(source: source).hasError)
+    #expect(
+      source.contains(
+        "RepoWriteRequirement(collection: collection.rawValue, action: .create)"
+      ))
+    #expect(
+      source.contains(
+        "RepoWriteRequirement(collection: collection.rawValue, action: .update)"
+      ))
+  }
+
   @Test("applyWrites describes every generated write variant")
   func applyWritesDescribesEveryGeneratedWriteVariant() async throws {
     let root = FileManager.default.temporaryDirectory
