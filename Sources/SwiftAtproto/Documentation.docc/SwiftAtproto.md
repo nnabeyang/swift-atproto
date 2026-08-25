@@ -82,8 +82,12 @@ let posts = try await client.call(
 - ``RpcScope``
 - ``RepoScope``
 - ``BlobScope``
+- ``SpaceScope``
+- ``SpaceScopeOperation``
+- ``SpaceScopeRequirement``
 - ``IncludeScope``
 - ``LexPermission``
+- ``LexPermissionValue``
 - ``LexPermissionSet``
 - ``LexPermissionAction``
 - ``LexPermissionResource``

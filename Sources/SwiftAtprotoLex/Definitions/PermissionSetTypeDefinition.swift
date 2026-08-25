@@ -117,6 +117,24 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
     if let collection = permission.collection {
       args.append(labeledArg(label: "collection", expression: stringArrayExpr(collection)))
     }
+    if let spaceType = permission.spaceType {
+      args.append(labeledArg(label: "spaceType", expression: StringLiteralExprSyntax(content: spaceType)))
+    }
+    if let authority = permission.authority {
+      args.append(labeledArg(label: "authority", expression: StringLiteralExprSyntax(content: authority)))
+    }
+    if let skey = permission.skey {
+      args.append(labeledArg(label: "skey", expression: StringLiteralExprSyntax(content: skey)))
+    }
+    if let manage = permission.manage {
+      args.append(labeledArg(label: "manage", expression: actionArrayExpr(manage)))
+    }
+    if !permission.additionalFields.isEmpty {
+      args.append(
+        labeledArg(
+          label: "additionalFields",
+          expression: permissionValuesExpr(permission.additionalFields)))
+    }
     for i in 0..<args.count {
       args[i].leadingTrivia = .newline
       if i < args.count - 1 {
@@ -175,12 +193,67 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
     )
   }
 
+  private static func permissionValuesExpr(_ values: [String: PermissionValue]) -> ExprSyntax {
+    let sorted = values.sorted { $0.key < $1.key }
+    return ExprSyntax(
+      DictionaryExprSyntax(
+        leftSquare: .leftSquareToken(),
+        content: .elements(
+          DictionaryElementListSyntax {
+            for (index, element) in sorted.enumerated() {
+              DictionaryElementSyntax(
+                leadingTrivia: .newline,
+                key: StringLiteralExprSyntax(content: element.key),
+                value: permissionValueExpr(element.value),
+                trailingComma: index < sorted.count - 1 ? .commaToken() : nil
+              )
+            }
+          }),
+        rightSquare: .rightSquareToken(leadingTrivia: .newline)
+      )
+    )
+  }
+
+  private static func permissionValueExpr(_ value: PermissionValue) -> ExprSyntax {
+    let name: String
+    let argument: ExprSyntax
+    switch value {
+    case .string(let value):
+      name = "string"
+      argument = ExprSyntax(StringLiteralExprSyntax(content: value))
+    case .integer(let value):
+      name = "integer"
+      argument = ExprSyntax(IntegerLiteralExprSyntax(value))
+    case .boolean(let value):
+      name = "boolean"
+      argument = ExprSyntax(BooleanLiteralExprSyntax(booleanLiteral: value))
+    case .array(let values):
+      name = "array"
+      argument = ExprSyntax(
+        ArrayExprSyntax {
+          for value in values {
+            ArrayElementSyntax(expression: permissionValueExpr(value))
+          }
+        })
+    }
+    return ExprSyntax(
+      FunctionCallExprSyntax(
+        calledExpression: MemberAccessExprSyntax(name: .identifier(name)),
+        leftParen: .leftParenToken(),
+        arguments: LabeledExprListSyntax([LabeledExprSyntax(expression: argument)]),
+        rightParen: .rightParenToken()
+      )
+    )
+  }
+
   private static func resourceExpr(_ resource: PermissionResource) -> ExprSyntax {
     switch resource {
     case .rpc:
       ExprSyntax(MemberAccessExprSyntax(name: .identifier("rpc")))
     case .repo:
       ExprSyntax(MemberAccessExprSyntax(name: .identifier("repo")))
+    case .space:
+      ExprSyntax(MemberAccessExprSyntax(name: .identifier("space")))
     default:
       ExprSyntax(
         FunctionCallExprSyntax(
@@ -201,6 +274,10 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
 
   private static func actionExpr(_ action: PermissionAction) -> ExprSyntax {
     switch action {
+    case .readSelf:
+      ExprSyntax(MemberAccessExprSyntax(name: .identifier("readSelf")))
+    case .read:
+      ExprSyntax(MemberAccessExprSyntax(name: .identifier("read")))
     case .create:
       ExprSyntax(MemberAccessExprSyntax(name: .identifier("create")))
     case .update:
