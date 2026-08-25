@@ -16,6 +16,9 @@ let package = Package(
       name: "ATProtoCrypto",
       targets: ["ATProtoCrypto"]),
     .library(
+      name: "ATProtoSync",
+      targets: ["ATProtoSync"]),
+    .library(
       name: "ATProtoMacro",
       targets: ["ATProtoMacro"]),
     .executable(
@@ -36,6 +39,7 @@ let package = Package(
     ),
   ],
   dependencies: [
+    .package(url: "https://github.com/nnabeyang/BLAKE3.git", exact: "1.8.7-swift.1"),
     .package(url: "https://github.com/nnabeyang/swift-cbor.git", exact: "0.1.0"),
     .package(url: "https://github.com/swift-libp2p/swift-cid", exact: "0.2.2"),
     .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.2.3"),
@@ -61,6 +65,16 @@ let package = Package(
         .product(name: "P256K", package: "swift-secp256k1"),
         .product(name: "libsecp256k1", package: "swift-secp256k1"),
         .product(name: "Multibase", package: "swift-multibase"),
+      ]
+    ),
+    .target(
+      name: "ATProtoSync",
+      dependencies: [
+        "ATProtoCrypto",
+        "SwiftAtproto",
+        .product(name: "CBLAKE3", package: "BLAKE3"),
+        .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "SwiftCbor", package: "swift-cbor"),
       ]
     ),
     .target(
@@ -127,6 +141,16 @@ let package = Package(
     .testTarget(
       name: "ATProtoCryptoTests",
       dependencies: ["ATProtoCrypto"]
+    ),
+    .testTarget(
+      name: "ATProtoSyncTests",
+      dependencies: [
+        "ATProtoCrypto",
+        "ATProtoSync",
+        "SwiftAtproto",
+        .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "SwiftCbor", package: "swift-cbor"),
+      ]
     ),
     .testTarget(
       name: "SourceControlTests",

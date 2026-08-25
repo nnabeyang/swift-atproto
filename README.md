@@ -132,6 +132,8 @@ Package Index:
   representations, and the Lexicon string formats.
 - [ATProtoCrypto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/atprotocrypto)
   — signing keys, their `did:key` encodings, and DID documents.
+- [ATProtoSync](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/atprotosync)
+  — signed Permissioned Data repository commit and LtHash verification.
 - [swift-atproto](https://swiftpackageindex.com/nnabeyang/swift-atproto/main/documentation/swift_atproto)
   — the code generation executable the package plugins invoke.
 
@@ -152,6 +154,10 @@ from `.spi.yml`:
 
 The generated documentation is not committed; the Swift Package Index rebuilds
 it from source.
+
+Third-party source notices, including the Apache License 2.0 terms for the
+BLAKE3 C implementation used by `ATProtoSync`, are listed in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ## Apps Using
 
