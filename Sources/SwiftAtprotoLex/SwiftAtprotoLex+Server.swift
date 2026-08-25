@@ -3,8 +3,16 @@ import SwiftBasicFormat
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
+#if os(macOS) || os(Linux)
+  import SourceControl
+#endif
+
 extension Lex {
-  static func genXRPCAPIProtocolFile(for schemasMap: [String: [Schema]], defMap: ExtDefMap) -> String {
+  static func genXRPCAPIProtocolFile(
+    for schemasMap: [String: [Schema]],
+    defMap: ExtDefMap,
+    accessModifier: AccessModifier = .public
+  ) -> String {
     var methodTypes = [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]()
     for schemas in schemasMap {
       for schema in schemas.value {
@@ -54,15 +62,16 @@ extension Lex {
         genUnversalServerExtension(leadingTrivia: .newlines(2), for: methodTypes, defMap: defMap)
       },
       trailingTrivia: .newline)
-    return src.formatted(using: BasicFormat(indentationWidth: .spaces(2))).description
+    return renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
   }
 
-  private static func genXRPCAPIProtocol(leadingTrivia _: Trivia? = nil, for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]) -> ProtocolDeclSyntax {
+  private static func genXRPCAPIProtocol(
+    leadingTrivia _: Trivia? = nil,
+    for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]
+  ) -> ProtocolDeclSyntax {
     ProtocolDeclSyntax(
       leadingTrivia: nil,
-      modifiers: [
-        DeclModifierSyntax(name: .keyword(.public))
-      ],
+      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
       name: .identifier("XRPCAPIProtocol"),
       inheritanceClause: InheritanceClauseSyntax(typeNames: ["Sendable"])
     ) {

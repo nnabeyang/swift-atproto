@@ -45,6 +45,7 @@ struct Lexgen: AsyncParsableCommand {
         outdir: outdirURL,
         path: SourceControl.lexiconsDirectoryURL(packageRootURL: rootURL).path(),
         generate: config.generate,
+        accessModifier: config.accessModifier,
         pluginSource: pluginSource
       )
     #endif

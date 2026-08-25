@@ -57,7 +57,7 @@ swift package plugin \
 ```
 
 
-Sample configuration file is as follows. You can specify whether to generate client code, server code, or both using the `generate` field (defaults to `["client"]`).
+Sample configuration file is as follows. You can specify whether to generate client code, server code, or both using the `generate` field (defaults to `["client"]`). Use `accessModifier` to generate `internal`, `package`, or `public` declarations; it defaults to `public`.
 
 The same `.atproto.json` schema serves both the `ATProtoGenerator` build tool plugin and the `Generate Source Code` command plugin, but the `module` field behaves differently:
 
