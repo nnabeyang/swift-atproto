@@ -28,8 +28,20 @@ public protocol _XRPCCallable: Sendable {
   func response(_ requestComponents: XRPCRequestComponents) async throws -> Data
   /// Calls a query, encoding `input` as query items.
   func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query) async throws -> X.ResponseBody
+  /// Calls a query at an explicitly resolved destination.
+  func call<X: XRPCQuery>(
+    _ request: X.Type,
+    input: X.Input.Query,
+    destination: XRPCRequestDestination
+  ) async throws -> X.ResponseBody
   /// Calls a procedure, encoding `input` into the request body.
   func call<X: XRPCProcedure>(_ request: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody
+  /// Calls a procedure at an explicitly resolved destination.
+  func call<X: XRPCProcedure>(
+    _ request: X.Type,
+    input: X.RequestBody?,
+    destination: XRPCRequestDestination
+  ) async throws -> X.ResponseBody
 }
 
 extension _XRPCCallable {
@@ -38,9 +50,25 @@ extension _XRPCCallable {
 
 extension _XRPCCallable {
   public func call<X: XRPCQuery>(_ query: X.Type, input: X.Input.Query) async throws -> X.ResponseBody {
+    try await call(query, input: input, destination: nil)
+  }
+
+  public func call<X: XRPCQuery>(
+    _ query: X.Type,
+    input: X.Input.Query,
+    destination: XRPCRequestDestination
+  ) async throws -> X.ResponseBody {
+    try await call(query, input: input, destination: Optional(destination))
+  }
+
+  private func call<X: XRPCQuery>(
+    _ query: X.Type,
+    input: X.Input.Query,
+    destination: XRPCRequestDestination?
+  ) async throws -> X.ResponseBody {
     let proxy = getProxy(nsid: X.id)
     try enforceRpcScopeGuard(X.self, proxy: proxy)
-    var request = try constructRequest(query, input: input)
+    var request = try constructRequest(query, input: input, destination: destination)
     if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
@@ -48,11 +76,27 @@ extension _XRPCCallable {
   }
 
   public func call<X: XRPCProcedure>(_ procedure: X.Type, input: X.RequestBody?) async throws -> X.ResponseBody {
+    try await call(procedure, input: input, destination: nil)
+  }
+
+  public func call<X: XRPCProcedure>(
+    _ procedure: X.Type,
+    input: X.RequestBody?,
+    destination: XRPCRequestDestination
+  ) async throws -> X.ResponseBody {
+    try await call(procedure, input: input, destination: Optional(destination))
+  }
+
+  private func call<X: XRPCProcedure>(
+    _ procedure: X.Type,
+    input: X.RequestBody?,
+    destination: XRPCRequestDestination?
+  ) async throws -> X.ResponseBody {
     let proxy = getProxy(nsid: X.id)
     try enforceRpcScopeGuard(X.self, proxy: proxy)
     try enforceRepoScopeGuard(input as? any RepoWriteOperationDescribing)
     try enforceBlobScopeGuard(input as? XRPCBlobUpload)
-    var request = try constructRequest(procedure, input: input)
+    var request = try constructRequest(procedure, input: input, destination: destination)
     if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
@@ -107,6 +151,7 @@ extension _XRPCCallable {
   func constructRequest<X: XRPCQuery>(
     _ request: X.Type,
     input: X.Input.Query,
+    destination: XRPCRequestDestination? = nil,
   ) throws -> XRPCRequestComponents {
     let queryItems = input.asParameters.map({ Self.makeParameters(params: $0) }) ?? .init()
     return .init(
@@ -116,12 +161,14 @@ extension _XRPCCallable {
         dictionaryLiteral: (.accept, "json/application")
       ),
       method: .get,
+      destination: destination
     )
   }
 
   func constructRequest<X: XRPCProcedure>(
     _ request: X.Type,
     input: X.RequestBody?,
+    destination: XRPCRequestDestination? = nil,
   ) throws -> XRPCRequestComponents {
     var headerFields = HTTPFields()
     let encoder = JSONEncoder()
@@ -148,7 +195,8 @@ extension _XRPCCallable {
       queryItems: .init(),
       headers: headerFields,
       method: .post,
-      body: body
+      body: body,
+      destination: destination
     )
   }
 
