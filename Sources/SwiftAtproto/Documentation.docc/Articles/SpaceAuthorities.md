@@ -53,7 +53,8 @@ misconfigured one would send space-host traffic to the PDS.
 Verification is the other direction and does not fall back. A space token names
 the key that signed it in its `kid`, so
 ``DIDDocument/spaceSigningKey(keyId:)`` resolves that key and treats a missing
-entry as an error. Only `atproto` and `atproto_space` are accepted.
+entry as an error. Only `atproto` and `atproto_space` are accepted. Getting that
+`kid` out of a token in the first place is <doc:SpaceCredentials>.
 
 ## Addressing
 
