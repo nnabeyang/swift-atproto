@@ -64,11 +64,20 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     let repoWriteActions = Self.repoWriteActions(nsid: ts.id, inputName: name)
     let isRepoApplyWritesInput =
       ts.id == "com.atproto.repo.applyWrites" && name.hasSuffix("_Input")
+    let permissionedRepoDescriptor = permissionedRepoDescriptor(ts: ts)
     let inheritedNames: [String] = {
       if ts.isRecord { return ["ATProtoRecord"] }
       var names = ["Codable", "Hashable", "Sendable"]
       if repoWriteActions != nil || isRepoApplyWritesInput {
         names.append("RepoWriteOperationDescribing")
+      }
+      switch permissionedRepoDescriptor {
+      case .signedCommit:
+        names.append("PermissionedRepoSignedCommitDescribing")
+      case .operation:
+        names.append("PermissionedRepoOperationDescribing")
+      case nil:
+        break
       }
       return names
     }()
@@ -168,6 +177,50 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       } else if isRepoApplyWritesInput {
         Self.applyWritesRequirementsAccessor()
           .with(\.leadingTrivia, .newlines(2))
+      }
+      if case .signedCommit? = permissionedRepoDescriptor {
+        Self.forwardingAccessor(
+          name: "permissionedRepoCommitVersion", type: Lex.typeSyntax("Swift.Int"),
+          source: "ver"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoCommitHash", type: Lex.typeSyntax("Foundation.Data"),
+          source: "hash"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoCommitInputKeyMaterial",
+          type: Lex.typeSyntax("Foundation.Data"), source: "ikm"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoCommitSignature", type: Lex.typeSyntax("Foundation.Data"),
+          source: "sig"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoCommitMAC", type: Lex.typeSyntax("Foundation.Data"),
+          source: "mac"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoCommitRevision", type: Self.formatStringType("TID"),
+          source: "rev"
+        ).with(\.leadingTrivia, .newlines(2))
+      }
+      if case .operation? = permissionedRepoDescriptor {
+        Self.forwardingAccessor(
+          name: "permissionedRepoOperationCollection", type: Self.formatStringType("NSID"),
+          source: "collection"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoOperationRecordKey",
+          type: Self.formatStringType("RecordKey"), source: "rkey"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoOperationCID",
+          type: Self.formatStringType("LexLink", optional: true), source: "cid"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoOperationPreviousCID",
+          type: Self.formatStringType("LexLink", optional: true), source: "prev"
+        ).with(\.leadingTrivia, .newlines(2))
       }
       if !enumCaseIsEmpty {
         EnumDeclSyntax(
@@ -936,6 +989,79 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     case "com.atproto.repo.deleteRecord": return ["delete"]
     default: return nil
     }
+  }
+
+  private enum PermissionedRepoDescriptor {
+    case signedCommit
+    case operation
+  }
+
+  private func permissionedRepoDescriptor(ts: TypeSchema) -> PermissionedRepoDescriptor? {
+    let required = Set(required ?? [])
+    if ts.id == "com.atproto.space.defs", ts.defName == "signedCommit",
+      required.isSuperset(of: ["ver", "hash", "ikm", "sig", "mac", "rev"]),
+      isInteger("ver"), isBytes("hash"), isBytes("ikm"), isBytes("sig"),
+      isBytes("mac"), isString("rev", format: "tid")
+    {
+      return .signedCommit
+    }
+    let nullable = Set(nullable ?? [])
+    if ts.id == "com.atproto.space.listRepoOps", ts.defName == "opEntry",
+      required.isSuperset(of: ["collection", "rkey", "cid", "prev"]),
+      nullable.isSuperset(of: ["cid", "prev"]),
+      isString("collection", format: "nsid"),
+      isString("rkey", format: "record-key"),
+      isString("cid", format: "cid"), isString("prev", format: "cid")
+    {
+      return .operation
+    }
+    return nil
+  }
+
+  private func isInteger(_ property: String) -> Bool {
+    guard case .integer = properties[property] else { return false }
+    return true
+  }
+
+  private func isBytes(_ property: String) -> Bool {
+    guard case .bytes = properties[property] else { return false }
+    return true
+  }
+
+  private func isString(_ property: String, format: String) -> Bool {
+    guard case .string(let definition) = properties[property] else { return false }
+    return definition.format?.rawValue == format
+  }
+
+  private static func formatStringType(_ wrappedName: String, optional: Bool = false)
+    -> TypeSyntax
+  {
+    let type = TypeSyntax(
+      IdentifierTypeSyntax(
+        name: .identifier("FormatString"),
+        genericArgumentClause: GenericArgumentClauseSyntax {
+          GenericArgumentSyntax.create(
+            argument: IdentifierTypeSyntax(name: .identifier(wrappedName)))
+        }))
+    return optional ? TypeSyntax(OptionalTypeSyntax(wrappedType: type)) : type
+  }
+
+  private static func forwardingAccessor(
+    name: String, type: TypeSyntax, source: String
+  ) -> VariableDeclSyntax {
+    VariableDeclSyntax(
+      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+      bindingSpecifier: .keyword(.var),
+      bindings: [
+        PatternBindingSyntax(
+          pattern: IdentifierPatternSyntax(identifier: .identifier(name)),
+          typeAnnotation: TypeAnnotationSyntax(type: type),
+          accessorBlock: AccessorBlockSyntax(
+            accessors: .getter(
+              CodeBlockItemListSyntax {
+                DeclReferenceExprSyntax(baseName: .identifier(source))
+              })))
+      ])
   }
 
   private static func repoWriteRequirementsAccessor(actionRaws: [String]) -> VariableDeclSyntax {

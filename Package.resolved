@@ -1,6 +1,15 @@
 {
-  "originHash" : "90808b5ae57f3266cc96552b7c9fd873ae4d3bd01f52ba73823fc2fa473929bc",
+  "originHash" : "78749e575dcd57ff9392823a5744b412485cf934a209e0b89eb58a37789f38d7",
   "pins" : [
+    {
+      "identity" : "blake3",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/nnabeyang/BLAKE3.git",
+      "state" : {
+        "revision" : "18742b2d7a8fc32a78275d58e82f12d7792da129",
+        "version" : "1.8.7-swift.1"
+      }
+    },
     {
       "identity" : "cryptoswift",
       "kind" : "remoteSourceControl",

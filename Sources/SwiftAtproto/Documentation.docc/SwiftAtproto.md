@@ -99,6 +99,11 @@ let posts = try await client.call(
 - ``LexSpace``
 - ``LexRecordKeyType``
 
+### Permissioned repository sync descriptors
+
+- ``PermissionedRepoSignedCommitDescribing``
+- ``PermissionedRepoOperationDescribing``
+
 ### Space credentials
 
 - <doc:SpaceCredentials>
