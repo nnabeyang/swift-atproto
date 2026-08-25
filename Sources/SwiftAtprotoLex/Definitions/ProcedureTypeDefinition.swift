@@ -220,6 +220,9 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       name: .lexIdentifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCProcedure")))
+        if output?.isBinary == true {
+          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCBinaryResponseRequest")))
+        }
       }
     ) {
       staticLetDecl(leadingTrivia: .newline, ident: "id", value: StringLiteralExprSyntax(content: type))

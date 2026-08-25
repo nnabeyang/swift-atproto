@@ -91,6 +91,132 @@ extension _XRPCCallable {
   }
 }
 
+extension _XRPCCallable where Self: XRPCStreamingCallable {
+  /// Calls a binary query without buffering its successful response body.
+  public func callStreaming<X: XRPCQuery>(
+    _ query: X.Type,
+    input: X.Input.Query
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    try await callStreaming(query, input: input, destination: nil)
+  }
+
+  /// Calls a binary query at an explicitly resolved destination without
+  /// buffering its successful response body.
+  public func callStreaming<X: XRPCQuery>(
+    _ query: X.Type,
+    input: X.Input.Query,
+    destination: XRPCRequestDestination
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    try await callStreaming(query, input: input, destination: Optional(destination))
+  }
+
+  private func callStreaming<X: XRPCQuery>(
+    _ query: X.Type,
+    input: X.Input.Query,
+    destination: XRPCRequestDestination?
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    let proxy = getProxy(nsid: X.id)
+    try enforceRpcScopeGuard(X.self, proxy: proxy)
+    var request = try constructRequest(query, input: input, destination: destination)
+    if let proxy {
+      request.headers[.atprotoProxy] = proxy
+    }
+    return try await sendStreaming(query, for: request)
+  }
+
+  /// Calls a binary procedure without buffering its successful response body.
+  public func callStreaming<X: XRPCProcedure>(
+    _ procedure: X.Type,
+    input: X.RequestBody?
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    try await callStreaming(procedure, input: input, destination: nil)
+  }
+
+  /// Calls a binary procedure at an explicitly resolved destination without
+  /// buffering its successful response body.
+  public func callStreaming<X: XRPCProcedure>(
+    _ procedure: X.Type,
+    input: X.RequestBody?,
+    destination: XRPCRequestDestination
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    try await callStreaming(procedure, input: input, destination: Optional(destination))
+  }
+
+  private func callStreaming<X: XRPCProcedure>(
+    _ procedure: X.Type,
+    input: X.RequestBody?,
+    destination: XRPCRequestDestination?
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    let proxy = getProxy(nsid: X.id)
+    try enforceRpcScopeGuard(X.self, proxy: proxy)
+    try enforceRepoScopeGuard(input as? any RepoWriteOperationDescribing)
+    try enforceBlobScopeGuard(input as? XRPCBlobUpload)
+    var request = try constructRequest(procedure, input: input, destination: destination)
+    if let proxy {
+      request.headers[.atprotoProxy] = proxy
+    }
+    return try await sendStreaming(procedure, for: request)
+  }
+
+  private func sendStreaming<X: XRPCRequest>(
+    _: X.Type,
+    for request: XRPCRequestComponents
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    do {
+      let firstResponse = try await performStreaming(request)
+      if (200...299).contains(firstResponse.statusCode) {
+        return firstResponse
+      }
+
+      let firstBuffered = try await bufferErrorResponse(firstResponse)
+      if let nonce = dpopNonceChallenge(in: firstBuffered),
+        try await storeDPoPNonce(nonce, for: request)
+      {
+        return try await validateStreamingResponse(
+          try await performStreaming(request))
+      }
+      try throwResponseError(firstBuffered)
+    } catch let error as UnExpectedError {
+      throw X.Error(error: error)
+    }
+  }
+
+  private func performStreaming(
+    _ request: XRPCRequestComponents
+  ) async throws -> XRPCStreamingResponseComponents {
+    let authorizedRequest = try await authorize(request)
+    return try await responseStreamWithMetadata(authorizedRequest)
+  }
+
+  private func validateStreamingResponse(
+    _ response: XRPCStreamingResponseComponents
+  ) async throws -> XRPCStreamingResponseComponents {
+    guard !(200...299).contains(response.statusCode) else { return response }
+    try throwResponseError(try await bufferErrorResponse(response))
+  }
+
+  private func bufferErrorResponse(
+    _ response: XRPCStreamingResponseComponents
+  ) async throws -> XRPCResponseComponents {
+    let maximumErrorBodyBytes = 1_048_576
+    return try await XRPCResponseComponents(
+      statusCode: response.statusCode,
+      headers: response.headers,
+      body: response.body.collect(upTo: maximumErrorBodyBytes))
+  }
+
+  private func throwResponseError(
+    _ response: XRPCResponseComponents
+  ) throws -> Never {
+    if let error = try? JSONDecoder().decode(UnExpectedError.self, from: response.body) {
+      throw error
+    }
+    throw UnExpectedError(
+      error: nil,
+      message: "HTTP request failed with status code \(response.statusCode).")
+  }
+}
+
 extension _XRPCCallable {
   public func call<X: XRPCQuery>(_ query: X.Type, input: X.Input.Query) async throws -> X.ResponseBody {
     try await call(query, input: input, destination: nil)
