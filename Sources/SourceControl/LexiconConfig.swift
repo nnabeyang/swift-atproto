@@ -43,15 +43,23 @@ public struct GenerateOption: OptionSet, Codable, Sendable {
   public static let server = Self(rawValue: 1 << 1)
 }
 
+public enum AccessModifier: String, Codable, Sendable {
+  case `internal`
+  case package
+  case `public`
+}
+
 public struct LexiconConfig: Encodable, DecodableWithConfiguration, Sendable {
   public let dependencies: [LexiconDependency]
   public let module: String
   public let generate: GenerateOption
+  public let accessModifier: AccessModifier
 
   enum CodingKeys: String, CodingKey {
     case dependencies
     case module
     case generate
+    case accessModifier
   }
 
   public init(from decoder: Decoder, configuration outdir: String?) throws {
@@ -59,6 +67,7 @@ public struct LexiconConfig: Encodable, DecodableWithConfiguration, Sendable {
     dependencies = try container.decode([LexiconDependency].self, forKey: .dependencies)
     module = try outdir ?? container.decodeIfPresent(String.self, forKey: .module) ?? Self.defaultModule
     generate = try container.decodeIfPresent(GenerateOption.self, forKey: .generate) ?? .client
+    accessModifier = try container.decodeIfPresent(AccessModifier.self, forKey: .accessModifier) ?? .public
   }
 
   private static let defaultModule = "."
