@@ -59,6 +59,17 @@ extension ATPClientProtocol {
     }
     return requestComponents
   }
+
+  public func storeDPoPNonce(
+    _ nonce: String,
+    for requestComponents: XRPCRequestComponents
+  ) async throws -> Bool {
+    let endpoint = requestComponents.destination?.serviceEndpoint ?? serviceEndpoint
+    return try await storeDPoPNonce(
+      nonce,
+      for: requestComponents,
+      serviceEndpoint: endpoint)
+  }
 }
 
 extension ATPClientProtocol where Self: XRPCSubscriptionCallable {

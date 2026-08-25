@@ -5,6 +5,8 @@ extension HTTPField.Name {
   static var atprotoProxy: Self { .init("atproto-proxy")! }
   /// A proof of possession for a DPoP-bound authorization credential.
   public static var dpop: Self { .init("dpop")! }
+  /// A server-provided nonce required in the next DPoP proof.
+  public static var dpopNonce: Self { .init("dpop-nonce")! }
 }
 
 /// The minimum a client has to provide in order to make XRPC calls.
@@ -24,6 +26,12 @@ public protocol _XRPCCallable: Sendable {
   func authorize(
     _ requestComponents: XRPCRequestComponents
   ) async throws -> XRPCRequestComponents
+  /// Stores a DPoP nonce for the request's destination when the authorizer can
+  /// rebuild its proof. The default returns `false`.
+  func storeDPoPNonce(
+    _ nonce: String,
+    for requestComponents: XRPCRequestComponents
+  ) async throws -> Bool
   /// The service to proxy this method to via the `atproto-proxy` header, or
   /// `nil` to send it to the client's own endpoint.
   func getProxy(nsid: String) -> String?
@@ -33,6 +41,14 @@ public protocol _XRPCCallable: Sendable {
   /// ``UnExpectedError`` for a failure the method's Lexicon does not describe;
   /// it is converted into the method's own error type.
   func response(_ requestComponents: XRPCRequestComponents) async throws -> Data
+  /// Sends a prepared request and returns its response metadata and payload.
+  ///
+  /// Override this to enable protocol-level handling of non-success responses,
+  /// including DPoP nonce challenges. The default wraps ``response(_:)`` as a
+  /// successful response with no headers.
+  func responseWithMetadata(
+    _ requestComponents: XRPCRequestComponents
+  ) async throws -> XRPCResponseComponents
   /// Calls a query, encoding `input` as query items.
   func call<X: XRPCQuery>(_ request: X.Type, input: X.Input.Query) async throws -> X.ResponseBody
   /// Calls a query at an explicitly resolved destination.
@@ -58,6 +74,20 @@ extension _XRPCCallable {
     _ requestComponents: XRPCRequestComponents
   ) async throws -> XRPCRequestComponents {
     requestComponents
+  }
+
+  public func storeDPoPNonce(
+    _: String,
+    for _: XRPCRequestComponents
+  ) async throws -> Bool {
+    false
+  }
+
+  public func responseWithMetadata(
+    _ requestComponents: XRPCRequestComponents
+  ) async throws -> XRPCResponseComponents {
+    let body = try await response(requestComponents)
+    return .init(statusCode: 200, body: body)
   }
 }
 
@@ -85,7 +115,6 @@ extension _XRPCCallable {
     if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
-    request = try await authorize(request)
     return try await send(query, for: request)
   }
 
@@ -114,7 +143,6 @@ extension _XRPCCallable {
     if let proxy {
       request.headers[.atprotoProxy] = proxy
     }
-    request = try await authorize(request)
     return try await send(procedure, for: request)
   }
 
@@ -147,7 +175,16 @@ extension _XRPCCallable {
 
   private func send<X: XRPCRequest>(_: X.Type, for request: XRPCRequestComponents) async throws -> X.ResponseBody {
     do {
-      let data = try await response(request)
+      let firstResponse = try await perform(request)
+      let response: XRPCResponseComponents
+      if let nonce = dpopNonceChallenge(in: firstResponse),
+        try await storeDPoPNonce(nonce, for: request)
+      {
+        response = try await perform(request)
+      } else {
+        response = firstResponse
+      }
+      let data = try responseBody(from: response)
       if X.ResponseBody.self == EmptyResponse.self {
         return EmptyResponse() as! X.ResponseBody
       }
@@ -161,6 +198,37 @@ extension _XRPCCallable {
     } catch let error as UnExpectedError {
       throw X.Error(error: error)
     }
+  }
+
+  private func perform(
+    _ request: XRPCRequestComponents
+  ) async throws -> XRPCResponseComponents {
+    let authorizedRequest = try await authorize(request)
+    return try await responseWithMetadata(authorizedRequest)
+  }
+
+  private func dpopNonceChallenge(in response: XRPCResponseComponents) -> String? {
+    guard !(200...299).contains(response.statusCode),
+      let nonce = response.headers[.dpopNonce],
+      !nonce.isEmpty,
+      let error = try? JSONDecoder().decode(UnExpectedError.self, from: response.body),
+      error.error == "use_dpop_nonce"
+    else {
+      return nil
+    }
+    return nonce
+  }
+
+  private func responseBody(from response: XRPCResponseComponents) throws -> Data {
+    guard (200...299).contains(response.statusCode) else {
+      if let error = try? JSONDecoder().decode(UnExpectedError.self, from: response.body) {
+        throw error
+      }
+      throw UnExpectedError(
+        error: nil,
+        message: "HTTP request failed with status code \(response.statusCode).")
+    }
+    return response.body
   }
 
   func constructRequest<X: XRPCQuery>(

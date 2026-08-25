@@ -93,10 +93,11 @@ A proof covers one method and one URL and is good for one request:
   ``DPoPProof/randomTokenID()`` produces a fresh value: 16 random bytes as
   lowercase hexadecimal.
 
-There is no `nonce` claim. RFC 9449 lets an authorization server or a resource
-server demand one with a `DPoP-Nonce` challenge, but the space exchange in the
-reference implementation of the proposal issues no such challenge, so nothing
-here emits one.
+``DPoPProof/serverNonce`` is absent on the first attempt. If an authorization or
+resource server responds with the `use_dpop_nonce` error and a `DPoP-Nonce`
+header, store that value for the server and build one new proof with it. The
+retry still needs a fresh ``DPoPProof/tokenID``: the server nonce does not make a
+proof reusable.
 
 ## Algorithms
 
