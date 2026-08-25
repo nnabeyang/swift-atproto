@@ -98,16 +98,7 @@ public struct ClientAttestation: Sendable, Hashable {
   /// Each attestation needs its own, so call this once per attestation rather
   /// than holding onto a value.
   public static func randomTokenID() -> String {
-    var generator = SystemRandomNumberGenerator()
-    let digits = "0123456789abcdef"
-    var hex = ""
-    hex.reserveCapacity(32)
-    for _ in 0..<16 {
-      let byte: UInt8 = generator.next()
-      hex.append(digits[digits.index(digits.startIndex, offsetBy: Int(byte >> 4))])
-      hex.append(digits[digits.index(digits.startIndex, offsetBy: Int(byte & 0x0F))])
-    }
-    return hex
+    randomHexTokenID()
   }
 
   private struct Header: Encodable {

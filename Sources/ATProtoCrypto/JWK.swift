@@ -6,7 +6,67 @@ import Crypto
   import Foundation
 #endif
 
+/// The RFC 7638 required members of a public JWK, and nothing else.
+///
+/// Both callers want exactly this member set: a thumbprint is defined over the
+/// required members alone, and the `jwk` header of a DPoP proof has to carry the
+/// public key by itself — no `use`, no `kid`, and above all no private material.
+///
+/// ``y`` is absent for `OKP`, whose curves have a single coordinate.
+struct BareJWK: Encodable, Hashable {
+  let crv: String
+  let kty: String
+  let x: String
+  let y: String?
+
+  init(crv: String, kty: String, x: String, y: String? = nil) {
+    self.crv = crv
+    self.kty = kty
+    self.x = x
+    self.y = y
+  }
+
+  /// The members in the order RFC 7638 §3.2 prescribes for this key type, which
+  /// for both `EC` and `OKP` happens to be lexicographic order.
+  var thumbprintMembers: [(name: String, value: String)] {
+    var members: [(name: String, value: String)] = [("crv", crv), ("kty", kty), ("x", x)]
+    if let y {
+      members.append(("y", y))
+    }
+    return members
+  }
+}
+
 extension PublicKey {
+  /// The public half of this key as a bare JWK.
+  ///
+  /// - Throws: `secp256k1Error.underlyingCryptoError` when a `secp256k1` point
+  ///   cannot be re-serialized to read its coordinates.
+  var bareJWK: BareJWK {
+    get throws {
+      switch raw {
+      case .p256:
+        // `rawRepresentation` is the two 32-byte coordinates, `x` then `y`.
+        let bytes = rawBytes
+        return BareJWK(
+          crv: "P-256",
+          kty: "EC",
+          x: base64URLEncoded(bytes.prefix(32)),
+          y: base64URLEncoded(bytes.suffix(32)))
+      case .secp256k1(let key):
+        // Drop the `0x04` prefix of the uncompressed encoding.
+        let bytes = try key.uncompressedBytes.dropFirst()
+        return BareJWK(
+          crv: "secp256k1",
+          kty: "EC",
+          x: base64URLEncoded(bytes.prefix(32)),
+          y: base64URLEncoded(bytes.suffix(32)))
+      case .ed25519:
+        return BareJWK(crv: "Ed25519", kty: "OKP", x: base64URLEncoded(rawBytes))
+      }
+    }
+  }
+
   /// The RFC 7638 JWK thumbprint of this key, base64url-encoded without padding.
   ///
   /// This is the value a `cnf.jkt` claim carries: comparing it against the
@@ -19,35 +79,7 @@ extension PublicKey {
   ///   cannot be re-serialized to read its coordinates.
   public var jwkThumbprint: String {
     get throws {
-      switch raw {
-      case .p256:
-        // `rawRepresentation` is the two 32-byte coordinates, `x` then `y`.
-        let bytes = rawBytes
-        return Self.thumbprint(
-          members: [
-            ("crv", "P-256"),
-            ("kty", "EC"),
-            ("x", base64URLEncoded(bytes.prefix(32))),
-            ("y", base64URLEncoded(bytes.suffix(32))),
-          ])
-      case .secp256k1(let key):
-        // Drop the `0x04` prefix of the uncompressed encoding.
-        let bytes = try key.uncompressedBytes.dropFirst()
-        return Self.thumbprint(
-          members: [
-            ("crv", "secp256k1"),
-            ("kty", "EC"),
-            ("x", base64URLEncoded(bytes.prefix(32))),
-            ("y", base64URLEncoded(bytes.suffix(32))),
-          ])
-      case .ed25519:
-        return Self.thumbprint(
-          members: [
-            ("crv", "Ed25519"),
-            ("kty", "OKP"),
-            ("x", base64URLEncoded(rawBytes)),
-          ])
-      }
+      Self.thumbprint(members: try bareJWK.thumbprintMembers)
     }
   }
 
