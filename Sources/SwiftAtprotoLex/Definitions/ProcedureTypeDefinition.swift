@@ -213,6 +213,10 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
   func generateDeclaration(leadingTrivia: SwiftSyntax.Trivia?, ts: TypeSchema, name: String, type: String, defMap: ExtDefMap, generate: GenerateOption) -> any DeclSyntaxProtocol {
     let prefix = Lex.structNameFor(prefix: ts.prefix)
     let responseBody = responseBody(fname: name, defMap: defMap, prefix: Lex.structNameFor(prefix: ts.prefix))
+    let usesRawServerBody = output?.usesRawServerBody == true
+    let requiresExplicitContentType = output?.requiresExplicitContentType == true
+    let outputBodyCaseName = usesRawServerBody ? "binary" : "json"
+    let serverResponseBody: TypeSyntax = usesRawServerBody ? Lex.typeSyntax("OpenAPIRuntime.HTTPBody") : responseBody
     return EnumDeclSyntax(
       modifiers: [
         declModifierSyntax
@@ -453,14 +457,20 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                         leadingTrivia: .newline,
                                         elements: EnumCaseElementListSyntax([
                                           EnumCaseElementSyntax(
-                                            name: .identifier("json"),
+                                            name: .identifier(outputBodyCaseName),
                                             parameterClause: EnumCaseParameterClauseSyntax(
                                               leftParen: .leftParenToken(),
-                                              parameters: EnumCaseParameterListSyntax([
+                                              parameters: EnumCaseParameterListSyntax {
                                                 EnumCaseParameterSyntax(
-                                                  type: TypeSyntax(responseBody)
+                                                  type: serverResponseBody
                                                 )
-                                              ]),
+                                                if requiresExplicitContentType {
+                                                  EnumCaseParameterSyntax(
+                                                    firstName: .identifier("contentType"),
+                                                    colon: .colonToken(),
+                                                    type: Lex.typeSyntax("Swift.String"))
+                                                }
+                                              },
                                               rightParen: .rightParenToken()
                                             )
                                           )
@@ -475,10 +485,10 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                         bindingSpecifier: .keyword(.var),
                                         bindings: PatternBindingListSyntax([
                                           PatternBindingSyntax(
-                                            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("json"))),
+                                            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier(outputBodyCaseName))),
                                             typeAnnotation: TypeAnnotationSyntax(
                                               colon: .colonToken(),
-                                              type: TypeSyntax(responseBody)
+                                              type: serverResponseBody
                                             ),
                                             accessorBlock: AccessorBlockSyntax(
                                               leftBrace: .leftBraceToken(),
@@ -510,7 +520,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                                                                   FunctionCallExprSyntax(
                                                                                     callee: MemberAccessExprSyntax(
                                                                                       period: .periodToken(),
-                                                                                      declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
+                                                                                      declName: DeclReferenceExprSyntax(baseName: .identifier(outputBodyCaseName))
                                                                                     )
                                                                                   ) {
                                                                                     LabeledExprSyntax(
@@ -519,6 +529,12 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                                                                           bindingSpecifier: .keyword(.let),
                                                                                           pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("body")))
                                                                                         )))
+                                                                                    if requiresExplicitContentType {
+                                                                                      LabeledExprSyntax(
+                                                                                        label: .identifier("contentType"),
+                                                                                        colon: .colonToken(),
+                                                                                        expression: PatternExprSyntax(pattern: WildcardPatternSyntax()))
+                                                                                    }
                                                                                   }
                                                                                 ))))
                                                                         ]),

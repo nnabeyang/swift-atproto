@@ -538,7 +538,7 @@ extension Lex {
             LabeledExprSyntax(
               label: .identifier("serializer", leadingTrivia: .newline),
               colon: .colonToken(),
-              expression: makeSerializerExpr()
+              expression: makeSerializerExpr(output: def.output)
             )
           }
           .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
@@ -816,9 +816,92 @@ extension Lex {
       )
     }
   }
-  /// `serializer`
-  private static func makeSerializerExpr() -> ClosureExprSyntax {
-    ClosureExprSyntax(signaturesBuilder: {
+  /// Creates the response serializer for an operation.
+  private static func makeSerializerExpr(output: OutputType?) -> ClosureExprSyntax {
+    let usesRawServerBody = output?.usesRawServerBody == true
+    let requiresExplicitContentType = output?.requiresExplicitContentType == true
+    let contentType = output?.encoding.rawValue ?? "application/json"
+    let responseContentType: ExprSyntax =
+      requiresExplicitContentType
+      ? ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("contentType")))
+      : ExprSyntax(StringLiteralExprSyntax(content: contentType))
+    func binaryBodyPattern(requiresExplicitContentType: Bool) -> ExpressionPatternSyntax {
+      ExpressionPatternSyntax(
+        expression: FunctionCallExprSyntax(
+          callee: MemberAccessExprSyntax(
+            period: .periodToken(),
+            declName: DeclReferenceExprSyntax(baseName: .identifier("binary"))
+          )
+        ) {
+          LabeledExprSyntax(
+            expression: PatternExprSyntax(
+              pattern: ValueBindingPatternSyntax(
+                bindingSpecifier: .keyword(.let),
+                pattern: IdentifierPatternSyntax(identifier: .identifier("value"))
+              )))
+          if requiresExplicitContentType {
+            LabeledExprSyntax(
+              label: .identifier("contentType"),
+              colon: .colonToken(),
+              expression: PatternExprSyntax(
+                pattern: ValueBindingPatternSyntax(
+                  bindingSpecifier: .keyword(.let),
+                  pattern: IdentifierPatternSyntax(identifier: .identifier("contentType"))
+                )))
+          }
+        })
+    }
+    func unwrapBinaryBody(requiresExplicitContentType: Bool) -> GuardStmtSyntax {
+      GuardStmtSyntax(
+        leadingTrivia: .newline,
+        conditions: ConditionElementListSyntax {
+          MatchingPatternConditionSyntax(
+            pattern: binaryBodyPattern(requiresExplicitContentType: requiresExplicitContentType),
+            initializer: InitializerClauseSyntax(
+              equal: .equalToken(),
+              value: MemberAccessExprSyntax(parts: [.identifier("value"), .identifier("body")])
+            ))
+        }
+      ) {
+        FunctionCallExprSyntax(
+          callee: DeclReferenceExprSyntax(baseName: .identifier("preconditionFailure"))
+        ) {
+          LabeledExprSyntax(
+            expression: StringLiteralExprSyntax(
+              content: "Generated non-JSON response has an incompatible body case"))
+        }
+      }
+    }
+    func validateAccept(_ contentType: ExprSyntax) -> TryExprSyntax {
+      TryExprSyntax(
+        expression: FunctionCallExprSyntax(
+          callee: MemberAccessExprSyntax(parts: [
+            .identifier("converter"),
+            .identifier("validateAcceptIfPresent"),
+          ])
+        ) {
+          LabeledExprSyntax(expression: contentType)
+          LabeledExprSyntax(
+            label: .identifier("in"),
+            colon: .colonToken(),
+            expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("headerFields")]))
+        })
+    }
+    func setResponseContentType(_ contentType: ExprSyntax) -> SequenceExprSyntax {
+      SequenceExprSyntax {
+        SubscriptCallExprSyntax(
+          calledExpression: MemberAccessExprSyntax(parts: [.identifier("response"), .identifier("headerFields")])
+        ) {
+          LabeledExprSyntax(
+            expression: MemberAccessExprSyntax(
+              period: .periodToken(),
+              declName: DeclReferenceExprSyntax(baseName: .identifier("contentType"))))
+        }
+        AssignmentExprSyntax(equal: .equalToken())
+        contentType
+      }
+    }
+    return ClosureExprSyntax(signaturesBuilder: {
       ClosureShorthandParameterSyntax(name: .identifier("output"))
       ClosureShorthandParameterSyntax(name: .identifier("request"))
     }) {
@@ -847,12 +930,14 @@ extension Lex {
             }
           )
         ) {
-          FunctionCallExprSyntax(
-            callee: DeclReferenceExprSyntax(baseName: .identifier("suppressUnusedWarning"))
-          ) {
-            LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("value"))))
+          if !usesRawServerBody {
+            FunctionCallExprSyntax(
+              callee: DeclReferenceExprSyntax(baseName: .identifier("suppressUnusedWarning"))
+            ) {
+              LabeledExprSyntax(expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("value"))))
+            }
+            .with(\.leadingTrivia, .newline)
           }
-          .with(\.leadingTrivia, .newline)
           VariableDeclSyntax(
             leadingTrivia: .newline,
             bindingSpecifier: .keyword(.var),
@@ -874,14 +959,16 @@ extension Lex {
               )
             ]
           )
-          FunctionCallExprSyntax(
-            callee: DeclReferenceExprSyntax(baseName: .identifier("suppressMutabilityWarning", leadingTrivia: .newline))
-          ) {
-            LabeledExprSyntax(
-              expression: InOutExprSyntax(
-                ampersand: .prefixAmpersandToken(),
-                expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("response")))
-              ))
+          if !usesRawServerBody {
+            FunctionCallExprSyntax(
+              callee: DeclReferenceExprSyntax(baseName: .identifier("suppressMutabilityWarning", leadingTrivia: .newline))
+            ) {
+              LabeledExprSyntax(
+                expression: InOutExprSyntax(
+                  ampersand: .prefixAmpersandToken(),
+                  expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("response")))
+                ))
+            }
           }
           VariableDeclSyntax(
             bindingSpecifier: .keyword(.let, leadingTrivia: .newline),
@@ -899,95 +986,109 @@ extension Lex {
               )
             ])
           )
-          ExpressionStmtSyntax(
-            expression: SwitchExprSyntax(
-              leadingTrivia: .newline,
-              subject: MemberAccessExprSyntax(parts: [.identifier("value"), .identifier("body")])
-            ) {
-              SwitchCaseSyntax(
-                label: SwitchCaseSyntax.Label(
-                  SwitchCaseLabelSyntax(
-                    leadingTrivia: .newline
-                  ) {
-                    SwitchCaseItemSyntax(
-                      pattern: ExpressionPatternSyntax(
-                        expression: FunctionCallExprSyntax(
-                          callee: MemberAccessExprSyntax(
-                            period: .periodToken(),
-                            declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
-                          )
-                        ) {
-                          LabeledExprSyntax(
-                            expression: PatternExprSyntax(
-                              pattern: ValueBindingPatternSyntax(
-                                bindingSpecifier: .keyword(.let),
-                                pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("value")))
-                              )))
-                        }
-                      ))
-                  }
-                )
+          .with(\.trailingTrivia, .newline)
+          if usesRawServerBody {
+            unwrapBinaryBody(requiresExplicitContentType: requiresExplicitContentType)
+            validateAccept(responseContentType)
+              .with(\.leadingTrivia, .newline)
+            setResponseContentType(responseContentType)
+              .with(\.leadingTrivia, .newline)
+            SequenceExprSyntax {
+              DeclReferenceExprSyntax(leadingTrivia: .newline, baseName: .identifier("body"))
+              AssignmentExprSyntax(equal: .equalToken())
+              DeclReferenceExprSyntax(baseName: .identifier("value"))
+            }
+          } else {
+            ExpressionStmtSyntax(
+              expression: SwitchExprSyntax(
+                leadingTrivia: .newline,
+                subject: MemberAccessExprSyntax(parts: [.identifier("value"), .identifier("body")])
               ) {
-                TryExprSyntax(
-                  leadingTrivia: .newline,
-                  expression: FunctionCallExprSyntax(
-                    callee: MemberAccessExprSyntax(parts: [
-                      .identifier("converter"),
-                      .identifier("validateAcceptIfPresent"),
-                    ])
-                  ) {
-                    LabeledExprSyntax(
-                      leadingTrivia: .newline,
-                      expression: StringLiteralExprSyntax(content: "application/json")
-                    )
-                    LabeledExprSyntax(
-                      label: .identifier("in", leadingTrivia: .newline),
-                      colon: .colonToken(),
-                      expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("headerFields")])
-                    )
-                  }
-                  .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
-                )
-                SequenceExprSyntax {
-                  DeclReferenceExprSyntax(
-                    leadingTrivia: .newline,
-                    baseName: .identifier("body"))
-                  AssignmentExprSyntax(equal: .equalToken())
+                SwitchCaseSyntax(
+                  label: SwitchCaseSyntax.Label(
+                    SwitchCaseLabelSyntax(
+                      leadingTrivia: .newline
+                    ) {
+                      SwitchCaseItemSyntax(
+                        pattern: ExpressionPatternSyntax(
+                          expression: FunctionCallExprSyntax(
+                            callee: MemberAccessExprSyntax(
+                              period: .periodToken(),
+                              declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
+                            )
+                          ) {
+                            LabeledExprSyntax(
+                              expression: PatternExprSyntax(
+                                pattern: ValueBindingPatternSyntax(
+                                  bindingSpecifier: .keyword(.let),
+                                  pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("value")))
+                                )))
+                          }
+                        ))
+                    }
+                  )
+                ) {
                   TryExprSyntax(
+                    leadingTrivia: .newline,
                     expression: FunctionCallExprSyntax(
-                      callee: MemberAccessExprSyntax(
-                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("converter"))),
-                        period: .periodToken(),
-                        declName: DeclReferenceExprSyntax(baseName: .identifier("setResponseBodyAsJSON"))
-                      )
+                      callee: MemberAccessExprSyntax(parts: [
+                        .identifier("converter"),
+                        .identifier("validateAcceptIfPresent"),
+                      ])
                     ) {
                       LabeledExprSyntax(
                         leadingTrivia: .newline,
-                        expression: DeclReferenceExprSyntax(baseName: .identifier("value")),
+                        expression: StringLiteralExprSyntax(content: "application/json")
                       )
                       LabeledExprSyntax(
-                        leadingTrivia: .newline,
-                        label: .identifier("headerFields"),
+                        label: .identifier("in", leadingTrivia: .newline),
                         colon: .colonToken(),
-                        expression: InOutExprSyntax(
-                          ampersand: .prefixAmpersandToken(),
-                          expression: MemberAccessExprSyntax(parts: [.identifier("response"), .identifier("headerFields")])
-                        )
-                      )
-                      LabeledExprSyntax(
-                        leadingTrivia: .newline,
-                        label: .identifier("contentType"),
-                        colon: .colonToken(),
-                        expression: StringLiteralExprSyntax(content: "application/json; charset=utf-8")
+                        expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("headerFields")])
                       )
                     }
                     .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
                   )
+                  SequenceExprSyntax {
+                    DeclReferenceExprSyntax(
+                      leadingTrivia: .newline,
+                      baseName: .identifier("body"))
+                    AssignmentExprSyntax(equal: .equalToken())
+                    TryExprSyntax(
+                      expression: FunctionCallExprSyntax(
+                        callee: MemberAccessExprSyntax(
+                          base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("converter"))),
+                          period: .periodToken(),
+                          declName: DeclReferenceExprSyntax(baseName: .identifier("setResponseBodyAsJSON"))
+                        )
+                      ) {
+                        LabeledExprSyntax(
+                          leadingTrivia: .newline,
+                          expression: DeclReferenceExprSyntax(baseName: .identifier("value")),
+                        )
+                        LabeledExprSyntax(
+                          leadingTrivia: .newline,
+                          label: .identifier("headerFields"),
+                          colon: .colonToken(),
+                          expression: InOutExprSyntax(
+                            ampersand: .prefixAmpersandToken(),
+                            expression: MemberAccessExprSyntax(parts: [.identifier("response"), .identifier("headerFields")])
+                          )
+                        )
+                        LabeledExprSyntax(
+                          leadingTrivia: .newline,
+                          label: .identifier("contentType"),
+                          colon: .colonToken(),
+                          expression: StringLiteralExprSyntax(content: "application/json; charset=utf-8")
+                        )
+                      }
+                      .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
+                    )
+                  }
                 }
               }
-            }
-            .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
-          )
+              .with(\.rightBrace, .rightBraceToken(leadingTrivia: .newline))
+            )
+          }
           ReturnStmtSyntax(
             leadingTrivia: .newline,
             expression: ExprSyntax(
