@@ -6,6 +6,16 @@ import Testing
 
 @Suite("Binary response streaming generation")
 struct BinaryResponseStreamingGenerationTests {
+  @Test("preserves an unknown encoding as an opaque string")
+  func preservesUnknownEncoding() throws {
+    let rawValue = "application/x-example; profile=custom"
+    let data = try JSONEncoder().encode(rawValue)
+    let encoding = try JSONDecoder().decode(EncodingType.self, from: data)
+
+    #expect(encoding == .other(rawValue))
+    #expect(try JSONDecoder().decode(String.self, from: JSONEncoder().encode(encoding)) == rawValue)
+  }
+
   @Test("generates streaming overloads only for binary outputs")
   func generatesBinaryStreamingMethods() async throws {
     let source = try await generate([
