@@ -728,22 +728,43 @@ struct RecordSchema {
   let nullable: [String]?
 }
 
-enum EncodingType: String, Codable {
-  case cbor = "application/cbor"
-  case json = "application/json"
-  case jsonl = "application/jsonl"
-  case car = "application/vnd.ipld.car"
-  case text = "text/plain"
-  case mp4 = "video/mp4"
-  case any = "*/*"
+enum EncodingType: Codable, Equatable {
+  case cbor
+  case json
+  case jsonl
+  case car
+  case text
+  case mp4
+  case any
+  case other(String)
+
+  var rawValue: String {
+    switch self {
+    case .cbor: "application/cbor"
+    case .json: "application/json"
+    case .jsonl: "application/jsonl"
+    case .car: "application/vnd.ipld.car"
+    case .text: "text/plain"
+    case .mp4: "video/mp4"
+    case .any: "*/*"
+    case .other(let rawValue): rawValue
+    }
+  }
 
   init(from decoder: Decoder) throws {
     let rawValue = try String(from: decoder)
 
-    guard let value = EncodingType(rawValue: rawValue) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "unexpected mimetype: \(rawValue.debugDescription)"))
-    }
-    self = value
+    self =
+      switch rawValue {
+      case "application/cbor": .cbor
+      case "application/json": .json
+      case "application/jsonl": .jsonl
+      case "application/vnd.ipld.car": .car
+      case "text/plain": .text
+      case "video/mp4": .mp4
+      case "*/*": .any
+      default: .other(rawValue)
+      }
   }
 
   func encode(to encoder: Encoder) throws {
@@ -781,18 +802,26 @@ struct OutputType: Encodable, DecodableWithConfiguration {
       return token
     case .text:
       return "Swift.String"
-    case .cbor, .car, .any, .mp4:
+    case .cbor, .car, .any, .mp4, .other:
       return binaryTypeName
     }
   }
 
   var isBinary: Bool {
     switch encoding {
-    case .cbor, .car, .any, .mp4:
+    case .cbor, .car, .any, .mp4, .other:
       true
     default:
       false
     }
+  }
+
+  var usesRawServerBody: Bool {
+    encoding != .json
+  }
+
+  var requiresExplicitContentType: Bool {
+    encoding == .any
   }
 }
 

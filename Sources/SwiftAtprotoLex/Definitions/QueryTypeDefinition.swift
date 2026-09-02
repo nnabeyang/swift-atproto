@@ -118,7 +118,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return Lex.typeSyntax("\(prefix).\(outname)")
       case .text:
         return Lex.typeSyntax("Swift.String")
-      case .cbor, .car, .any, .mp4:
+      case .cbor, .car, .any, .mp4, .other:
         return Lex.typeSyntax("Foundation.Data")
       }
     }
@@ -617,6 +617,10 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
 
   private func genQueryOutput(ts: TypeSchema, name: String, type: String, prefix: String, defMap: ExtDefMap) -> EnumDeclSyntax {
     let prefix = Lex.structNameFor(prefix: ts.prefix)
+    let usesRawServerBody = output?.usesRawServerBody == true
+    let requiresExplicitContentType = output?.requiresExplicitContentType == true
+    let bodyCaseName = usesRawServerBody ? "binary" : "json"
+    let bodyType = usesRawServerBody ? "OpenAPIRuntime.HTTPBody" : "ResponseBody"
     return EnumDeclSyntax(
       attributes: [
         AttributeListSyntax.Element(
@@ -654,10 +658,10 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             bindingSpecifier: .keyword(.var),
             bindings: PatternBindingListSyntax([
               PatternBindingSyntax(
-                pattern: IdentifierPatternSyntax(identifier: .identifier("json")),
+                pattern: IdentifierPatternSyntax(identifier: .identifier(bodyCaseName)),
                 typeAnnotation: TypeAnnotationSyntax(
                   colon: .colonToken(),
-                  type: IdentifierTypeSyntax(name: .identifier("ResponseBody"))
+                  type: Lex.typeSyntax(bodyType)
                 ),
                 accessorBlock: AccessorBlockSyntax(
                   leftBrace: .leftBraceToken(),
@@ -681,10 +685,16 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                                       expression: FunctionCallExprSyntax(
                                         callee: MemberAccessExprSyntax(
                                           period: .periodToken(),
-                                          declName: DeclReferenceExprSyntax(baseName: .identifier("json"))
+                                          declName: DeclReferenceExprSyntax(baseName: .identifier(bodyCaseName))
                                         )
                                       ) {
                                         LabeledExprSyntax(expression: PatternExprSyntax(pattern: ValueBindingPatternSyntax(bindingSpecifier: .keyword(.let), pattern: IdentifierPatternSyntax(identifier: .identifier("body")))))
+                                        if requiresExplicitContentType {
+                                          LabeledExprSyntax(
+                                            label: .identifier("contentType"),
+                                            colon: .colonToken(),
+                                            expression: PatternExprSyntax(pattern: WildcardPatternSyntax()))
+                                        }
                                       }
                                     ))
                                 ]),
@@ -927,18 +937,24 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
   }
 
   private func genQueryOutputBody(ts: TypeSchema, name: String, type: String, prefix: String, defMap: ExtDefMap) -> EnumCaseDeclSyntax {
-    EnumCaseDeclSyntax(
+    let usesRawServerBody = output?.usesRawServerBody == true
+    let requiresExplicitContentType = output?.requiresExplicitContentType == true
+    return EnumCaseDeclSyntax(
       leadingTrivia: .newline,
       elements: EnumCaseElementListSyntax([
         EnumCaseElementSyntax(
-          name: .identifier("json"),
+          name: .identifier(usesRawServerBody ? "binary" : "json"),
           parameterClause: EnumCaseParameterClauseSyntax(
             leftParen: .leftParenToken(),
-            parameters: EnumCaseParameterListSyntax([
-              EnumCaseParameterSyntax(
-                type: IdentifierTypeSyntax(name: .identifier("ResponseBody"))
-              )
-            ]),
+            parameters: EnumCaseParameterListSyntax {
+              EnumCaseParameterSyntax(type: Lex.typeSyntax(usesRawServerBody ? "OpenAPIRuntime.HTTPBody" : "ResponseBody"))
+              if requiresExplicitContentType {
+                EnumCaseParameterSyntax(
+                  firstName: .identifier("contentType"),
+                  colon: .colonToken(),
+                  type: Lex.typeSyntax("Swift.String"))
+              }
+            },
             rightParen: .rightParenToken()
           )
         )
