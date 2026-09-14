@@ -70,6 +70,7 @@ jobs:
           xcodebuild clean test \
             -scheme SwiftAtproto-Package \
             -destination "$DESTINATION" \
+            -skipPackagePluginValidation \
             | xcpretty
 
   test-linux:
