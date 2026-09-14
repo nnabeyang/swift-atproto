@@ -118,7 +118,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return Lex.typeSyntax("\(prefix).\(outname)")
       case .text:
         return Lex.typeSyntax("Swift.String")
-      case .cbor, .car, .any, .mp4:
+      case .cbor, .car, .any, .mp4, .other:
         return Lex.typeSyntax("Foundation.Data")
       }
     }
