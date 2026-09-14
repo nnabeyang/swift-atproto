@@ -72,4 +72,10 @@ func isNeedEscapingKeyword(_ string: String) -> Bool {
     public static let client = Self(rawValue: 1 << 0)
     public static let server = Self(rawValue: 1 << 1)
   }
+
+  public enum AccessModifier: String, Codable, Sendable {
+    case `internal`
+    case package
+    case `public`
+  }
 #endif

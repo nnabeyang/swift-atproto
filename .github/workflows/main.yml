@@ -56,6 +56,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Test platform ${{ matrix.target }}
         run: |
+          # Without pipefail the step reports xcpretty's exit status, so a
+          # failing xcodebuild would still pass the job.
+          set -o pipefail
+
           if [ "${{ matrix.target }}" = "iOS" ]; then
             DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=26.5"
           else
@@ -66,6 +70,7 @@ jobs:
           xcodebuild clean test \
             -scheme SwiftAtproto-Package \
             -destination "$DESTINATION" \
+            -skipPackagePluginValidation \
             | xcpretty
 
   test-linux:
