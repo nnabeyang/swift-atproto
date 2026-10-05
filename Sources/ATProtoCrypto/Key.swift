@@ -142,11 +142,17 @@ public struct PublicKey {
   /// multicodec code for its curve.
   ///
   /// This is the value a DID document publishes as `publicKeyMultibase`.
+  /// Elliptic-curve points are written in compressed form, as the multikey
+  /// encoding requires. See
+  /// [Cryptography](https://atproto.com/specs/cryptography).
   public var multibaseString: String {
-    BaseEncoding.base58btc.encode(data: varEncode(pref: prefix, body: rawBytes))
+    BaseEncoding.base58btc.encode(data: varEncode(pref: prefix, body: multikeyBytes))
   }
 
   /// The key material, compressed for ``KeyType/secp256k1``.
+  ///
+  /// A ``KeyType/p256`` key is the 64-byte `x` and `y` coordinates, not the
+  /// compressed point that ``multibaseString`` encodes.
   public var rawBytes: Data {
     switch raw {
     case .ed25519(let key):
@@ -155,6 +161,19 @@ public struct PublicKey {
       key.rawRepresentation
     case .secp256k1(let key):
       Data(key.dataRepresentation)
+    }
+  }
+
+  /// The bytes that follow the multicodec prefix in ``multibaseString``.
+  ///
+  /// ``rawBytes`` keeps the P-256 coordinates uncompressed because the JWK
+  /// thumbprint reads `x` and `y` from it, so the compression happens here.
+  private var multikeyBytes: Data {
+    switch raw {
+    case .p256(let key):
+      key.compressedRepresentation
+    case .ed25519, .secp256k1:
+      rawBytes
     }
   }
 
@@ -221,7 +240,8 @@ public struct PublicKey {
   /// multicodec prefix.
   ///
   /// A `secp256k1` key is accepted in either compressed or uncompressed form
-  /// and is normalized to compressed.
+  /// and is normalized to compressed. A P-256 key is accepted as the compressed
+  /// point or as the 64-byte coordinates.
   public static func publicKeyFromMultibaseString(string: String) throws -> PublicKey {
     let data = try Multibase.BaseEncoding.decode(string).data
     let (prefix, raw) = try varDecode(buf: data)
@@ -235,7 +255,12 @@ public struct PublicKey {
       let raw = try Curve25519.Signing.PublicKey(rawRepresentation: raw)
       return PublicKey(type: keyType, raw: .ed25519(raw))
     case .p256:
-      let raw = try P256.Signing.PublicKey(rawRepresentation: raw)
+      // Releases before compressed multikey output wrote the 64-byte
+      // coordinates, so keys encoded by them must still decode.
+      let raw =
+        try raw.count == 64
+        ? P256.Signing.PublicKey(rawRepresentation: raw)
+        : P256.Signing.PublicKey(compressedRepresentation: raw)
       return PublicKey(type: keyType, raw: .p256(raw))
     case .secp256k1:
       let format: P256K.Format = raw.count == P256K.Format.compressed.length ? .compressed : .uncompressed
