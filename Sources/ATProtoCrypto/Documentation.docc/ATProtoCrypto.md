@@ -35,6 +35,8 @@ key.publicKey.did                                                   // "did:key:
 - ``ClientAttestation``
 - <doc:DPoPProofs>
 - ``DPoPProof``
+- <doc:SpaceRequestSignatures>
+- ``SpaceRequestSignature``
 
 ### Identifiers
 
@@ -50,4 +52,5 @@ key.publicKey.did                                                   // "did:key:
 ### Errors
 
 - ``DPoPProofError``
+- ``SpaceRequestSignatureError``
 - ``VarintError``
