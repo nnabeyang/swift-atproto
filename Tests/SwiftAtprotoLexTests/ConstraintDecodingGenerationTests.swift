@@ -41,8 +41,53 @@ struct ConstraintDecodingGenerationTests {
 
     #expect(!syntax.hasError)
     #expect(source.contains("if !LexiconDecodingMode.shouldValidateConstraints(in: decoder)"))
-    #expect(source.contains("self = Self.init(value: value)"))
-    #expect(source.contains("self = try Self.make(value: value)"))
+    #expect(source.contains("self = Self.init(value: value, _unknownValues: _unknownValues)"))
+    #expect(source.contains("self = try Self.make(value: value, _unknownValues: _unknownValues)"))
+    #expect(source.contains("public init(value: Swift.String, _unknownValues: [Swift.String: AnyCodable] = [:])"))
+    #expect(source.contains("public static func make(value: Swift.String, _unknownValues: [Swift.String: AnyCodable] = [:]) throws -> Self"))
+    #expect(source.contains("return Self.init(value: value, _unknownValues: _unknownValues)"))
+  }
+
+  @Test("constrained records pass unknown fields through init and make")
+  func constrainedRecordsPassUnknownFields() async throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: "swift-atproto-constraint-record-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let input = root.appending(path: "input", directoryHint: .isDirectory)
+    let output = root.appending(path: "output", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+    let fixture = """
+      {
+        "lexicon": 1,
+        "id": "com.example.constrainedRecord",
+        "defs": {
+          "main": {
+            "type": "record",
+            "key": "tid",
+            "record": {
+              "type": "object",
+              "required": ["value"],
+              "properties": {
+                "value": {"type": "string", "maxLength": 10}
+              }
+            }
+          }
+        }
+      }
+      """
+    try fixture.write(to: input.appending(path: "constrainedRecord.json"), atomically: true, encoding: .utf8)
+
+    try await SwiftAtprotoLex.main(outdir: output, path: input.path, generate: .client, pluginSource: .command)
+
+    let source = try String(contentsOf: output.appending(path: "XRPCAPIClient.swift"), encoding: .utf8)
+
+    #expect(!Parser.parse(source: source).hasError)
+    #expect(source.contains("case type = \"$type\""))
+    #expect(source.contains("self = Self.init(value: value, _unknownValues: _unknownValues)"))
+    #expect(source.contains("self = try Self.make(value: value, _unknownValues: _unknownValues)"))
   }
 
   @Test("internal API generation removes public access modifiers")
