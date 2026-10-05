@@ -562,6 +562,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               : InitializerClauseSyntax(equal: .equalToken(), value: NilLiteralExprSyntax())
             FunctionParameterSyntax(firstName: .lexIdentifier(key), type: type, defaultValue: defaultValue)
           }
+          Self.unknownValuesParameter
         }
       )
     ) {
@@ -583,13 +584,32 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           declName: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
         )
         AssignmentExprSyntax(equal: .equalToken())
-        DictionaryExprSyntax(
-          leftSquare: .leftSquareToken(),
-          content: DictionaryExprSyntax.Content(.colonToken()),
-          rightSquare: .rightSquareToken()
-        )
+        DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
       }
     }
+  }
+
+  /// Lets callers rebuild a value from a decoded one without losing the
+  /// fields this module was not generated against.
+  private static var unknownValuesParameter: FunctionParameterSyntax {
+    FunctionParameterSyntax(
+      firstName: .identifier("_unknownValues"),
+      type: DictionaryTypeSyntax(
+        key: Lex.typeSyntax("Swift.String"),
+        value: TypeSyntax(IdentifierTypeSyntax(name: .identifier("AnyCodable")))
+      ),
+      defaultValue: InitializerClauseSyntax(
+        value: DictionaryExprSyntax(content: .colon(.colonToken()))
+      )
+    )
+  }
+
+  private static var unknownValuesArgument: LabeledExprSyntax {
+    LabeledExprSyntax(
+      label: .identifier("_unknownValues"),
+      colon: .colonToken(),
+      expression: DeclReferenceExprSyntax(baseName: .identifier("_unknownValues"))
+    )
   }
 
   private func staticMakeDecl(ts: TypeSchema, name: String, defMap: ExtDefMap, required: [String: Bool]) -> FunctionDeclSyntax {
@@ -610,6 +630,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               : InitializerClauseSyntax(equal: .equalToken(), value: NilLiteralExprSyntax())
             FunctionParameterSyntax(firstName: .lexIdentifier(key), type: type, defaultValue: defaultValue)
           }
+          Self.unknownValuesParameter
         },
         effectSpecifiers: FunctionEffectSpecifiersSyntax(
           throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
@@ -640,6 +661,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
             )
           }
+          Self.unknownValuesArgument
         }
       )
     }
@@ -874,6 +896,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
               )
             }
+            Self.unknownValuesArgument
           }
         }
         ReturnStmtSyntax()
@@ -898,6 +921,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                     expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                   )
                 }
+                Self.unknownValuesArgument
               }
             )
           }

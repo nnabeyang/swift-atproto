@@ -9,14 +9,14 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
   let tags: [String]?
   let _unknownValues: [String: AnyCodable]
 
-  public init(text: String, limit: Int? = nil, tags: [String]? = nil) {
+  public init(text: String, limit: Int? = nil, tags: [String]? = nil, _unknownValues: [String: AnyCodable] = [:]) {
     self.text = text
     self.limit = limit
     self.tags = tags
-    self._unknownValues = [:]
+    self._unknownValues = _unknownValues
   }
 
-  public static func make(text: String, limit: Int? = nil, tags: [String]? = nil) throws -> Self {
+  public static func make(text: String, limit: Int? = nil, tags: [String]? = nil, _unknownValues: [String: AnyCodable] = [:]) throws -> Self {
     guard text.utf8.count <= 3000 else {
       throw LexiconConstraintError.stringTooLong("text", limit: 3000)
     }
@@ -36,7 +36,7 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
         throw LexiconConstraintError.arrayTooLong("tags", limit: 8)
       }
     }
-    return Self(text: text, limit: limit, tags: tags)
+    return Self(text: text, limit: limit, tags: tags, _unknownValues: _unknownValues)
   }
 
   enum CodingKeys: String, CodingKey {
@@ -50,16 +50,32 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
     let text = try keyedContainer.decode(String.self, forKey: .text)
     let limit = try keyedContainer.decodeIfPresent(Int.self, forKey: .limit)
     let tags = try keyedContainer.decodeIfPresent([String].self, forKey: .tags)
+    let unknownContainer = try decoder.container(keyedBy: AnyCodingKeys.self)
+    var _unknownValues = [String: AnyCodable]()
+    for key in unknownContainer.allKeys {
+      guard CodingKeys(rawValue: key.stringValue) == nil else {
+        continue
+      }
+      _unknownValues[key.stringValue] = try unknownContainer.decode(AnyCodable.self, forKey: key)
+    }
     if !LexiconDecodingMode.shouldValidateConstraints(in: decoder) {
-      self.init(text: text, limit: limit, tags: tags)
+      self.init(text: text, limit: limit, tags: tags, _unknownValues: _unknownValues)
       return
     }
     do {
-      self = try Self.make(text: text, limit: limit, tags: tags)
+      self = try Self.make(text: text, limit: limit, tags: tags, _unknownValues: _unknownValues)
     } catch let error as LexiconConstraintError {
       throw DecodingError.dataCorrupted(
         .init(codingPath: decoder.codingPath, debugDescription: "\(error)", underlyingError: error))
     }
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.text, forKey: .text)
+    try container.encodeIfPresent(self.limit, forKey: .limit)
+    try container.encodeIfPresent(self.tags, forKey: .tags)
+    try _unknownValues.encode(to: encoder)
   }
 }
 
@@ -183,6 +199,52 @@ final class LexiconConstraintTests: XCTestCase {
     let record = try decoder.decode(ConstrainedRecord.self, from: json)
 
     XCTAssertEqual(record.text, tooLong)
+  }
+
+  func testStrictDecodeKeepsUnknownFieldsThroughEncode() throws {
+    try assertUnknownFieldsRoundTrip(mode: .strict)
+  }
+
+  func testPermissiveDecodeKeepsUnknownFieldsThroughEncode() throws {
+    try assertUnknownFieldsRoundTrip(mode: .permissive)
+  }
+
+  func testPermissiveDecodeKeepsUnknownFieldsWithConstraintViolation() throws {
+    let tooLong = String(repeating: "a", count: 3001)
+    let json = Data(#"{"text":"\#(tooLong)","extra":{"nested":[1,2]}}"#.utf8)
+    let decoder = JSONDecoder()
+    decoder.userInfo[.atprotoLexiconDecodingMode] = LexiconDecodingMode.permissive
+
+    let record = try decoder.decode(ConstrainedRecord.self, from: json)
+
+    XCTAssertEqual(record.text, tooLong)
+    XCTAssertEqual(Set(record._unknownValues.keys), ["extra"])
+  }
+
+  func testMakeCarriesUnknownFieldsIntoRebuiltValue() throws {
+    let json = Data(#"{"text":"hi","extra":{"nested":[1,"a"]}}"#.utf8)
+    let decoded = try JSONDecoder().decode(ConstrainedRecord.self, from: json)
+
+    let rebuilt = try ConstrainedRecord.make(text: "edited", _unknownValues: decoded._unknownValues)
+
+    let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(rebuilt)) as? NSDictionary
+    XCTAssertEqual(encoded, ["text": "edited", "extra": ["nested": [1, "a"]]] as NSDictionary)
+  }
+
+  private func assertUnknownFieldsRoundTrip(mode: LexiconDecodingMode, file: StaticString = #filePath, line: UInt = #line) throws {
+    let json = Data(
+      #"{"text":"hi","limit":5,"extraScalar":1,"extraArray":[1,"a",true,null],"extraObject":{"nested":{"k":"v","list":[{"x":1}]}}}"#
+        .utf8)
+    let decoder = JSONDecoder()
+    decoder.userInfo[.atprotoLexiconDecodingMode] = mode
+
+    let record = try decoder.decode(ConstrainedRecord.self, from: json)
+    XCTAssertEqual(Set(record._unknownValues.keys), ["extraScalar", "extraArray", "extraObject"], file: file, line: line)
+
+    let encoded = try JSONEncoder().encode(record)
+    let expected = try JSONSerialization.jsonObject(with: json) as? NSDictionary
+    let actual = try JSONSerialization.jsonObject(with: encoded) as? NSDictionary
+    XCTAssertEqual(actual, expected, file: file, line: line)
   }
 
   func testKnownValuesOtherWithinLimitSucceeds() throws {
