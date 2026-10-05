@@ -1,3 +1,4 @@
+import Multibase
 import XCTest
 
 @testable import ATProtoCrypto
@@ -26,6 +27,43 @@ final class KeyTests: XCTestCase {
     let pubKey = try PublicKey.publicKeyFromMultibaseString(string: multibaseString)
     XCTAssertEqual(pubKey.type, .p256)
     XCTAssertEqual(pubKey.multibaseString, multibaseString)
+  }
+
+  // The P-256 multikey example from https://atproto.com/specs/cryptography.
+  func testPublicKeyFromMultibaseString_p256SpecExample() throws {
+    let multibaseString = "zDnaembgSGUhZULN2Caob4HLJPaxBh92N7rtH21TErzqf8HQo"
+    let pubKey = try PublicKey.publicKeyFromMultibaseString(string: multibaseString)
+    XCTAssertEqual(pubKey.type, .p256)
+    XCTAssertEqual(pubKey.multibaseString, multibaseString)
+    XCTAssertEqual(pubKey.did, "did:key:\(multibaseString)")
+  }
+
+  func testMultibaseString_p256IsCompressed() throws {
+    let pubKey = try PrivateKey(type: .p256).publicKey
+    let decoded = try BaseEncoding.decode(pubKey.multibaseString).data
+    XCTAssertEqual(Array(decoded.prefix(2)), [0x80, 0x24])
+    XCTAssertEqual(decoded.count, 2 + 33)
+    XCTAssertTrue(pubKey.multibaseString.hasPrefix("zDn"))
+    XCTAssertTrue(pubKey.did.hasPrefix("did:key:zDn"))
+  }
+
+  // Earlier releases wrote the 64-byte coordinates after the multicodec prefix.
+  func testPublicKeyFromMultibaseString_p256LegacyCoordinates() throws {
+    let sk = try PrivateKey(type: .p256)
+    let legacy = BaseEncoding.base58btc.encode(data: Data([0x80, 0x24]) + sk.publicKey.rawBytes)
+    let pubKey = try PublicKey.publicKeyFromMultibaseString(string: legacy)
+    XCTAssertEqual(pubKey.multibaseString, sk.publicKey.multibaseString)
+    let msg = Data("legacy p256".utf8)
+    XCTAssertTrue(pubKey.isValidSignature(signature: try sk.sign(msg), for: msg))
+  }
+
+  func testDecodedP256KeyVerifiesSignature() throws {
+    let sk = try PrivateKey(type: .p256)
+    let pubKey = try PublicKey.publicKeyFromMultibaseString(string: sk.publicKey.multibaseString)
+    let msg = Data("compressed p256".utf8)
+    XCTAssertTrue(pubKey.isValidSignature(signature: try sk.sign(msg), for: msg))
+    XCTAssertEqual(try pubKey.jwkThumbprint, try sk.publicKey.jwkThumbprint)
+    XCTAssertEqual(pubKey.rawBytes, sk.publicKey.rawBytes)
   }
 
   func testPublicKeyFromMultibaseString_secp256k1() throws {

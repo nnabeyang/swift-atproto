@@ -55,8 +55,10 @@ and "not a signature at all".
   ``PublicKey/multibaseString`` with the `did:key:` prefix.
 
 ``PublicKey/publicKeyFromMultibaseString(string:)`` reverses the first one,
-reading the multicodec prefix to decide the curve. `secp256k1` keys are accepted
-in both compressed and uncompressed form and are normalized to compressed.
+reading the multicodec prefix to decide the curve. Elliptic-curve keys are
+always written as compressed points. `secp256k1` keys are accepted in both
+compressed and uncompressed form, and P-256 keys as either the compressed point
+or the 64-byte coordinates that earlier releases wrote.
 
 ## Thumbprints
 
