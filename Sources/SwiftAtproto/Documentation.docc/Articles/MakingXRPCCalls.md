@@ -43,7 +43,8 @@ Procedures are sent as `POST`; the body is the JSON encoding of the input,
 except for two cases that pass through unchanged — a `Data` input, and an
 ``XRPCBlobUpload``, whose `mimeType` becomes the `Content-Type` header.
 
-Responses are decoded with the AT Protocol data encoding strategy and with
+Bodies are encoded with `JSONEncoder.DataEncodingStrategy.atproto`. Responses
+are decoded with `JSONDecoder.DataDecodingStrategy.atproto` and with
 ``LexiconDecodingMode/permissive``, so a server that exceeds an authoring
 constraint does not break decoding. See <doc:DecodingLexiconRecords>.
 

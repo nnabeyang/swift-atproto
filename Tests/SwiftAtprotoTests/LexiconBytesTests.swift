@@ -75,8 +75,8 @@ private enum RawBinaryProcedure: XRPCProcedure {
 }
 
 // The wire form is the point, so `$bytes` stays a `String` here. Decoding it
-// through `xrpcDecoder()` would turn it back into `Data` and hide the encoding
-// under test.
+// through `atprotoDecoder()` would turn it back into `Data` and hide the
+// encoding under test.
 private struct EncodedBytesRecord: Decodable, Equatable {
   let type: String
   let tag: EncodedBytes
@@ -111,18 +111,30 @@ private struct BytesTestClient: @unchecked Sendable, _XRPCCallable {
   }
 }
 
-private func xrpcEncoder() -> JSONEncoder {
+private func atprotoEncoder() -> JSONEncoder {
   let encoder = JSONEncoder()
-  encoder.dataEncodingStrategy = .xrpc
+  encoder.dataEncodingStrategy = .atproto
   encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
   return encoder
 }
 
-private func xrpcDecoder() -> JSONDecoder {
+private func atprotoDecoder() -> JSONDecoder {
   let decoder = JSONDecoder()
-  decoder.dataDecodingStrategy = .xrpc
+  decoder.dataDecodingStrategy = .atproto
   return decoder
 }
+
+private struct BytesAndBlobRecord: Codable, Equatable {
+  let tag: Data
+  let attachment: LexBlob
+
+  enum CodingKeys: String, CodingKey {
+    case tag
+    case attachment
+  }
+}
+
+private let cidString = "bafkreibxn7ww5xcnkgwii3cndu46ike6reqllouvapfevfrxscpm3ovveq"
 
 private func rawBase64(_ value: Data) -> String {
   value.base64EncodedString().trimmingCharacters(in: CharacterSet(charactersIn: "="))
@@ -136,7 +148,7 @@ struct LexiconBytesTests {
     Data([0x00, 0xFF, 0x10, 0x80]),
   ])
   func encodesDataAsBytesObject(_ value: Data) throws {
-    let encoded = try xrpcEncoder().encode(value)
+    let encoded = try atprotoEncoder().encode(value)
     let expected = #"{"$bytes":"\#(rawBase64(value))"}"#
 
     #expect(String(decoding: encoded, as: UTF8.self) == expected)
@@ -148,8 +160,8 @@ struct LexiconBytesTests {
     Data([0x00, 0x01, 0xFE, 0xFF]),
   ])
   func bytesObjectRoundTrips(_ value: Data) throws {
-    let encoded = try xrpcEncoder().encode(value)
-    let decoded = try xrpcDecoder().decode(Data.self, from: encoded)
+    let encoded = try atprotoEncoder().encode(value)
+    let decoded = try atprotoDecoder().decode(Data.self, from: encoded)
 
     #expect(decoded == value)
   }
@@ -158,7 +170,7 @@ struct LexiconBytesTests {
     let value = Data([0xCA, 0xFE, 0xBA, 0xBE])
     let json = Data(#""yv66vg==""#.utf8)
 
-    #expect(try xrpcDecoder().decode(Data.self, from: json) == value)
+    #expect(try atprotoDecoder().decode(Data.self, from: json) == value)
   }
 
   @Test(arguments: [
@@ -168,23 +180,23 @@ struct LexiconBytesTests {
   ])
   func rejectsInvalidBytesObjects(_ json: String) {
     #expect(throws: DecodingError.self) {
-      try xrpcDecoder().decode(Data.self, from: Data(json.utf8))
+      try atprotoDecoder().decode(Data.self, from: Data(json.utf8))
     }
   }
 
   @Test func generatedRecordUsesCanonicalBytesForm() throws {
     let record = GeneratedBytesRecord(tag: Data([0x01, 0x02, 0x03]))
-    let encoded = try xrpcEncoder().encode(record)
+    let encoded = try atprotoEncoder().encode(record)
 
     #expect(
       String(decoding: encoded, as: UTF8.self)
         == #"{"$type":"com.example.repo.artifact","tag":{"$bytes":"AQID"}}"#
     )
-    #expect(try xrpcDecoder().decode(GeneratedBytesRecord.self, from: encoded) == record)
+    #expect(try atprotoDecoder().decode(GeneratedBytesRecord.self, from: encoded) == record)
   }
 
   @Test func constraintsUseDecodedByteCount() throws {
-    let decoder = xrpcDecoder()
+    let decoder = atprotoDecoder()
     let valid = try decoder.decode(
       ConstrainedBytesRecord.self,
       from: Data(#"{"tag":{"$bytes":"AQI="}}"#.utf8)
@@ -240,10 +252,59 @@ struct LexiconBytesTests {
   }
 
   @Test func cidStillUsesLinkObject() throws {
-    let json =
-      #"{"$link":"bafkreibxn7ww5xcnkgwii3cndu46ike6reqllouvapfevfrxscpm3ovveq"}"#
-    let link = try xrpcDecoder().decode(LexLink.self, from: Data(json.utf8))
+    let json = #"{"$link":"\#(cidString)"}"#
+    let link = try atprotoDecoder().decode(LexLink.self, from: Data(json.utf8))
 
-    #expect(try String(decoding: xrpcEncoder().encode(link), as: UTF8.self) == json)
+    #expect(try String(decoding: atprotoEncoder().encode(link), as: UTF8.self) == json)
+  }
+
+  @Test func encodesSlicedDataWithoutTrapping() throws {
+    let storage = Data([0xAA, 0xBB, 0x01, 0x02, 0x03])
+    let value = storage[2...]
+
+    #expect(value.startIndex != 0)
+    #expect(
+      try String(decoding: atprotoEncoder().encode(value), as: UTF8.self)
+        == #"{"$bytes":"AQID"}"#
+    )
+  }
+
+  @Test func encodesSlicedLinkData() throws {
+    let link = try LexLink(cidString)
+    let storage = Data([0xAA]) + Data([0x00] + link.cid.rawBuffer)
+    let value = storage[1...]
+
+    #expect(
+      try String(decoding: atprotoEncoder().encode(value), as: UTF8.self)
+        == #"{"$link":"\#(cidString)"}"#
+    )
+  }
+
+  // Documents a known limitation rather than desired behavior: the strategy
+  // only sees `Data`, so a `bytes` value shaped like a `LexLink` payload is
+  // indistinguishable from one.
+  @Test func bytesShapedLikeLinkEncodeAsLink() throws {
+    let link = try LexLink(cidString)
+    let value = Data([0x00] + link.cid.rawBuffer)
+
+    #expect(
+      try String(decoding: atprotoEncoder().encode(value), as: UTF8.self)
+        == #"{"$link":"\#(cidString)"}"#
+    )
+  }
+
+  @Test func bytesAndLinksKeepTheirFormsInOnePayload() throws {
+    let blobJSON =
+      #"{"$type":"blob","mimeType":"image/png","ref":{"$link":"\#(cidString)"},"size":3}"#
+    let blob = try atprotoDecoder().decode(LexBlob.self, from: Data(blobJSON.utf8))
+    let record = BytesAndBlobRecord(tag: Data([0x00, 0x01, 0x02]), attachment: blob)
+
+    let encoded = try atprotoEncoder().encode(record)
+
+    #expect(
+      String(decoding: encoded, as: UTF8.self)
+        == #"{"attachment":\#(blobJSON),"tag":{"$bytes":"AAEC"}}"#
+    )
+    #expect(try atprotoDecoder().decode(BytesAndBlobRecord.self, from: encoded) == record)
   }
 }
