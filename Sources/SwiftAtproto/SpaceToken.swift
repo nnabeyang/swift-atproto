@@ -12,7 +12,8 @@ import Foundation
 /// A failure to read a space token.
 ///
 /// A claim that is present but malformed throws the error of its own identifier type instead:
-/// ``LexiconStringFormatError`` for `iss` and `sub`, ``DIDDocument/VerifyError`` for `aud`.
+/// ``LexiconStringFormatError`` for `iss`, `sub`, and `cnf.kid`, ``DIDDocument/VerifyError`` for
+/// `aud`.
 ///
 /// No case carries the token or any part of it, because a credential must not reach a log through
 /// an error message.
@@ -23,8 +24,11 @@ public enum SpaceTokenError: Error, Hashable, Sendable {
   /// The `typ` header names a different credential class than the one being read.
   case wrongType(expected: String, found: String?)
   /// A claim this credential class requires is absent or empty. The payload names the claim, e.g.
-  /// `exp` or `cnf.jkt`.
+  /// `exp` or `cnf.kid`.
   case missingClaim(String)
+  /// A space credential whose `exp` is not after its `iat`, or whose lifetime exceeds
+  /// ``UnverifiedSpaceCredential/maximumLifetime``.
+  case invalidLifetime
   /// A client attestation whose `iss` and `sub` disagree. Both are the `client_id`.
   case clientIDMismatch
 }
@@ -39,27 +43,28 @@ private struct SpaceTokenSpec {
   let typ: String
   let requiresAudience: Bool
   let requiresBoundKey: Bool
-  /// A single-use token carries the `jti` its recipient remembers in order to refuse a replay. A
-  /// credential is reused across hosts and needs none.
-  let requiresTokenID: Bool
+  /// Whether `iat` must be present, `exp` must follow it, and the gap between them must not exceed
+  /// ``UnverifiedSpaceCredential/maximumLifetime``. A credential is reused across hosts for as long
+  /// as it lives, so its lifetime is capped; the single-use classes are not.
+  let limitsLifetime: Bool
 
   static let delegation = SpaceTokenSpec(
     typ: "atproto-space-delegation+jwt",
     requiresAudience: true,
     requiresBoundKey: false,
-    requiresTokenID: true)
+    limitsLifetime: false)
 
   static let credential = SpaceTokenSpec(
     typ: "atproto-space-credential+jwt",
     requiresAudience: false,
     requiresBoundKey: true,
-    requiresTokenID: false)
+    limitsLifetime: true)
 
   static let clientAttestation = SpaceTokenSpec(
     typ: "atproto-client-attestation+jwt",
     requiresAudience: true,
     requiresBoundKey: false,
-    requiresTokenID: true)
+    limitsLifetime: false)
 }
 
 // MARK: - Shared parsing
@@ -74,8 +79,8 @@ private struct SpaceTokenClaims {
   let audience: String?
   let issuedAt: Date?
   let expiresAt: Date
-  let tokenID: String?
-  let boundKeyThumbprint: String?
+  let tokenID: String
+  let boundKeyID: String?
 }
 
 extension SpaceTokenClaims {
@@ -87,14 +92,15 @@ extension SpaceTokenClaims {
 
   private struct Payload: Decodable {
     struct Confirmation: Decodable {
-      let jkt: String?
+      let kid: String?
     }
 
     let iss: String?
     let sub: String?
     let aud: String?
-    let iat: Int?
-    let exp: Int?
+    // Seconds since the Unix epoch. JWT allows a fractional value, so these are not `Int`.
+    let iat: Double?
+    let exp: Double?
     let jti: String?
     let cnf: Confirmation?
   }
@@ -132,22 +138,28 @@ extension SpaceTokenClaims {
     guard let expiry = payload.exp else { throw SpaceTokenError.missingClaim("exp") }
 
     let audience = payload.aud?.nonEmpty
-    let thumbprint = payload.cnf?.jkt?.nonEmpty
-    let tokenID = payload.jti?.nonEmpty
+    // Only `cnf.kid` binds a credential. A `cnf.jkt` from the earlier DPoP binding is not read, so
+    // a credential carrying only that is refused as missing its bound key.
+    let boundKeyID = payload.cnf?.kid?.nonEmpty
     if spec.requiresAudience, audience == nil { throw SpaceTokenError.missingClaim("aud") }
-    if spec.requiresBoundKey, thumbprint == nil { throw SpaceTokenError.missingClaim("cnf.jkt") }
-    if spec.requiresTokenID, tokenID == nil { throw SpaceTokenError.missingClaim("jti") }
+    if spec.requiresBoundKey, boundKeyID == nil { throw SpaceTokenError.missingClaim("cnf.kid") }
+    guard let tokenID = payload.jti?.nonEmpty else { throw SpaceTokenError.missingClaim("jti") }
+    if spec.limitsLifetime {
+      guard let issuedAt = payload.iat else { throw SpaceTokenError.missingClaim("iat") }
+      guard expiry > issuedAt, expiry - issuedAt <= UnverifiedSpaceCredential.maximumLifetime else {
+        throw SpaceTokenError.invalidLifetime
+      }
+    }
 
     self.algorithm = algorithm
     self.issuer = issuer
     self.subject = subject
     self.audience = audience
     self.tokenID = tokenID
-    boundKeyThumbprint = thumbprint
+    self.boundKeyID = boundKeyID
     keyID = header.kid?.nonEmpty
-    // JWT spells both instants as whole seconds since the Unix epoch.
-    issuedAt = payload.iat.map { Date(timeIntervalSince1970: TimeInterval($0)) }
-    expiresAt = Date(timeIntervalSince1970: TimeInterval(expiry))
+    issuedAt = payload.iat.map { Date(timeIntervalSince1970: $0) }
+    expiresAt = Date(timeIntervalSince1970: expiry)
   }
 }
 
@@ -164,7 +176,7 @@ extension String {
 /// A space authority issues one in exchange for a delegation token, and an application presents it
 /// to every repo host serving a repo in the space until it expires. The holder reads three things
 /// from it — when to renew (``isExpired(at:clockSkew:)``), which space it covers
-/// (``authorizes(_:)``), and which key it is bound to (``isBound(toKeyThumbprint:)``).
+/// (``authorizes(_:)``), and which key it is bound to (``isBound(toKeyID:)``).
 ///
 /// - Important: Parsing establishes nothing about who issued this. Verifying the signature means
 ///   resolving ``issuer`` to a DID document, taking the key ``keyID`` names, and checking the
@@ -174,16 +186,17 @@ public struct UnverifiedSpaceCredential: Sendable, Hashable {
   public let issuer: DID
   /// `sub`: the space this credential reads.
   public let space: SpaceRef
-  /// `cnf.jkt`: the JWK thumbprint of the key the credential is bound to. A credential is a
-  /// whole-space capability presented to many hosts, so it is bound to the holder's DPoP key
-  /// rather than being a bearer token.
-  public let boundKeyThumbprint: String
-  /// `iat`, when the credential carries one.
-  public let issuedAt: Date?
-  /// `exp`.
+  /// `cnf.kid`: the `did:key` of the key the credential is bound to. A credential is a
+  /// whole-space capability presented to many hosts, so rather than being a bearer token it is
+  /// bound to a P-256 key of the holder's, and every request carries an HTTP message signature
+  /// made with that key.
+  public let boundKeyID: String
+  /// `iat`.
+  public let issuedAt: Date
+  /// `exp`, at most ``maximumLifetime`` after ``issuedAt``.
   public let expiresAt: Date
-  /// `jti`, when the credential carries one. A credential is multi-use, so it need not.
-  public let tokenID: String?
+  /// `jti`.
+  public let tokenID: String
   /// `alg`: the JOSE algorithm the signature was produced with.
   public let algorithm: String
   /// `kid`: the entry in the issuer's DID document that names the signing key. Pass it to
@@ -192,16 +205,17 @@ public struct UnverifiedSpaceCredential: Sendable, Hashable {
 
   /// Reads a compact JWT as a space credential.
   ///
-  /// - Throws: ``SpaceTokenError`` when the structure or a required claim is wrong,
-  ///   ``LexiconStringFormatError`` when `iss` is not a DID or `sub` is not a space ref.
+  /// - Throws: ``SpaceTokenError`` when the structure, a required claim, or the lifetime is wrong,
+  ///   ``LexiconStringFormatError`` when `iss` or `cnf.kid` is not a DID or `sub` is not a space
+  ///   ref.
   public init(introspecting token: String) throws {
     let claims = try SpaceTokenClaims(introspecting: token, as: .credential)
     issuer = try DID(string: claims.issuer)
     space = try SpaceRef(string: claims.subject)
-    // The credential spec requires a bound key, so the claims parser has already refused a token
-    // without one — the force-unwrap documents that invariant.
-    boundKeyThumbprint = claims.boundKeyThumbprint!
-    issuedAt = claims.issuedAt
+    // The credential spec requires a bound key and an `iat`, so the claims parser has already
+    // refused a token without either — the force-unwraps document that invariant.
+    boundKeyID = try DID(string: claims.boundKeyID!).rawValue
+    issuedAt = claims.issuedAt!
     expiresAt = claims.expiresAt
     tokenID = claims.tokenID
     algorithm = claims.algorithm
@@ -210,6 +224,10 @@ public struct UnverifiedSpaceCredential: Sendable, Hashable {
 }
 
 extension UnverifiedSpaceCredential {
+  /// The longest a credential may live, from `iat` to `exp`: one hour. A credential that claims
+  /// more is refused while reading it.
+  public static let maximumLifetime: TimeInterval = 3600
+
   /// The tolerance ``isExpired(at:clockSkew:)`` applies unless told otherwise: five seconds.
   public static let defaultClockSkew: TimeInterval = 5
 
@@ -233,18 +251,18 @@ extension UnverifiedSpaceCredential {
     self.space == space
   }
 
-  /// Whether this credential is bound to the key with `thumbprint`.
+  /// Whether this credential is bound to the key with `keyID`.
   ///
-  /// `thumbprint` is the RFC 7638 thumbprint of the holder's own DPoP key. It is base64url and
-  /// therefore case-sensitive, so the comparison is exact.
-  public func isBound(toKeyThumbprint thumbprint: String) -> Bool {
-    boundKeyThumbprint == thumbprint
+  /// `keyID` is the `did:key` of the holder's own signing key, as `ATProtoCrypto` writes it. The
+  /// comparison is exact: a `did:key` is base58btc and therefore case-sensitive.
+  public func isBound(toKeyID keyID: String) -> Bool {
+    boundKeyID == keyID
   }
 }
 
 extension UnverifiedSpaceCredential: CustomStringConvertible {
   /// Names the space and the expiry and stops there. The default reflected description would print
-  /// ``boundKeyThumbprint`` and ``tokenID``, which is how a credential ends up in a log.
+  /// ``boundKeyID`` and ``tokenID``, which is how a credential ends up in a log.
   public var description: String {
     "UnverifiedSpaceCredential(space: \(space.rawValue), expiresAt: \(expiresAt))"
   }
@@ -288,10 +306,10 @@ public struct UnverifiedSpaceDelegationToken: Sendable, Hashable {
     let claims = try SpaceTokenClaims(introspecting: token, as: .delegation)
     issuer = try DID(string: claims.issuer)
     space = try SpaceRef(string: claims.subject)
-    // The delegation spec requires both, so the claims parser has already refused a token missing
-    // either — the force-unwraps document that invariant.
+    // The delegation spec requires an audience, so the claims parser has already refused a token
+    // without one — the force-unwrap documents that invariant.
     audience = try ServiceIdentifier(string: claims.audience!)
-    tokenID = claims.tokenID!
+    tokenID = claims.tokenID
     issuedAt = claims.issuedAt
     expiresAt = claims.expiresAt
     algorithm = claims.algorithm
@@ -344,10 +362,10 @@ public struct UnverifiedClientAttestation: Sendable, Hashable {
     let claims = try SpaceTokenClaims(introspecting: token, as: .clientAttestation)
     guard claims.issuer == claims.subject else { throw SpaceTokenError.clientIDMismatch }
     clientID = claims.issuer
-    // The attestation spec requires both, so the claims parser has already refused a token missing
-    // either — the force-unwraps document that invariant.
+    // The attestation spec requires an audience, so the claims parser has already refused a token
+    // without one — the force-unwrap documents that invariant.
     audience = try ServiceIdentifier(string: claims.audience!)
-    tokenID = claims.tokenID!
+    tokenID = claims.tokenID
     issuedAt = claims.issuedAt
     expiresAt = claims.expiresAt
     algorithm = claims.algorithm

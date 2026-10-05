@@ -23,10 +23,10 @@ depends on reading a handful of claims out of it.
 ```swift
 let credential = try UnverifiedSpaceCredential(introspecting: jwt)
 
-credential.issuer              // DID — the space authority
-credential.space               // SpaceRef — the space it reads
-credential.boundKeyThumbprint  // String — the key it is bound to
-credential.expiresAt           // Date
+credential.issuer      // DID — the space authority
+credential.space       // SpaceRef — the space it reads
+credential.boundKeyID  // String — the did:key it is bound to
+credential.expiresAt   // Date
 ```
 
 ## Nothing here is verified
@@ -53,21 +53,31 @@ key. Turning that entry into a key means handing its `publicKeyMultibase` to
 The three share a wire shape and differ only in who signs them, who they are
 addressed to, and how long they live:
 
-| Credential | `typ` | `aud` | `cnf.jkt` | `jti` |
+| Credential | `typ` | `aud` | `cnf.kid` | `iat` |
 |------------|-------|-------|-----------|-------|
-| delegation token | `atproto-space-delegation+jwt` | required | — | required |
-| client attestation | `atproto-client-attestation+jwt` | required | — | required |
-| space credential | `atproto-space-credential+jwt` | — | required | optional |
+| delegation token | `atproto-space-delegation+jwt` | required | — | optional |
+| client attestation | `atproto-client-attestation+jwt` | required | — | optional |
+| space credential | `atproto-space-credential+jwt` | — | required | required |
 
-`alg`, `iss`, `sub`, and `exp` are required of all three. A missing one throws
-``SpaceTokenError/missingClaim(_:)``; a claim that is present but malformed
-throws the error of its own identifier type, so an `iss` that is not a DID fails
-as ``LexiconStringFormatError`` rather than being smuggled through as a string.
+`alg`, `iss`, `sub`, `exp`, and `jti` are required of all three. A missing one
+throws ``SpaceTokenError/missingClaim(_:)``; a claim that is present but
+malformed throws the error of its own identifier type, so an `iss` that is not a
+DID fails as ``LexiconStringFormatError`` rather than being smuggled through as
+a string.
 
 A credential carries no `aud` because it is presented to every repo host serving
-a repo in the space, and no host is named in advance. It is bound to the holder's
-DPoP key instead. It also needs no `jti`: a nonce exists so a recipient can
-refuse a replay, and a credential is meant to be reused.
+a repo in the space, and no host is named in advance. It is bound instead to a
+P-256 key of the holder's: `cnf.kid` is that key's `did:key`, and every request
+that presents the credential carries an HTTP message signature made with it,
+covering the host it is addressed to. `ATProtoCrypto` produces that signature as
+`SpaceRequestSignature`. A credential from the earlier binding, which named a
+JWK thumbprint in `cnf.jkt`, has no `cnf.kid` and is refused with
+``SpaceTokenError/missingClaim(_:)``.
+
+Because a credential is reused for as long as it lives, its lifetime is capped:
+`exp` has to follow `iat` by no more than
+``UnverifiedSpaceCredential/maximumLifetime``, one hour. A credential that claims
+more is refused with ``SpaceTokenError/invalidLifetime``.
 
 A client attestation writes the `client_id` into both `iss` and `sub`, so
 ``UnverifiedClientAttestation/clientID`` is one property rather than two, and a
@@ -86,7 +96,7 @@ credential.isExpired()
 credential.authorizes(requestedSpace)
 
 // Is it bound to my key?
-credential.isBound(toKeyThumbprint: myKeyThumbprint)
+credential.isBound(toKeyID: myKey.publicKey.did)
 ```
 
 ``UnverifiedSpaceCredential/isExpired(at:clockSkew:)`` applies five seconds of
@@ -101,9 +111,10 @@ renew wants the opposite, and asks for it by passing a negative skew:
 if credential.isExpired(clockSkew: -60) { … }
 ```
 
-``UnverifiedSpaceCredential/isBound(toKeyThumbprint:)`` compares against the RFC
-7638 thumbprint of the holder's own DPoP key, which `ATProtoCrypto` computes.
-Thumbprints are base64url, so the comparison is exact and case-sensitive.
+``UnverifiedSpaceCredential/isBound(toKeyID:)`` compares against the `did:key`
+of the holder's own signing key, which `ATProtoCrypto` writes as
+`PublicKey.did`. A `did:key` is base58btc, so the comparison is exact and
+case-sensitive.
 
 ## Keeping credentials out of logs
 
@@ -115,7 +126,7 @@ leak it:
 - None of them keeps the JWT it was read from.
 - ``SpaceTokenError`` carries no part of a token, so an error is safe to log.
 - `description` names the space and the expiry and stops. The reflected
-  description Swift would print by default includes `cnf.jkt` and `jti`, which is
+  description Swift would print by default includes `cnf.kid` and `jti`, which is
   exactly how a credential reaches a log.
 
 ## The other direction
