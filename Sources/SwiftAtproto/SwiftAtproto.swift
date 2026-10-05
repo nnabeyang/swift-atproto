@@ -205,7 +205,7 @@ public struct LexLink: Sendable, Hashable, Codable, CborCodable, CustomStringCon
   }
 
   static func dataEncodingStrategy(data: Data, encoder: any Encoder) throws {
-    let cid = try CID(data[1...])
+    let cid = try CID(data.dropFirst())
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(cid.toBaseEncodedString, forKey: .link)
   }

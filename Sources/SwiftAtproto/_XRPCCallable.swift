@@ -318,7 +318,7 @@ extension _XRPCCallable {
         return data as! X.ResponseBody
       }
       let decoder = JSONDecoder()
-      decoder.dataDecodingStrategy = .xrpc
+      decoder.dataDecodingStrategy = .atproto
       decoder.userInfo[.atprotoLexiconDecodingMode] = LexiconDecodingMode.permissive
       return try decoder.decode(X.ResponseBody.self, from: data)
     } catch let error as UnExpectedError {
@@ -381,7 +381,7 @@ extension _XRPCCallable {
   ) throws -> XRPCRequestComponents {
     var headerFields = HTTPFields()
     let encoder = JSONEncoder()
-    encoder.dataEncodingStrategy = .xrpc
+    encoder.dataEncodingStrategy = .atproto
     encoder.outputFormatting = [.withoutEscapingSlashes]
     let body: Data
     switch input {

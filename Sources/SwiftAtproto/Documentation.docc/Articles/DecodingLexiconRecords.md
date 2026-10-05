@@ -50,6 +50,24 @@ introduced after it was generated.
 
 ## Binary values
 
+A Lexicon `bytes` field is generated as `Data`. In JSON it is written as
+`{"$bytes": "<base64>"}`, but only when the encoder is told to: a bare
+`JSONEncoder()` writes a plain Base64 string. Set the AT Protocol strategies
+whenever you encode or decode Lexicon data outside an XRPC call, such as a
+record you store or sign, or a request a server receives:
+
+```swift
+let encoder = JSONEncoder()
+encoder.dataEncodingStrategy = .atproto
+
+let decoder = JSONDecoder()
+decoder.dataDecodingStrategy = .atproto
+```
+
+The same encoding strategy writes a ``LexLink`` as `{"$link": "<cid>"}`. A link
+reaches the strategy as `Data` — its CID bytes prefixed with `0x00` — so a
+`bytes` value with exactly that shape is written as `$link` too.
+
 ``LexBlob`` carries a blob reference — its ``LexLink`` CID, MIME type, and size
 — rather than the bytes themselves. Uploading bytes is a separate procedure
 call; see ``XRPCBlobUpload`` in <doc:MakingXRPCCalls>.
