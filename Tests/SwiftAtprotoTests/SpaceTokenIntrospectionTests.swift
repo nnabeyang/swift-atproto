@@ -12,12 +12,14 @@ struct SpaceTokenIntrospectionTests {
   // target share.
   static let spaceRef = "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/space/com.example.forum/self"
   static let otherSpaceRef = "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/space/com.example.forum/other"
-  static let thumbprint = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+  // The P-256 `did:key` example from https://atproto.com/specs/cryptography.
+  static let boundKeyID = "did:key:zDnaembgSGUhZULN2Caob4HLJPaxBh92N7rtH21TErzqf8HQo"
   static let clientID = "https://app.example.com/client-metadata.json"
   static let spaceHost = "did:plc:ewvi7nxzyoun6zhxrhs64oiz#atproto_space_host"
   static let nonce = "9f8e7d6c5b4a3210fedcba9876543210"
   static let issuedAt = Date(timeIntervalSince1970: 1_738_368_000)
-  static let expiresAt = Date(timeIntervalSince1970: 1_738_375_200)
+  // One hour after `issuedAt`: the longest a space credential may live.
+  static let expiresAt = Date(timeIntervalSince1970: 1_738_371_600)
 
   // Raw string literals with `##` delimiters: the JSON carries `"#`, which would close a `#"`
   // literal early.
@@ -26,8 +28,8 @@ struct SpaceTokenIntrospectionTests {
     """##
 
   static let credentialPayload = ##"""
-    {"iss":"\##(spaceDID)","sub":"\##(spaceRef)","cnf":{"jkt":"\##(thumbprint)"},\##
-    "iat":1738368000,"exp":1738375200,"jti":"\##(nonce)"}
+    {"iss":"\##(spaceDID)","sub":"\##(spaceRef)","cnf":{"kid":"\##(boundKeyID)"},\##
+    "iat":1738368000,"exp":1738371600,"jti":"\##(nonce)"}
     """##
 
   static let delegationHeader = ##"""
@@ -36,7 +38,7 @@ struct SpaceTokenIntrospectionTests {
 
   static let delegationPayload = ##"""
     {"iss":"did:plc:44ybard66vv44zksje25o7dz","sub":"\##(spaceRef)","aud":"\##(spaceHost)",\##
-    "iat":1738368000,"exp":1738375200,"jti":"\##(nonce)"}
+    "iat":1738368000,"exp":1738371600,"jti":"\##(nonce)"}
     """##
 
   static let attestationHeader = ##"""
@@ -45,7 +47,7 @@ struct SpaceTokenIntrospectionTests {
 
   static let attestationPayload = ##"""
     {"iss":"\##(clientID)","sub":"\##(clientID)","aud":"\##(spaceHost)",\##
-    "iat":1738368000,"exp":1738375200,"jti":"\##(nonce)"}
+    "iat":1738368000,"exp":1738371600,"jti":"\##(nonce)"}
     """##
 
   // MARK: - Structure
@@ -112,18 +114,65 @@ struct SpaceTokenIntrospectionTests {
 
   @Test func requiresTheBoundKeyOnACredential() {
     let payload = Self.credentialPayload(dropping: "cnf")
-    #expect(throws: SpaceTokenError.missingClaim("cnf.jkt")) {
+    #expect(throws: SpaceTokenError.missingClaim("cnf.kid")) {
       try UnverifiedSpaceCredential(
         introspecting: Self.token(header: Self.credentialHeader, payload: payload))
     }
   }
 
-  @Test func acceptsACredentialWithoutATokenID() throws {
-    // A credential is reused across every repo host serving the space, so it needs no replay nonce.
-    let payload = Self.credentialPayload(dropping: "jti")
+  @Test func rejectsACredentialBoundByThumbprint() {
+    // The earlier binding named a JWK thumbprint in `cnf.jkt`. It must not pass for a bound key.
+    let payload = Self.credentialPayload(setting: "cnf", to: ["jkt": "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"])
+    #expect(throws: SpaceTokenError.missingClaim("cnf.kid")) {
+      try UnverifiedSpaceCredential(
+        introspecting: Self.token(header: Self.credentialHeader, payload: payload))
+    }
+  }
+
+  @Test func rejectsABoundKeyThatIsNotADID() {
+    let payload = Self.credentialPayload(setting: "cnf", to: ["kid": "zDnaembgSGUhZULN2Caob4HLJPaxBh92N7rtH21TErzqf8HQo"])
+    #expect(throws: LexiconStringFormatError.self) {
+      try UnverifiedSpaceCredential(
+        introspecting: Self.token(header: Self.credentialHeader, payload: payload))
+    }
+  }
+
+  @Test func requiresATokenIDAndAnIssueTimeOnACredential() {
+    for claim in ["jti", "iat"] {
+      let payload = Self.credentialPayload(dropping: claim)
+      #expect(throws: SpaceTokenError.missingClaim(claim)) {
+        try UnverifiedSpaceCredential(
+          introspecting: Self.token(header: Self.credentialHeader, payload: payload))
+      }
+    }
+  }
+
+  @Test func rejectsACredentialThatDoesNotOutliveItsIssueTime() {
+    for exp in [1_738_368_000, 1_738_367_999] {
+      let payload = Self.credentialPayload(setting: "exp", to: exp)
+      #expect(throws: SpaceTokenError.invalidLifetime) {
+        try UnverifiedSpaceCredential(
+          introspecting: Self.token(header: Self.credentialHeader, payload: payload))
+      }
+    }
+  }
+
+  @Test func capsTheLifetimeOfACredentialAtOneHour() throws {
+    let tooLong = Self.credentialPayload(setting: "exp", to: 1_738_371_601)
+    #expect(throws: SpaceTokenError.invalidLifetime) {
+      try UnverifiedSpaceCredential(
+        introspecting: Self.token(header: Self.credentialHeader, payload: tooLong))
+    }
+    // The fixture lives exactly `maximumLifetime`, which is allowed.
+    let credential = try Self.credential()
+    #expect(credential.expiresAt.timeIntervalSince(credential.issuedAt) == UnverifiedSpaceCredential.maximumLifetime)
+  }
+
+  @Test func readsFractionalTimes() throws {
+    let payload = Self.credentialPayload(setting: "iat", to: 1_738_368_000.5)
     let credential = try UnverifiedSpaceCredential(
       introspecting: Self.token(header: Self.credentialHeader, payload: payload))
-    #expect(credential.tokenID == nil)
+    #expect(credential.issuedAt == Date(timeIntervalSince1970: 1_738_368_000.5))
   }
 
   @Test func requiresAnAudienceAndATokenIDOnADelegationToken() {
@@ -154,7 +203,7 @@ struct SpaceTokenIntrospectionTests {
     #expect(credential.issuer.rawValue == Self.spaceDID)
     #expect(credential.space.rawValue == Self.spaceRef)
     #expect(credential.space.skey.rawValue == "self")
-    #expect(credential.boundKeyThumbprint == Self.thumbprint)
+    #expect(credential.boundKeyID == Self.boundKeyID)
     #expect(credential.issuedAt == Self.issuedAt)
     #expect(credential.expiresAt == Self.expiresAt)
     #expect(credential.tokenID == Self.nonce)
@@ -272,17 +321,17 @@ struct SpaceTokenIntrospectionTests {
     #expect(!credential.authorizes(try SpaceRef(string: Self.otherSpaceRef)))
   }
 
-  @Test func isBoundOnlyToItsOwnKeyThumbprint() throws {
+  @Test func isBoundOnlyToItsOwnKeyID() throws {
     let credential = try Self.credential()
-    #expect(credential.isBound(toKeyThumbprint: Self.thumbprint))
-    // A thumbprint is base64url, so the comparison is case-sensitive.
-    #expect(!credential.isBound(toKeyThumbprint: Self.thumbprint.lowercased()))
-    #expect(!credential.isBound(toKeyThumbprint: "not-the-same-key"))
+    #expect(credential.isBound(toKeyID: Self.boundKeyID))
+    // A `did:key` is base58btc, so the comparison is case-sensitive.
+    #expect(!credential.isBound(toKeyID: Self.boundKeyID.lowercased()))
+    #expect(!credential.isBound(toKeyID: "did:key:zDnaeTheWrongKey"))
   }
 
   // MARK: - Redaction
 
-  @Test func descriptionsWithholdNoncesAndThumbprints() throws {
+  @Test func descriptionsWithholdNoncesAndBoundKeys() throws {
     let credential = try Self.credential()
     let delegation = try UnverifiedSpaceDelegationToken(
       introspecting: Self.token(header: Self.delegationHeader, payload: Self.delegationPayload))
@@ -291,7 +340,7 @@ struct SpaceTokenIntrospectionTests {
 
     for description in [credential.description, delegation.description, attestation.description] {
       #expect(!description.contains(Self.nonce))
-      #expect(!description.contains(Self.thumbprint))
+      #expect(!description.contains(Self.boundKeyID))
     }
     #expect(credential.description.contains(Self.spaceRef))
   }
@@ -329,6 +378,10 @@ extension SpaceTokenIntrospectionTests {
   }
 
   static func credentialPayload(replacing claim: String, with value: String) -> String {
+    rewrite(credentialPayload) { $0[claim] = value }
+  }
+
+  static func credentialPayload(setting claim: String, to value: Any) -> String {
     rewrite(credentialPayload) { $0[claim] = value }
   }
 
