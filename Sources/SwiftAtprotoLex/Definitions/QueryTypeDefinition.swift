@@ -43,6 +43,10 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
   }
 
+  var hasParameters: Bool {
+    !(parameters?.sortedProperties ?? []).isEmpty
+  }
+
   private func queries(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [PatternBindingSyntax] {
     var queries = [PatternBindingSyntax]()
     guard let parameters else { return queries }

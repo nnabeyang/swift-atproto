@@ -31,6 +31,15 @@ struct XRPCServerContractTests {
     return try String(contentsOf: output.appending(path: "XRPCAPIProtocol.swift"), encoding: .utf8)
   }
 
+  // The `UniversalServer` method that registers one operation, from its
+  // signature up to the next member.
+  private func handler(_ name: String, in source: String) throws -> Substring {
+    let start = try #require(source.range(of: "func \(name)(\n    request:"))
+    let rest = source[start.upperBound...]
+    let end = rest.range(of: "\n  func ")?.lowerBound ?? rest.range(of: "\n  private func ")?.lowerBound ?? rest.endIndex
+    return source[start.lowerBound..<end]
+  }
+
   private var fixtures: [String: String] {
     [
       "listRecords.json": """
@@ -125,5 +134,25 @@ struct XRPCServerContractTests {
     #expect(!Parser.parse(source: source).hasError)
     #expect(source.contains("soar_statusCode: 200"))
     #expect(!source.contains("soar_statusCode: 201"))
+  }
+
+  // A pair with an empty value, or with no `=` at all, carries no Lexicon value.
+  // Every parameter is decoded from the normalized string, so `actor=` leaves a
+  // required parameter missing and a bare `name` no longer fails as a 500.
+  @Test("decodes every query parameter from the normalized query string")
+  func queryParametersSkipEmptyValues() async throws {
+    let source = try await generateServer()
+
+    #expect(!Parser.parse(source: source).hasError)
+    #expect(source.contains("private func xrpcQueryString(_ query: Swift.Substring?) -> Swift.Substring?"))
+    #expect(!source.contains("in: request.soar_query"))
+
+    for name in ["ComAtprotoRepoListRecords", "ComAtprotoSyncGetBlocks"] {
+      let handler = try handler(name, in: source)
+      #expect(handler.contains("let queryString = xrpcQueryString(request.soar_query)"))
+    }
+    #expect(try handler("ComAtprotoRepoListRecords", in: source).components(separatedBy: "in: queryString").count - 1 == 5)
+    #expect(try handler("ComAtprotoSyncGetBlocks", in: source).components(separatedBy: "in: queryString").count - 1 == 2)
+    #expect(try !handler("ComAtprotoRepoCreateRecord", in: source).contains("queryString"))
   }
 }
