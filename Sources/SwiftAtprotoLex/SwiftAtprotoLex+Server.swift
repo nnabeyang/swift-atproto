@@ -431,6 +431,9 @@ extension Lex {
       if methodTypes.contains(where: { ($0.def as? QueryTypeDefinition)?.hasScalarParameters ?? false }) {
         scalarQueryItemValidator
       }
+      if methodTypes.contains(where: { ($0.def as? QueryTypeDefinition)?.hasRequiredArrayParameters ?? false }) {
+        requiredArrayQueryItemValidator
+      }
     }
   }
 
@@ -660,6 +663,86 @@ extension Lex {
                   colon: .colonToken(),
                   expression: StringLiteralExprSyntax {
                     StringSegmentSyntax(content: .stringSegment("Repeated value for the scalar query parameter "))
+                    ExpressionSegmentSyntax {
+                      LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("name")))
+                    }
+                    StringSegmentSyntax(content: .stringSegment("."))
+                  }
+                )
+              }
+            )
+          }
+        )
+      }
+    }
+  }
+
+  /// Called after a required array parameter is decoded.
+  ///
+  /// A required parameter has to be present, and an array is present only when
+  /// its name appears with a value at least once. The OpenAPI URI decoder
+  /// reports a missing scalar but decodes a missing array as `[]`, so without
+  /// this a request leaving out a required array would reach the handler.
+  private static var requiredArrayQueryItemValidator: FunctionDeclSyntax {
+    FunctionDeclSyntax(
+      leadingTrivia: .newlines(2),
+      modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+      name: .identifier("validateXRPCRequiredArrayQueryItem"),
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax {
+          FunctionParameterSyntax(
+            firstName: .wildcardToken(),
+            secondName: .identifier("name"),
+            colon: .colonToken(),
+            type: Lex.typeSyntax("Swift.String")
+          )
+          FunctionParameterSyntax(
+            firstName: .identifier("values"),
+            colon: .colonToken(),
+            type: SomeOrAnyTypeSyntax(
+              someOrAnySpecifier: .keyword(.some),
+              constraint: Lex.typeSyntax("Swift.Collection")
+            )
+          )
+        },
+        effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
+      )
+    ) {
+      GuardStmtSyntax(
+        conditions: ConditionElementListSyntax {
+          PrefixOperatorExprSyntax(
+            operator: .prefixOperator("!"),
+            expression: MemberAccessExprSyntax(parts: [.identifier("values"), .identifier("isEmpty")])
+          )
+        }
+      ) {
+        ThrowStmtSyntax(
+          expression: FunctionCallExprSyntax(
+            callee: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("DecodingError"), .identifier("valueNotFound")])
+          ) {
+            LabeledExprSyntax(
+              expression: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("type"))) {
+                LabeledExprSyntax(
+                  label: .identifier("of"),
+                  colon: .colonToken(),
+                  expression: DeclReferenceExprSyntax(baseName: .identifier("values"))
+                )
+              }
+            )
+            LabeledExprSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("DecodingError"), .identifier("Context")])
+              ) {
+                LabeledExprSyntax(
+                  label: .identifier("codingPath"),
+                  colon: .colonToken(),
+                  expression: ArrayExprSyntax {}
+                )
+                LabeledExprSyntax(
+                  label: .identifier("debugDescription"),
+                  colon: .colonToken(),
+                  expression: StringLiteralExprSyntax {
+                    StringSegmentSyntax(content: .stringSegment("Missing value for the required query parameter "))
                     ExpressionSegmentSyntax {
                       LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("name")))
                     }
@@ -1000,6 +1083,19 @@ extension Lex {
                 .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
               )
             )
+          )
+        }
+        if isArray, isRequired {
+          TryExprSyntax(
+            leadingTrivia: .newline,
+            expression: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("validateXRPCRequiredArrayQueryItem"))) {
+              LabeledExprSyntax(expression: StringLiteralExprSyntax(content: key))
+              LabeledExprSyntax(
+                label: .identifier("values"),
+                colon: .colonToken(),
+                expression: DeclReferenceExprSyntax(baseName: .identifier("query\(i)"))
+              )
+            }
           )
         }
       }

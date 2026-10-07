@@ -177,4 +177,20 @@ struct XRPCServerContractTests {
     #expect(getBlocks.contains("try validateXRPCScalarQueryItem(\"did\", in: queryString)"))
     #expect(!getBlocks.contains("validateXRPCScalarQueryItem(\"cids\""))
   }
+
+  // The runtime decoder reports a missing required scalar, but decodes a
+  // missing array as `[]`. A required array is checked once it is decoded.
+  @Test("rejects a required array query parameter given no values")
+  func requiredArrayQueryParametersRejectMissingValues() async throws {
+    let source = try await generateServer()
+
+    #expect(!Parser.parse(source: source).hasError)
+    #expect(source.contains("private func validateXRPCRequiredArrayQueryItem(_ name: Swift.String, values: some Swift.Collection) throws"))
+    #expect(source.contains("throw Swift.DecodingError.valueNotFound(type(of: values), "))
+
+    let getBlocks = try handler("ComAtprotoSyncGetBlocks", in: source)
+    #expect(getBlocks.contains("try validateXRPCRequiredArrayQueryItem(\"cids\", values: query0)"))
+    #expect(!getBlocks.contains("validateXRPCRequiredArrayQueryItem(\"did\""))
+    #expect(try !handler("ComAtprotoRepoListRecords", in: source).contains("validateXRPCRequiredArrayQueryItem"))
+  }
 }

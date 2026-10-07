@@ -54,6 +54,13 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     }
   }
 
+  var hasRequiredArrayParameters: Bool {
+    let required = Set(parameters?.required ?? [])
+    return (parameters?.sortedProperties ?? []).contains { name, field in
+      if case .array = field { required.contains(name) } else { false }
+    }
+  }
+
   private func queries(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [PatternBindingSyntax] {
     var queries = [PatternBindingSyntax]()
     guard let parameters else { return queries }
