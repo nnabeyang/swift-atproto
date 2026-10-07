@@ -58,6 +58,8 @@ struct XRPCServerGenerationTests {
     #expect(source.contains(".comExampleCheck)"))
     #expect(source.contains("validateScalarXRPCQueryParameter(\"actor\", in: request.soar_query)"))
     #expect(!source.contains("validateScalarXRPCQueryParameter(\"labels\", in: request.soar_query)"))
+    #expect(source.contains("in query: Substring?"))
+    #expect(source.contains("URLComponents(string: \"https://xrpc.invalid/?\\($0)\")"))
     #expect(source.contains("soar_statusCode: 200"))
     #expect(!source.contains("soar_statusCode: 201"))
   }
