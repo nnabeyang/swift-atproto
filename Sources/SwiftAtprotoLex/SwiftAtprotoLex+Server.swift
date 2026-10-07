@@ -867,7 +867,7 @@ extension Lex {
                     LabeledExprSyntax(
                       label: .identifier("soar_statusCode"),
                       colon: .colonToken(),
-                      expression: IntegerLiteralExprSyntax(literal: .integerLiteral("201"))
+                      expression: IntegerLiteralExprSyntax(literal: .integerLiteral("200"))
                     )
                   }
                 )
