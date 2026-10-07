@@ -105,20 +105,28 @@ func authorize(
   let credential = try await credentials.credential(for: request.destination)
 
   switch credential {
-  case .spaceDelegationToken(let token):
-    request.headers[.authorization] = "Bearer \(token)"
-    request.headers[.dpop] = try await proof(for: request, at: serviceEndpoint)
-  case .spaceCredential(let token):
+  case .accessToken(let token):
     request.headers[.authorization] = "DPoP \(token)"
     request.headers[.dpop] = try await proof(for: request, at: serviceEndpoint)
-  default:
+  case .spaceDelegationToken, .spaceCredential:
+    // `authorization`, `signature-input`, `signature`, and for a credential
+    // `atproto-space-audience`, all produced and signed together.
+    for field in try await signedFields(for: credential, request: request) {
+      request.headers[HTTPField.Name(field.name)!] = field.value
+    }
+  case .clientAttestation:
     break
   }
   return request
 }
 ```
 
-The proof crosses this boundary as a `String`. It may come from
+An OAuth access token is proved with a DPoP proof. A space delegation token
+and a space credential are proved with an HTTP message signature instead, which
+also writes the `authorization` field it signs, so the authorizer copies the
+signed fields as they are rather than spelling that field itself.
+
+Proofs and signatures cross this boundary as strings. They may come from
 `ATProtoCrypto`, an OAuth package, or another producer; `SwiftAtproto` does not
 depend on a cryptography implementation. A client attestation is also a
 distinct credential case, but it belongs in the `getSpaceCredential` request
