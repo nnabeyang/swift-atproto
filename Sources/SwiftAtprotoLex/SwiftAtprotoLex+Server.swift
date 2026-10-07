@@ -74,8 +74,9 @@ extension Lex {
     guard hasScalarQueryParameters else { return source }
     return source + """
 
-      private func validateScalarXRPCQueryParameter(_ name: String, in query: [URLQueryItem]) throws {
-        guard query.filter({ $0.name == name }).count <= 1 else {
+      private func validateScalarXRPCQueryParameter(_ name: String, in query: Substring?) throws {
+        let queryItems = query.flatMap { URLComponents(string: "https://xrpc.invalid/?\\($0)")?.queryItems } ?? []
+        guard queryItems.filter({ $0.name == name }).count <= 1 else {
           throw DecodingError.dataCorrupted(
             .init(codingPath: [], debugDescription: "Repeated scalar query parameter: \\(name)")
           )
