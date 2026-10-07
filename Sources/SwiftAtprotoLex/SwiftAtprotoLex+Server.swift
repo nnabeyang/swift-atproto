@@ -57,12 +57,69 @@ extension Lex {
           path: [ImportPathComponentSyntax(name: "SwiftAtproto")],
           trailingTrivia: .newlines(2)
         )
+        genXRPCOperation(for: methodTypes)
         genXRPCAPIProtocol(for: methodTypes)
         genXRPCExtension(leadingTrivia: .newlines(2), for: methodTypes)
         genUnversalServerExtension(leadingTrivia: .newlines(2), for: methodTypes, defMap: defMap)
       },
       trailingTrivia: .newline)
-    return renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
+    let source = renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
+    let hasScalarQueryParameters = methodTypes.contains { _, _, _, definition in
+      guard let query = definition as? QueryTypeDefinition else { return false }
+      return (query.parameters?.sortedProperties ?? []).contains { _, field in
+        if case .array = field { return false }
+        return true
+      }
+    }
+    guard hasScalarQueryParameters else { return source }
+    return source + """
+
+      private func validateScalarXRPCQueryParameter(_ name: String, in query: [URLQueryItem]) throws {
+        guard query.filter({ $0.name == name }).count <= 1 else {
+          throw DecodingError.dataCorrupted(
+            .init(codingPath: [], debugDescription: "Repeated scalar query parameter: \\(name)")
+          )
+        }
+      }
+      """
+  }
+
+  private static func genXRPCOperation(
+    for methodTypes: [(key: String, prefix: String, value: TypeSchema, def: any HTTPAPITypeDefinition)]
+  ) -> EnumDeclSyntax {
+    EnumDeclSyntax(
+      modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+      name: .identifier("XRPCOperation"),
+      inheritanceClause: InheritanceClauseSyntax {
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("String")))
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("Hashable")))
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("Sendable")))
+      }
+    ) {
+      if !methodTypes.isEmpty {
+        EnumCaseDeclSyntax(
+          leadingTrivia: .newline,
+          elements: EnumCaseElementListSyntax {
+            for (key, prefix, schema, _) in methodTypes {
+              EnumCaseElementSyntax(
+                name: .identifier(operationCaseName(prefix: prefix, key: key)),
+                rawValue: InitializerClauseSyntax(
+                  equal: .equalToken(),
+                  value: StringLiteralExprSyntax(content: schema.id)
+                )
+              )
+            }
+          }
+        )
+      }
+    }
+    .with(\.trailingTrivia, .newlines(2))
+  }
+
+  private static func operationCaseName(prefix: String, key: String) -> String {
+    let name = "\(Lex.enumNameFor(prefix: prefix))\(key)"
+    guard let first = name.first else { return name }
+    return first.lowercased() + name.dropFirst()
   }
 
   private static func genXRPCAPIProtocol(
@@ -312,6 +369,12 @@ extension Lex {
           )
           FunctionParameterSyntax(
             leadingTrivia: .newline,
+            firstName: .identifier("operations"),
+            colon: .colonToken(),
+            type: Lex.typeSyntax("Set<XRPCOperation>")
+          )
+          FunctionParameterSyntax(
+            leadingTrivia: .newline,
             firstName: .identifier("serverURL"),
             colon: .colonToken(),
             type: TypeSyntax(IdentifierTypeSyntax(name: .identifier("URL"))),
@@ -397,7 +460,26 @@ extension Lex {
           default:
             fatalError("unreachable")
           }
-        makeHandlerRegistration(prefix: prefix, type: type, method: method)
+        IfExprSyntax(
+          conditions: ConditionElementListSyntax {
+            ConditionElementSyntax(
+              condition: .expression(
+                ExprSyntax(
+                  FunctionCallExprSyntax(callee: MemberAccessExprSyntax(parts: [.identifier("operations"), .identifier("contains")])) {
+                    LabeledExprSyntax(
+                      expression: MemberAccessExprSyntax(
+                        leadingTrivia: .newline,
+                        declName: DeclReferenceExprSyntax(baseName: .identifier(operationCaseName(prefix: prefix, key: type)))
+                      )
+                    )
+                  }
+                )
+              )
+            )
+          }
+        ) {
+          makeHandlerRegistration(prefix: prefix, type: type, method: method)
+        }
       }
     }
     .with(\.body!.rightBrace, .rightBraceToken(leadingTrivia: .newline))
@@ -672,7 +754,20 @@ extension Lex {
       ClosureShorthandParameterSyntax(name: .identifier("requestBody"))
       ClosureShorthandParameterSyntax(name: .identifier("metadata"))
     }) {
-      for (i, (key, isRequired, type)) in def.params(ts: schema, fname: key, defMap: defMap, prefix: prefix).enumerated() {
+      for (i, (key, isRequired, type, isArray)) in def.params(ts: schema, fname: key, defMap: defMap, prefix: prefix).enumerated() {
+        if !isArray {
+          TryExprSyntax(
+            expression: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("validateScalarXRPCQueryParameter"))) {
+              LabeledExprSyntax(expression: StringLiteralExprSyntax(content: key))
+              LabeledExprSyntax(
+                label: .identifier("in"),
+                colon: .colonToken(),
+                expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("soar_query")])
+              )
+            }
+          )
+          .with(\.leadingTrivia, .newline)
+        }
         VariableDeclSyntax(
           leadingTrivia: .newline,
           bindingSpecifier: .keyword(.let)
@@ -867,7 +962,7 @@ extension Lex {
                     LabeledExprSyntax(
                       label: .identifier("soar_statusCode"),
                       colon: .colonToken(),
-                      expression: IntegerLiteralExprSyntax(literal: .integerLiteral("201"))
+                      expression: IntegerLiteralExprSyntax(literal: .integerLiteral("200"))
                     )
                   }
                 )

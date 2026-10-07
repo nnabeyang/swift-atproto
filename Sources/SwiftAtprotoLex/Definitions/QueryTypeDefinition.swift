@@ -80,8 +80,8 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return queries
   }
 
-  func params(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [(key: String, isRequired: Bool, type: ExprSyntax)] {
-    var queries = [(key: String, isRequired: Bool, type: ExprSyntax)]()
+  func params(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [(key: String, isRequired: Bool, type: ExprSyntax, isArray: Bool)] {
+    var queries = [(key: String, isRequired: Bool, type: ExprSyntax, isArray: Bool)]()
     guard let parameters else { return queries }
     var required = [String: Bool]()
     for req in parameters.required ?? [] {
@@ -97,7 +97,13 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
       let type = Lex.refExpr(tn)
-      queries.append((key: name, isRequired: isRequired, type: type))
+      let isArray: Bool
+      if case .array = t {
+        isArray = true
+      } else {
+        isArray = false
+      }
+      queries.append((key: name, isRequired: isRequired, type: type, isArray: isArray))
     }
     return queries
   }
