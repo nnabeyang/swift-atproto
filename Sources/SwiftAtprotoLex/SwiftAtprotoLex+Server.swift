@@ -95,6 +95,7 @@ extension Lex {
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("String")))
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("Hashable")))
         InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("Sendable")))
+        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("CaseIterable")))
       }
     ) {
       if !methodTypes.isEmpty {

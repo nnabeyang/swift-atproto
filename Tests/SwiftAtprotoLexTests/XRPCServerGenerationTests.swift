@@ -51,7 +51,7 @@ struct XRPCServerGenerationTests {
     let source = try String(contentsOf: output.appending(path: "XRPCAPIProtocol.swift"), encoding: .utf8)
 
     #expect(!Parser.parse(source: source).hasError)
-    #expect(source.contains("public enum XRPCOperation: String, Hashable, Sendable"))
+    #expect(source.contains("public enum XRPCOperation: String, Hashable, Sendable, CaseIterable"))
     #expect(source.contains("case comExampleCheck = \"com.example.check\""))
     #expect(source.contains("operations: Set<XRPCOperation>"))
     #expect(source.contains("operations.contains("))
