@@ -151,8 +151,30 @@ struct XRPCServerContractTests {
       let handler = try handler(name, in: source)
       #expect(handler.contains("let queryString = xrpcQueryString(request.soar_query)"))
     }
-    #expect(try handler("ComAtprotoRepoListRecords", in: source).components(separatedBy: "in: queryString").count - 1 == 5)
-    #expect(try handler("ComAtprotoSyncGetBlocks", in: source).components(separatedBy: "in: queryString").count - 1 == 2)
+    #expect(try handler("ComAtprotoRepoListRecords", in: source).components(separatedBy: "in: queryString,").count - 1 == 5)
+    #expect(try handler("ComAtprotoSyncGetBlocks", in: source).components(separatedBy: "in: queryString,").count - 1 == 2)
     #expect(try !handler("ComAtprotoRepoCreateRecord", in: source).contains("queryString"))
+  }
+
+  // A repeated name only means something for an array parameter. The runtime
+  // decoder would keep the first value of a repeated scalar and drop the rest,
+  // so every scalar is counted before it is decoded.
+  @Test("rejects repeated values only for scalar query parameters")
+  func scalarQueryParametersRejectRepeatedValues() async throws {
+    let source = try await generateServer()
+
+    #expect(!Parser.parse(source: source).hasError)
+    #expect(source.contains("private func validateXRPCScalarQueryItem(_ name: Swift.String, in query: Swift.Substring?) throws"))
+    #expect(source.contains("as: [Swift.String].self) ?? []"))
+    #expect(source.contains("throw Swift.DecodingError.dataCorrupted("))
+
+    let listRecords = try handler("ComAtprotoRepoListRecords", in: source)
+    for name in ["collection", "cursor", "limit", "repo", "reverse"] {
+      #expect(listRecords.contains("try validateXRPCScalarQueryItem(\"\(name)\", in: queryString)"))
+    }
+
+    let getBlocks = try handler("ComAtprotoSyncGetBlocks", in: source)
+    #expect(getBlocks.contains("try validateXRPCScalarQueryItem(\"did\", in: queryString)"))
+    #expect(!getBlocks.contains("validateXRPCScalarQueryItem(\"cids\""))
   }
 }
