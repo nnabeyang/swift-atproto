@@ -1,24 +1,23 @@
 # DPoP proofs
 
-Prove possession of the key a space credential is bound to, once per request.
+Prove possession of the key an OAuth access token is bound to, once per request.
 
 ## Overview
 
-> Important: Space credentials come from the permissioned data proposal, not from
-> the ratified AT Protocol. What a space host accepts is the part most likely to
-> change.
+[AT Protocol OAuth](https://atproto.com/specs/oauth) requires DPoP of every
+client. As a bearer token, an access token would work for anyone who copied it
+out of a log or a compromised proxy. So the authorization server binds the token
+to a key the client alone controls, by the ``PublicKey/jwkThumbprint`` of that
+key in the token's `cnf.jkt`, and every request carries a fresh **DPoP proof**
+(RFC 9449) signed with the matching private key.
 
-A space credential reads a whole space, and the same credential is presented to
-every repo host in that space. As a bearer token it would be a shared secret: a
-host handed one to serve its own repo could replay it against every other host in
-the space. So the credential is bound to a key its holder alone controls, by the
-``PublicKey/jwkThumbprint`` of that key in the credential's `cnf.jkt`, and every
-request carries a fresh **DPoP proof** (RFC 9449) signed with the matching
-private key.
+The proof is what makes the binding mean something. Without it the token is
+still a bearer token; with it, a stolen token is useless to anyone who does not
+also hold the key.
 
-The proof is what makes the binding mean something. Without it the credential is
-still a bearer token; with it, a stolen credential is useless to anyone who does
-not also hold the key.
+A space credential from the permissioned data proposal is not proved this way.
+It is bound to a key through `cnf.kid` and presented with an HTTP message
+signature instead; see <doc:SpaceRequestSignatures>.
 
 ## Building one
 
@@ -26,39 +25,44 @@ not also hold the key.
 them. Each request needs its own, and they come in two shapes, told apart by
 whether the proof carries an `ath` claim.
 
-The exchange that obtains a credential proves the key without presenting
-anything:
+A request to the authorization server's token endpoint proves the key without
+presenting a token. This is how the server learns which key to bind the issued
+token to:
 
 ```swift
 let proof = DPoPProof(
   httpMethod: "POST",
-  url: URL(string: "https://space.example.com/xrpc/com.atproto.space.getSpaceCredential")!,
+  url: URL(string: "https://auth.example.com/oauth/token")!,
   issuedAt: Date(),
   tokenID: DPoPProof.randomTokenID())
 
 let jwt = try proof.signed(with: key)
+// DPoP: <jwt>
 ```
 
-Every later request presents the credential it obtained, and says so:
+Every request to the PDS afterwards presents the access token it obtained, and
+says so:
 
 ```swift
 let proof = DPoPProof(
   httpMethod: "GET",
-  url: URL(string: "https://repo.example.com/xrpc/com.atproto.repo.getRecord?rkey=self")!,
+  url: URL(string: "https://pds.example.com/xrpc/com.atproto.repo.getRecord?rkey=self")!,
   issuedAt: Date(),
   tokenID: DPoPProof.randomTokenID(),
-  credential: credential)
+  credential: accessToken)
+// Authorization: DPoP <access token>
+// DPoP: <signed proof>
 ```
 
-``DPoPProof/credential`` becomes `ath`, the base64url SHA-256 of the credential's
-octets — never the credential itself. A verifier requires `ath` to match what the
-request carries, and requires it to be *absent* when no credential is being
+``DPoPProof/credential`` becomes `ath`, the base64url SHA-256 of the token's
+octets — never the token itself. A verifier requires `ath` to match what the
+request carries, and requires it to be *absent* when no token is being
 presented, so the two cases are not interchangeable.
 
-The signing key has to be the key the credential was bound to. Its public half
+The signing key has to be the key the token was bound to. Its public half
 travels in the proof's `jwk` header, which is how a verifier checks the signature
 without having been told the key in advance; it then compares that key's
-thumbprint against the credential's `cnf.jkt`. Only the members RFC 7638 takes a
+thumbprint against the token's `cnf.jkt`. Only the members RFC 7638 takes a
 thumbprint over are embedded — `kty`, `crv`, `x`, and `y` for an EC key — so no
 private material and nothing else rides along.
 
@@ -97,15 +101,17 @@ A proof covers one method and one URL and is good for one request:
 resource server responds with the `use_dpop_nonce` error and a `DPoP-Nonce`
 header, store that value for the server and build one new proof with it. The
 retry still needs a fresh ``DPoPProof/tokenID``: the server nonce does not make a
-proof reusable.
+proof reusable. AT Protocol OAuth makes server nonces mandatory, so a client
+should expect that challenge on its first request to each server rather than
+treat it as an error.
 
 ## Algorithms
 
 As with a client attestation, the `alg` header comes from the signing key through
 ``KeyType/jwsAlgorithm``, and any of the three key types produces a well-formed
-proof. What a given verifier accepts is narrower: the space host in the reference
-implementation of the proposal accepts `ES256` alone, so a DPoP key is in
-practice a ``KeyType/p256`` key.
+proof. What AT Protocol OAuth guarantees is narrower: `ES256` is the one
+algorithm every client and server must support, so a DPoP key is in practice a
+``KeyType/p256`` key.
 
 ## What is not here
 

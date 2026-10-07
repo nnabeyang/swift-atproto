@@ -13,14 +13,13 @@ public enum DPoPProofError: Error, Hashable, Sendable {
   case unsupportedTargetURL
 }
 
-/// A single-use JWT that proves possession of the key a space credential is
-/// bound to, sent alongside the credential on every request (RFC 9449).
+/// A single-use JWT that proves possession of the key an OAuth access token is
+/// bound to, sent alongside the token on every request (RFC 9449).
 ///
-/// A space credential reads a whole space and is presented to every repo host in
-/// it. As a bearer token it would be a shared secret: a host handed one to serve
-/// its own repo could replay it against every other host in the space. Binding
-/// the credential to a key the holder alone controls, and proving possession of
-/// that key per request, is what stops that.
+/// AT Protocol OAuth requires DPoP for every client. As a bearer token, an
+/// access token would work for anyone who copied it out of a log or a
+/// compromised proxy. Binding the token to a key the client alone controls, and
+/// proving possession of that key per request, is what stops that.
 ///
 /// A proof covers one method and one URL and is not reusable, so build one per
 /// request. See <doc:DPoPProofs>.
@@ -49,13 +48,13 @@ public struct DPoPProof: Sendable, Hashable {
   /// be reused across proofs. ``randomTokenID()`` produces a suitable one.
   public let tokenID: String
 
-  /// The credential this proof is presented with, or `nil` when the request is
-  /// the exchange that obtains one.
+  /// The access token this proof is presented with, or `nil` when the request
+  /// goes to the authorization server's token endpoint to obtain one.
   ///
-  /// Only its SHA-256 digest reaches the wire, as `ath`; the credential itself
-  /// is never written into the proof. A verifier requires the two to agree, and
-  /// requires `ath` to be *absent* when no credential is being presented, so
-  /// this has to track what the request actually carries.
+  /// Only its SHA-256 digest reaches the wire, as `ath`; the token itself is
+  /// never written into the proof. A verifier requires the two to agree, and
+  /// requires `ath` to be *absent* when no token is being presented, so this has
+  /// to track what the request actually carries.
   public let credential: String?
 
   /// The server-provided nonce required after a `DPoP-Nonce` challenge.
@@ -122,8 +121,8 @@ public struct DPoPProof: Sendable, Hashable {
   /// The public half of `key` is embedded in the `jwk` header, which is how a
   /// verifier checks the signature without having been told the key in advance.
   /// It then compares that key's thumbprint against the `cnf.jkt` of the
-  /// credential being presented, so `key` has to be the key the credential was
-  /// bound to.
+  /// access token being presented (RFC 9449 §6), so `key` has to be the key the
+  /// token was bound to when it was issued.
   ///
   /// ``issuedAt`` becomes `iat`, which JWT spells as whole seconds since the
   /// Unix epoch, so any sub-second part is truncated.
@@ -158,7 +157,7 @@ public struct DPoPProof: Sendable, Hashable {
   /// verifier's constant rather than something the holder can extend.
   public static let maximumAge: TimeInterval = 60
 
-  /// The `ath` claim for `credential`: the base64url SHA-256 of its octets.
+  /// The `ath` claim for an access token: the base64url SHA-256 of its octets.
   private static func credentialHash(_ credential: String) -> String {
     base64URLEncoded(Data(SHA256.hash(data: Data(credential.utf8))))
   }
@@ -182,7 +181,7 @@ public struct DPoPProof: Sendable, Hashable {
   }
 
   private struct Payload: Encodable {
-    // Absent when obtaining a credential rather than presenting one, which the
+    // Absent when obtaining a token rather than presenting one, which the
     // synthesized encoding gives us for a `nil` optional.
     let ath: String?
     let htm: String
