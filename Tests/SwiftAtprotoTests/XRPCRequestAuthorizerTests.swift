@@ -58,9 +58,11 @@ struct XRPCRequestAuthorizerTests {
     #expect(requests[0].headers[.authorization] == "Bearer access-token")
     #expect(requests[0].headers[.dpop] == nil)
     #expect(requests[1].headers[.authorization] == "Bearer delegation-token")
-    #expect(requests[1].headers[.dpop] == "delegation-proof")
-    #expect(requests[2].headers[.authorization] == "DPoP space-credential")
-    #expect(requests[2].headers[.dpop] == "credential-proof")
+    #expect(requests[1].headers[.signature] == "delegation-signature")
+    #expect(requests[1].headers[.dpop] == nil)
+    #expect(requests[2].headers[.authorization] == "Atproto-Space space-credential")
+    #expect(requests[2].headers[.signature] == "credential-signature")
+    #expect(requests[2].headers[.dpop] == nil)
   }
 
   @Test("passes proofs from ATProtoCrypto and other producers unchanged")
@@ -72,7 +74,7 @@ struct XRPCRequestAuthorizerTests {
       url: target,
       issuedAt: Date(timeIntervalSince1970: 1_738_368_000),
       tokenID: "b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8",
-      credential: "space-credential"
+      credential: "access-token"
     ).signed(with: PrivateKey(type: .p256))
 
     for proof in [cryptoProof, "consumer-produced-proof"] {
@@ -85,7 +87,7 @@ struct XRPCRequestAuthorizerTests {
       _ = try await client.call(AuthorizationQuery.self, input: .init())
 
       let request = try #require(await recorder.requests.first)
-      #expect(request.headers[.authorization] == "DPoP space-credential")
+      #expect(request.headers[.authorization] == "DPoP access-token")
       #expect(request.headers[.dpop] == proof)
     }
   }
@@ -166,29 +168,34 @@ private struct DestinationAuthorizer: XRPCRequestAuthorizer {
     await recorder.record(requestComponents, serviceEndpoint: serviceEndpoint)
     var request = requestComponents
     let credential: XRPCCredential
-    let proof: String?
+    let signature: String?
     switch request.destination {
     case nil:
       credential = .accessToken("access-token")
-      proof = nil
+      signature = nil
     case .spaceHost:
       credential = .spaceDelegationToken("delegation-token")
-      proof = "delegation-proof"
+      signature = "delegation-signature"
     case .repoHost:
       credential = .spaceCredential("space-credential")
-      proof = "credential-proof"
+      signature = "credential-signature"
     }
     switch credential {
     case .accessToken(let token), .spaceDelegationToken(let token):
       request.headers[.authorization] = "Bearer \(token)"
     case .spaceCredential(let token):
-      request.headers[.authorization] = "DPoP \(token)"
+      request.headers[.authorization] = "Atproto-Space \(token)"
     case .clientAttestation:
       break
     }
-    request.headers[.dpop] = proof
+    request.headers[.signature] = signature
     return request
   }
+}
+
+extension HTTPField.Name {
+  // The HTTP message signature a space request carries in place of a DPoP proof.
+  fileprivate static var signature: Self { .init("signature")! }
 }
 
 private struct StaticDPoPAuthorizer: XRPCRequestAuthorizer {
@@ -199,7 +206,7 @@ private struct StaticDPoPAuthorizer: XRPCRequestAuthorizer {
     serviceEndpoint _: URL
   ) async throws -> XRPCRequestComponents {
     var request = requestComponents
-    request.headers[.authorization] = "DPoP space-credential"
+    request.headers[.authorization] = "DPoP access-token"
     request.headers[.dpop] = proof
     return request
   }

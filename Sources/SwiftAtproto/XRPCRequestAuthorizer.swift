@@ -42,9 +42,10 @@ extension XRPCRequestAuthorizer {
 ///
 /// The cases keep ordinary access tokens separate from the three credential
 /// classes introduced by permissioned data. This type does not decide how a
-/// credential travels: an authorizer applies access and delegation tokens as
-/// appropriate, applies a space credential with its DPoP proof, and passes a
-/// client attestation in the credential-exchange request body.
+/// credential travels: an authorizer applies an access token with its DPoP
+/// proof, applies a delegation token or a space credential with the HTTP message
+/// signature that covers it, and passes a client attestation in the
+/// credential-exchange request body.
 public enum XRPCCredential: Sendable, Hashable {
   /// An ordinary access token for the client's own session.
   case accessToken(String)

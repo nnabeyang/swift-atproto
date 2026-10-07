@@ -8,11 +8,11 @@ struct DPoPProofTests {
   private static let issuedAt = Date(timeIntervalSince1970: 1_738_368_000)
   private static let tokenID = "b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8"
 
-  // An opaque stand-in for a space credential; only its digest is ever encoded.
-  // The expected `ath` is `base64url(SHA-256(utf8(credential)))`, computed
-  // independently of this module.
-  private static let credential = "a-space-credential-jwt"
-  private static let credentialHash = "bks-F6oDLcO-nvmRslqy5tPdSGUG6sxi-WTRDYCG1Pc"
+  // An opaque stand-in for an OAuth access token; only its digest is ever
+  // encoded. The expected `ath` is `base64url(SHA-256(utf8(credential)))`,
+  // computed independently of this module.
+  private static let credential = "an-oauth-access-token"
+  private static let credentialHash = "nsKj8gUZMJWGBDo61yucSlf_tgYnZn1qnBeNhZzlSJE"
 
   private func proof(
     httpMethod: String = "GET",
@@ -42,8 +42,8 @@ struct DPoPProofTests {
     #expect(try header(of: jwt).typ == "dpop+jwt")
     #expect(try header(of: jwt).alg == "ES256")
 
-    // No `exp` — a proof is bounded by its `iat` — and no `nonce`, which the
-    // space exchange does not use.
+    // No `exp` — a proof is bounded by its `iat` — and no `nonce` until a
+    // server has issued one.
     #expect(try memberNames(of: jwt, 1) == ["htm", "htu", "iat", "jti"])
     let claims = try payload(of: jwt)
     #expect(claims.htm == "GET")
@@ -69,22 +69,22 @@ struct DPoPProofTests {
     #expect(try payload(of: proof.signed(with: PrivateKey(type: .p256))).iat == 1_700_000_000)
   }
 
-  // MARK: - Credential binding
+  // MARK: - Token binding
 
-  // The exchange that obtains a credential has none to hash yet, and a verifier
-  // rejects a proof that carries `ath` anyway.
-  @Test func omitsAthWhenObtainingACredential() throws {
+  // A token request has no access token to hash yet, and a verifier rejects a
+  // proof that carries `ath` anyway.
+  @Test func omitsAthWhenObtainingAToken() throws {
     let jwt = try proof().signed(with: PrivateKey(type: .p256))
     #expect(!(try memberNames(of: jwt, 1).contains("ath")))
   }
 
-  @Test func hashesTheCredentialIntoAth() throws {
+  @Test func hashesTheAccessTokenIntoAth() throws {
     let jwt = try proof(credential: Self.credential).signed(with: PrivateKey(type: .p256))
     #expect(try memberNames(of: jwt, 1) == ["ath", "htm", "htu", "iat", "jti"])
     #expect(try payload(of: jwt).ath == Self.credentialHash)
   }
 
-  // `ath` is a digest, so the credential itself must not survive anywhere in the
+  // `ath` is a digest, so the token itself must not survive anywhere in the
   // proof — nor in the description a holder is most likely to log.
   @Test func withholdsTheCredentialAndTheNonce() throws {
     let proof = proof(credential: Self.credential)
@@ -187,7 +187,7 @@ struct DPoPProofTests {
     }
   }
 
-  // The credential names its key by thumbprint in `cnf.jkt`, so the key the
+  // An access token names its key by thumbprint in `cnf.jkt`, so the key the
   // proof embeds has to hash to the same value.
   @Test func embeddedKeyMatchesTheThumbprintOfTheSigningKey() throws {
     for type in keyTypes {
