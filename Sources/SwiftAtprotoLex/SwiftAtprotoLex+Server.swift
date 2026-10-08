@@ -425,6 +425,335 @@ extension Lex {
       for (key, prefix, schema, def) in methodTypes {
         makeHandlerMethod(key: key, prefix: prefix, schema: schema, def: def, defMap: defMap)
       }
+      if methodTypes.contains(where: { ($0.def as? QueryTypeDefinition)?.hasParameters ?? false }) {
+        queryStringNormalizer
+      }
+      if methodTypes.contains(where: { ($0.def as? QueryTypeDefinition)?.hasScalarParameters ?? false }) {
+        scalarQueryItemValidator
+      }
+      if methodTypes.contains(where: { ($0.def as? QueryTypeDefinition)?.hasRequiredArrayParameters ?? false }) {
+        requiredArrayQueryItemValidator
+      }
+    }
+  }
+
+  /// Applied to the query string before any parameter is decoded from it.
+  ///
+  /// XRPC carries Lexicon params as URL query parameters, which the URL
+  /// standard parses as `application/x-www-form-urlencoded`: a bare `name` is
+  /// `name=`. An empty value carries no Lexicon value, so it counts as absent,
+  /// and a required parameter given only `name=` is missing rather than an empty
+  /// string. Without this, the OpenAPI URI decoder decodes `name=` as `""` and
+  /// rejects a bare `name` with an error that is not a `DecodingError`, which
+  /// the server reports as a 500 instead of a 400.
+  private static var queryStringNormalizer: FunctionDeclSyntax {
+    FunctionDeclSyntax(
+      leadingTrivia: .newlines(2),
+      modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+      name: .identifier("xrpcQueryString"),
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax {
+          FunctionParameterSyntax(
+            firstName: .wildcardToken(),
+            secondName: .identifier("query"),
+            colon: .colonToken(),
+            type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.Substring"))
+          )
+        },
+        returnClause: ReturnClauseSyntax(
+          type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.Substring"))
+        )
+      )
+    ) {
+      GuardStmtSyntax(
+        conditions: ConditionElementListSyntax {
+          OptionalBindingConditionSyntax(
+            bindingSpecifier: .keyword(.let),
+            pattern: IdentifierPatternSyntax(identifier: .identifier("query"))
+          )
+        }
+      ) {
+        ReturnStmtSyntax(expression: NilLiteralExprSyntax())
+      }
+      VariableDeclSyntax(bindingSpecifier: .keyword(.let)) {
+        PatternBindingSyntax(
+          pattern: IdentifierPatternSyntax(identifier: .identifier("pairs")),
+          initializer: InitializerClauseSyntax(
+            value: FunctionCallExprSyntax(
+              callee: MemberAccessExprSyntax(
+                base: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(parts: [.identifier("query"), .identifier("split")])
+                ) {
+                  LabeledExprSyntax(
+                    label: .identifier("separator"),
+                    colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: "&")
+                  )
+                },
+                name: .identifier("filter")
+              ),
+              trailingClosure: ClosureExprSyntax(signaturesBuilder: {
+                ClosureShorthandParameterSyntax(name: .identifier("pair"))
+              }) {
+                GuardStmtSyntax(
+                  conditions: ConditionElementListSyntax {
+                    OptionalBindingConditionSyntax(
+                      bindingSpecifier: .keyword(.let),
+                      pattern: IdentifierPatternSyntax(identifier: .identifier("separator")),
+                      initializer: InitializerClauseSyntax(
+                        value: FunctionCallExprSyntax(
+                          callee: MemberAccessExprSyntax(parts: [.identifier("pair"), .identifier("firstIndex")])
+                        ) {
+                          LabeledExprSyntax(
+                            label: .identifier("of"),
+                            colon: .colonToken(),
+                            expression: StringLiteralExprSyntax(content: "=")
+                          )
+                        }
+                      )
+                    )
+                  }
+                ) {
+                  ReturnStmtSyntax(expression: BooleanLiteralExprSyntax(literal: .keyword(.false)))
+                }
+                ReturnStmtSyntax(
+                  expression: SequenceExprSyntax {
+                    FunctionCallExprSyntax(
+                      callee: MemberAccessExprSyntax(parts: [.identifier("pair"), .identifier("index")])
+                    ) {
+                      LabeledExprSyntax(
+                        label: .identifier("after"),
+                        colon: .colonToken(),
+                        expression: DeclReferenceExprSyntax(baseName: .identifier("separator"))
+                      )
+                    }
+                    BinaryOperatorExprSyntax(operator: .binaryOperator("!="))
+                    MemberAccessExprSyntax(parts: [.identifier("pair"), .identifier("endIndex")])
+                  }
+                )
+              }
+            )
+          )
+        )
+      }
+      ReturnStmtSyntax(
+        expression: TernaryExprSyntax(
+          condition: MemberAccessExprSyntax(parts: [.identifier("pairs"), .identifier("isEmpty")]),
+          thenExpression: NilLiteralExprSyntax(),
+          elseExpression: FunctionCallExprSyntax(
+            callee: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("Substring")])
+          ) {
+            LabeledExprSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(parts: [.identifier("pairs"), .identifier("joined")])
+              ) {
+                LabeledExprSyntax(
+                  label: .identifier("separator"),
+                  colon: .colonToken(),
+                  expression: StringLiteralExprSyntax(content: "&")
+                )
+              }
+            )
+          }
+        )
+      )
+    }
+  }
+
+  /// Called before a scalar parameter is decoded.
+  ///
+  /// XRPC spells an array parameter by repeating its name, so a repeated name
+  /// is only meaningful for an array. The OpenAPI URI decoder reads a scalar
+  /// from the first matching pair and ignores the rest, which would accept
+  /// `repo=a&repo=b` as `a`. Counting the values with the same decoder keeps
+  /// both sides agreeing on what a pair is, and a `DecodingError` is reported
+  /// as a 400.
+  private static var scalarQueryItemValidator: FunctionDeclSyntax {
+    FunctionDeclSyntax(
+      leadingTrivia: .newlines(2),
+      modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+      name: .identifier("validateXRPCScalarQueryItem"),
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax {
+          FunctionParameterSyntax(
+            firstName: .wildcardToken(),
+            secondName: .identifier("name"),
+            colon: .colonToken(),
+            type: Lex.typeSyntax("Swift.String")
+          )
+          FunctionParameterSyntax(
+            firstName: .identifier("in"),
+            secondName: .identifier("query"),
+            colon: .colonToken(),
+            type: OptionalTypeSyntax(wrappedType: Lex.typeSyntax("Swift.Substring"))
+          )
+        },
+        effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
+      )
+    ) {
+      VariableDeclSyntax(bindingSpecifier: .keyword(.let)) {
+        PatternBindingSyntax(
+          pattern: IdentifierPatternSyntax(identifier: .identifier("values")),
+          initializer: InitializerClauseSyntax(
+            value: SequenceExprSyntax {
+              TryExprSyntax(
+                expression: FunctionCallExprSyntax(
+                  callee: MemberAccessExprSyntax(parts: [.identifier("converter"), .identifier("getOptionalQueryItemAsURI")])
+                ) {
+                  LabeledExprSyntax(
+                    label: .identifier("in"),
+                    colon: .colonToken(),
+                    expression: DeclReferenceExprSyntax(baseName: .identifier("query"))
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("style"),
+                    colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(declName: DeclReferenceExprSyntax(baseName: .identifier("form")))
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("explode"),
+                    colon: .colonToken(),
+                    expression: BooleanLiteralExprSyntax(literal: .keyword(.true))
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("name"),
+                    colon: .colonToken(),
+                    expression: DeclReferenceExprSyntax(baseName: .identifier("name"))
+                  )
+                  LabeledExprSyntax(
+                    label: .identifier("as"),
+                    colon: .colonToken(),
+                    expression: MemberAccessExprSyntax(
+                      base: TypeExprSyntax(type: ArrayTypeSyntax(element: Lex.typeSyntax("Swift.String"))),
+                      declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
+                    )
+                  )
+                }
+              )
+              BinaryOperatorExprSyntax(operator: .binaryOperator("??"))
+              ArrayExprSyntax {}
+            }
+          )
+        )
+      }
+      GuardStmtSyntax(
+        conditions: ConditionElementListSyntax {
+          SequenceExprSyntax {
+            MemberAccessExprSyntax(parts: [.identifier("values"), .identifier("count")])
+            BinaryOperatorExprSyntax(operator: .binaryOperator("<="))
+            IntegerLiteralExprSyntax(literal: .integerLiteral("1"))
+          }
+        }
+      ) {
+        ThrowStmtSyntax(
+          expression: FunctionCallExprSyntax(
+            callee: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("DecodingError"), .identifier("dataCorrupted")])
+          ) {
+            LabeledExprSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("DecodingError"), .identifier("Context")])
+              ) {
+                LabeledExprSyntax(
+                  label: .identifier("codingPath"),
+                  colon: .colonToken(),
+                  expression: ArrayExprSyntax {}
+                )
+                LabeledExprSyntax(
+                  label: .identifier("debugDescription"),
+                  colon: .colonToken(),
+                  expression: StringLiteralExprSyntax {
+                    StringSegmentSyntax(content: .stringSegment("Repeated value for the scalar query parameter "))
+                    ExpressionSegmentSyntax {
+                      LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("name")))
+                    }
+                    StringSegmentSyntax(content: .stringSegment("."))
+                  }
+                )
+              }
+            )
+          }
+        )
+      }
+    }
+  }
+
+  /// Called after a required array parameter is decoded.
+  ///
+  /// A required parameter has to be present, and an array is present only when
+  /// its name appears with a value at least once. The OpenAPI URI decoder
+  /// reports a missing scalar but decodes a missing array as `[]`, so without
+  /// this a request leaving out a required array would reach the handler.
+  private static var requiredArrayQueryItemValidator: FunctionDeclSyntax {
+    FunctionDeclSyntax(
+      leadingTrivia: .newlines(2),
+      modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+      name: .identifier("validateXRPCRequiredArrayQueryItem"),
+      signature: FunctionSignatureSyntax(
+        parameterClause: FunctionParameterClauseSyntax {
+          FunctionParameterSyntax(
+            firstName: .wildcardToken(),
+            secondName: .identifier("name"),
+            colon: .colonToken(),
+            type: Lex.typeSyntax("Swift.String")
+          )
+          FunctionParameterSyntax(
+            firstName: .identifier("values"),
+            colon: .colonToken(),
+            type: SomeOrAnyTypeSyntax(
+              someOrAnySpecifier: .keyword(.some),
+              constraint: Lex.typeSyntax("Swift.Collection")
+            )
+          )
+        },
+        effectSpecifiers: FunctionEffectSpecifiersSyntax(throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws)))
+      )
+    ) {
+      GuardStmtSyntax(
+        conditions: ConditionElementListSyntax {
+          PrefixOperatorExprSyntax(
+            operator: .prefixOperator("!"),
+            expression: MemberAccessExprSyntax(parts: [.identifier("values"), .identifier("isEmpty")])
+          )
+        }
+      ) {
+        ThrowStmtSyntax(
+          expression: FunctionCallExprSyntax(
+            callee: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("DecodingError"), .identifier("valueNotFound")])
+          ) {
+            LabeledExprSyntax(
+              expression: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("type"))) {
+                LabeledExprSyntax(
+                  label: .identifier("of"),
+                  colon: .colonToken(),
+                  expression: DeclReferenceExprSyntax(baseName: .identifier("values"))
+                )
+              }
+            )
+            LabeledExprSyntax(
+              expression: FunctionCallExprSyntax(
+                callee: MemberAccessExprSyntax(parts: [.identifier("Swift"), .identifier("DecodingError"), .identifier("Context")])
+              ) {
+                LabeledExprSyntax(
+                  label: .identifier("codingPath"),
+                  colon: .colonToken(),
+                  expression: ArrayExprSyntax {}
+                )
+                LabeledExprSyntax(
+                  label: .identifier("debugDescription"),
+                  colon: .colonToken(),
+                  expression: StringLiteralExprSyntax {
+                    StringSegmentSyntax(content: .stringSegment("Missing value for the required query parameter "))
+                    ExpressionSegmentSyntax {
+                      LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("name")))
+                    }
+                    StringSegmentSyntax(content: .stringSegment("."))
+                  }
+                )
+              }
+            )
+          }
+        )
+      }
     }
   }
 
@@ -672,7 +1001,36 @@ extension Lex {
       ClosureShorthandParameterSyntax(name: .identifier("requestBody"))
       ClosureShorthandParameterSyntax(name: .identifier("metadata"))
     }) {
-      for (i, (key, isRequired, type)) in def.params(ts: schema, fname: key, defMap: defMap, prefix: prefix).enumerated() {
+      if def.hasParameters {
+        VariableDeclSyntax(
+          leadingTrivia: .newline,
+          bindingSpecifier: .keyword(.let)
+        ) {
+          PatternBindingSyntax(
+            pattern: PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("queryString"))),
+            initializer: InitializerClauseSyntax(
+              equal: .equalToken(),
+              value: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("xrpcQueryString"))) {
+                LabeledExprSyntax(expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("soar_query")]))
+              }
+            )
+          )
+        }
+      }
+      for (i, (key, isRequired, type, isArray)) in def.params(ts: schema, fname: key, defMap: defMap, prefix: prefix).enumerated() {
+        if !isArray {
+          TryExprSyntax(
+            leadingTrivia: .newline,
+            expression: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("validateXRPCScalarQueryItem"))) {
+              LabeledExprSyntax(expression: StringLiteralExprSyntax(content: key))
+              LabeledExprSyntax(
+                label: .identifier("in"),
+                colon: .colonToken(),
+                expression: DeclReferenceExprSyntax(baseName: .identifier("queryString"))
+              )
+            }
+          )
+        }
         VariableDeclSyntax(
           leadingTrivia: .newline,
           bindingSpecifier: .keyword(.let)
@@ -691,7 +1049,7 @@ extension Lex {
                   LabeledExprSyntax(
                     label: .identifier("in", leadingTrivia: .newline),
                     colon: .colonToken(),
-                    expression: MemberAccessExprSyntax(parts: [.identifier("request"), .identifier("soar_query")])
+                    expression: DeclReferenceExprSyntax(baseName: .identifier("queryString"))
                   )
                   LabeledExprSyntax(
                     label: .identifier("style", leadingTrivia: .newline),
@@ -725,6 +1083,19 @@ extension Lex {
                 .with(\.rightParen, .rightParenToken(leadingTrivia: .newline))
               )
             )
+          )
+        }
+        if isArray, isRequired {
+          TryExprSyntax(
+            leadingTrivia: .newline,
+            expression: FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("validateXRPCRequiredArrayQueryItem"))) {
+              LabeledExprSyntax(expression: StringLiteralExprSyntax(content: key))
+              LabeledExprSyntax(
+                label: .identifier("values"),
+                colon: .colonToken(),
+                expression: DeclReferenceExprSyntax(baseName: .identifier("query\(i)"))
+              )
+            }
           )
         }
       }
@@ -867,7 +1238,7 @@ extension Lex {
                     LabeledExprSyntax(
                       label: .identifier("soar_statusCode"),
                       colon: .colonToken(),
-                      expression: IntegerLiteralExprSyntax(literal: .integerLiteral("201"))
+                      expression: IntegerLiteralExprSyntax(literal: .integerLiteral("200"))
                     )
                   }
                 )
