@@ -43,6 +43,24 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
   }
 
+  var hasParameters: Bool {
+    !(parameters?.sortedProperties ?? []).isEmpty
+  }
+
+  var hasScalarParameters: Bool {
+    (parameters?.sortedProperties ?? []).contains { _, field in
+      if case .array = field { return false }
+      return true
+    }
+  }
+
+  var hasRequiredArrayParameters: Bool {
+    let required = Set(parameters?.required ?? [])
+    return (parameters?.sortedProperties ?? []).contains { name, field in
+      if case .array = field { required.contains(name) } else { false }
+    }
+  }
+
   private func queries(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [PatternBindingSyntax] {
     var queries = [PatternBindingSyntax]()
     guard let parameters else { return queries }
@@ -80,8 +98,8 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     return queries
   }
 
-  func params(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [(key: String, isRequired: Bool, type: ExprSyntax)] {
-    var queries = [(key: String, isRequired: Bool, type: ExprSyntax)]()
+  func params(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String) -> [(key: String, isRequired: Bool, type: ExprSyntax, isArray: Bool)] {
+    var queries = [(key: String, isRequired: Bool, type: ExprSyntax, isArray: Bool)]()
     guard let parameters else { return queries }
     var required = [String: Bool]()
     for req in parameters.required ?? [] {
@@ -97,7 +115,8 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         tn = TypeSchema.typeNameForField(name: name, k: "", v: ts, defMap: defMap, dropPrefix: false)
       }
       let type = Lex.refExpr(tn)
-      queries.append((key: name, isRequired: isRequired, type: type))
+      let isArray = if case .array = t { true } else { false }
+      queries.append((key: name, isRequired: isRequired, type: type, isArray: isArray))
     }
     return queries
   }
