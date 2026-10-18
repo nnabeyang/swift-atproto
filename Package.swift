@@ -41,7 +41,7 @@ let package = Package(
     .package(url: "https://github.com/swift-libp2p/swift-multibase.git", exact: "0.2.3"),
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"604.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMajor(from: "1.3.1")),
-    .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.0.0")),
+    .package(url: "https://github.com/apple/swift-crypto", "4.0.0"..<"6.0.0"),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", "0.23.0"..<"0.24.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.0"),
   ],
