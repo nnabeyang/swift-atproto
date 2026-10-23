@@ -2,27 +2,26 @@ import Foundation
 
 /// Exposes the wire fields needed to verify a Permissioned Data repository commit.
 ///
-/// The lexicon generator adds this conformance to
-/// `com.atproto.space.defs#signedCommit` when that definition is present and has
-/// the expected shape. Verification is provided by the `ATProtoSync` product.
-public protocol PermissionedRepoSignedCommitDescribing: Sendable {
-  /// The signed commit format version.
+/// The lexicon generator adds this conformance to `com.atproto.space.defs#commit`
+/// when that definition is present and has the expected shape. A commit carries
+/// no signature: the repo host authenticates it to a syncer with a MAC in the
+/// `Atproto-Space-Mac` response header. Verification is provided by the
+/// `ATProtoSync` product.
+public protocol PermissionedRepoCommitDescribing: Sendable {
+  /// The commit format version.
   var permissionedRepoCommitVersion: Int { get }
 
-  /// The SHA-256 digest claimed for the repository's LtHash state.
-  var permissionedRepoCommitHash: Data { get }
+  /// The DID of the repo's author.
+  var permissionedRepoCommitRepo: FormatString<DID> { get }
 
-  /// Per-commit input keying material used for the hash-binding MAC.
-  var permissionedRepoCommitInputKeyMaterial: Data { get }
+  /// The space the repo belongs to.
+  var permissionedRepoCommitSpace: FormatString<SpaceRef> { get }
 
-  /// The author's signature over the encoded commit context.
-  var permissionedRepoCommitSignature: Data { get }
-
-  /// The HMAC-SHA256 value binding the repository hash to the context.
-  var permissionedRepoCommitMAC: Data { get }
-
-  /// The revision encoded in the signed commit.
+  /// The commit revision.
   var permissionedRepoCommitRevision: FormatString<TID> { get }
+
+  /// The SHA-256 digest claimed for the repository's LtHash state.
+  var permissionedRepoCommitData: Data { get }
 }
 
 /// Exposes one Permissioned Data repository operation to a sync verifier.

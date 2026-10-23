@@ -72,8 +72,8 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         names.append("RepoWriteOperationDescribing")
       }
       switch permissionedRepoDescriptor {
-      case .signedCommit:
-        names.append("PermissionedRepoSignedCommitDescribing")
+      case .commit:
+        names.append("PermissionedRepoCommitDescribing")
       case .operation:
         names.append("PermissionedRepoOperationDescribing")
       case nil:
@@ -178,30 +178,26 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         Self.applyWritesRequirementsAccessor()
           .with(\.leadingTrivia, .newlines(2))
       }
-      if case .signedCommit? = permissionedRepoDescriptor {
+      if case .commit? = permissionedRepoDescriptor {
         Self.forwardingAccessor(
           name: "permissionedRepoCommitVersion", type: Lex.typeSyntax("Swift.Int"),
           source: "ver"
         ).with(\.leadingTrivia, .newlines(2))
         Self.forwardingAccessor(
-          name: "permissionedRepoCommitHash", type: Lex.typeSyntax("Foundation.Data"),
-          source: "hash"
+          name: "permissionedRepoCommitRepo", type: Self.formatStringType("DID"),
+          source: "repo"
         ).with(\.leadingTrivia, .newlines(2))
         Self.forwardingAccessor(
-          name: "permissionedRepoCommitInputKeyMaterial",
-          type: Lex.typeSyntax("Foundation.Data"), source: "ikm"
-        ).with(\.leadingTrivia, .newlines(2))
-        Self.forwardingAccessor(
-          name: "permissionedRepoCommitSignature", type: Lex.typeSyntax("Foundation.Data"),
-          source: "sig"
-        ).with(\.leadingTrivia, .newlines(2))
-        Self.forwardingAccessor(
-          name: "permissionedRepoCommitMAC", type: Lex.typeSyntax("Foundation.Data"),
-          source: "mac"
+          name: "permissionedRepoCommitSpace", type: Self.formatStringType("SpaceRef"),
+          source: "space"
         ).with(\.leadingTrivia, .newlines(2))
         Self.forwardingAccessor(
           name: "permissionedRepoCommitRevision", type: Self.formatStringType("TID"),
           source: "rev"
+        ).with(\.leadingTrivia, .newlines(2))
+        Self.forwardingAccessor(
+          name: "permissionedRepoCommitData", type: Lex.typeSyntax("Foundation.Data"),
+          source: "data"
         ).with(\.leadingTrivia, .newlines(2))
       }
       if case .operation? = permissionedRepoDescriptor {
@@ -1016,18 +1012,19 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
   }
 
   private enum PermissionedRepoDescriptor {
-    case signedCommit
+    case commit
     case operation
   }
 
   private func permissionedRepoDescriptor(ts: TypeSchema) -> PermissionedRepoDescriptor? {
     let required = Set(required ?? [])
-    if ts.id == "com.atproto.space.defs", ts.defName == "signedCommit",
-      required.isSuperset(of: ["ver", "hash", "ikm", "sig", "mac", "rev"]),
-      isInteger("ver"), isBytes("hash"), isBytes("ikm"), isBytes("sig"),
-      isBytes("mac"), isString("rev", format: "tid")
+    if ts.id == "com.atproto.space.defs", ts.defName == "commit",
+      required.isSuperset(of: ["ver", "repo", "space", "rev", "data"]),
+      isInteger("ver"), isString("repo", format: "did"),
+      isString("space", format: "space-ref"), isString("rev", format: "tid"),
+      isBytes("data")
     {
-      return .signedCommit
+      return .commit
     }
     let nullable = Set(nullable ?? [])
     if ts.id == "com.atproto.space.listRepoOps", ts.defName == "opEntry",

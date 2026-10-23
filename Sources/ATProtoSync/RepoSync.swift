@@ -1,10 +1,9 @@
-import ATProtoCrypto
 import Foundation
 import SwiftAtproto
 
 /// A durable, verified position in a Permissioned Data repository.
 public struct RepoSyncCheckpoint: Hashable, Sendable {
-  /// The revision authenticated by the repository's signed commit.
+  /// The revision authenticated by the repository's commit.
   public let revision: TID
 
   /// The repository state at ``revision``.
@@ -17,7 +16,8 @@ public struct RepoSyncCheckpoint: Hashable, Sendable {
   ///
   /// Only restore bytes that the consumer persisted after successful
   /// verification. This initializer validates the state representation, but
-  /// cannot re-authenticate a historical checkpoint without its signed commit.
+  /// cannot re-authenticate a historical checkpoint: a commit MAC holds only for
+  /// the request that carried it.
   public init(revision: TID, state: Data) throws {
     self.revision = revision
     self.repository = try RepoCommit(state: state)
@@ -29,7 +29,7 @@ public struct RepoSyncCheckpoint: Hashable, Sendable {
   }
 }
 
-/// Why incremental synchronization must restart from a complete repository CAR.
+/// Why incremental synchronization must restart from a complete repository archive.
 public enum RepoFullStateRecoveryReason: Hashable, Sendable {
   /// The incrementally reconstructed state did not match the authenticated head.
   ///
@@ -50,9 +50,9 @@ public enum RepoIncrementalSyncResult: Hashable, Sendable {
 /// An uncommitted candidate state accumulated from incremental repository operations.
 ///
 /// Create a fresh value from the last durable checkpoint, apply every page of
-/// `listRepoOps`, and call ``finish(_:context:publicKey:limits:)`` only after a
-/// response includes the head signed commit. The base checkpoint remains
-/// unchanged unless the returned result supplies a replacement.
+/// `listRepoOps`, and call ``finish(_:authentication:)`` only after a response
+/// includes the head commit, with that response's MAC. The base checkpoint
+/// remains unchanged unless the returned result supplies a replacement.
 public struct RepoIncrementalSync: Hashable, Sendable {
   /// The last durable checkpoint from which this update started.
   public let checkpoint: RepoSyncCheckpoint
@@ -78,43 +78,39 @@ public struct RepoIncrementalSync: Hashable, Sendable {
 
   /// Authenticates the head commit and decides whether the candidate can be persisted.
   ///
-  /// Signature, context, and MAC failures are thrown because recovery from the
-  /// same unauthenticated source cannot make them trustworthy. Only a valid
-  /// commit whose set hash differs from the candidate requests full recovery.
+  /// Context and MAC failures are thrown because recovery from the same
+  /// unauthenticated source cannot make them trustworthy. Only a valid commit
+  /// whose data differs from the candidate requests full recovery.
   public func finish(
-    _ commit: any PermissionedRepoSignedCommitDescribing,
-    context: RepoCommitContext,
-    publicKey: PublicKey,
-    limits: RepoVerificationLimits = .init()
+    _ commit: any PermissionedRepoCommitDescribing,
+    authentication: RepoCommitAuthentication
   ) throws -> RepoIncrementalSyncResult {
-    try SignedRepoCommitVerifier.verify(
-      commit, context: context, publicKey: publicKey, limits: limits)
-    guard context.revision.rawValue >= checkpoint.revision.rawValue else {
+    let revision = try RepoCommitVerifier.verify(commit, authentication: authentication)
+    guard revision.rawValue >= checkpoint.revision.rawValue else {
       throw RepoVerificationError.staleCommitRevision(
         checkpoint: checkpoint.revision,
-        commit: context.revision)
+        commit: revision)
     }
     guard candidate.matches(commit) else {
       return .fullStateRecoveryRequired(.incrementalStateMismatch)
     }
-    return .synchronized(
-      RepoSyncCheckpoint(revision: context.revision, repository: candidate))
+    return .synchronized(RepoSyncCheckpoint(revision: revision, repository: candidate))
   }
 }
 
 extension RepoCommit {
   /// Authenticates this complete state and returns a durable replacement checkpoint.
   ///
-  /// For a state built from ``PermissionedRepoCAR/repository``, consume
-  /// ``PermissionedRepoCAR/recordBlocks`` through its `nil` terminator before
-  /// persisting the returned checkpoint alongside mapped record values.
+  /// A full download read with ``PermissionedRepoSTAR`` returns its checkpoint
+  /// from ``PermissionedRepoSTAR/verifiedCheckpoint()`` instead.
   public func verifiedCheckpoint(
-    _ commit: any PermissionedRepoSignedCommitDescribing,
-    context: RepoCommitContext,
-    publicKey: PublicKey,
-    limits: RepoVerificationLimits = .init()
+    _ commit: any PermissionedRepoCommitDescribing,
+    authentication: RepoCommitAuthentication
   ) throws -> RepoSyncCheckpoint {
-    try verify(commit, context: context, publicKey: publicKey, limits: limits)
-    return RepoSyncCheckpoint(revision: context.revision, repository: self)
+    let revision = try RepoCommitVerifier.verify(commit, authentication: authentication)
+    guard matches(commit) else {
+      throw RepoVerificationError.setHashMismatch
+    }
+    return RepoSyncCheckpoint(revision: revision, repository: self)
   }
 }

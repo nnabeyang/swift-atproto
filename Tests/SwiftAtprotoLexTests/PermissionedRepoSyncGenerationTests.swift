@@ -6,19 +6,21 @@ import Testing
 
 @Suite("Permissioned repository sync generation")
 struct PermissionedRepoSyncGenerationTests {
-  @Test("signed commits and operations expose sync descriptors")
+  @Test("commits and operations expose sync descriptors")
   func generatesSyncDescriptors() async throws {
     let source = try await generate([
-      "defs.json": Self.signedCommit,
+      "defs.json": Self.commit,
       "listRepoOps.json": Self.listRepoOps,
     ])
 
     #expect(!Parser.parse(source: source).hasError)
     #expect(
       source.contains(
-        "public struct SpaceDefs_SignedCommit: Codable, Hashable, Sendable, PermissionedRepoSignedCommitDescribing"
+        "public struct SpaceDefs_Commit: Codable, Hashable, Sendable, PermissionedRepoCommitDescribing"
       ))
-    #expect(source.contains("public var permissionedRepoCommitInputKeyMaterial: Foundation.Data"))
+    #expect(source.contains("public var permissionedRepoCommitRepo: FormatString<DID>"))
+    #expect(source.contains("public var permissionedRepoCommitSpace: FormatString<SpaceRef>"))
+    #expect(source.contains("public var permissionedRepoCommitData: Foundation.Data"))
     #expect(
       source.contains(
         "public struct SpaceListRepoOps_OpEntry: Codable, Hashable, Sendable, PermissionedRepoOperationDescribing"
@@ -28,10 +30,10 @@ struct PermissionedRepoSyncGenerationTests {
 
   @Test("a similarly named but incompatible definition gets no conformance")
   func rejectsAnIncompatibleShape() async throws {
-    let source = try await generate(["defs.json": Self.incompatibleSignedCommit])
+    let source = try await generate(["defs.json": Self.incompatibleCommit])
 
     #expect(!Parser.parse(source: source).hasError)
-    #expect(!source.contains("PermissionedRepoSignedCommitDescribing"))
+    #expect(!source.contains("PermissionedRepoCommitDescribing"))
     #expect(!source.contains("permissionedRepoCommitVersion"))
   }
 
@@ -53,7 +55,29 @@ struct PermissionedRepoSyncGenerationTests {
       contentsOf: output.appending(path: "XRPCAPIClient.swift"), encoding: .utf8)
   }
 
-  private static let signedCommit = """
+  private static let commit = """
+    {
+      "lexicon": 1,
+      "id": "com.atproto.space.defs",
+      "defs": {
+        "commit": {
+          "type": "object",
+          "required": ["ver", "repo", "space", "rev", "data"],
+          "properties": {
+            "ver": { "type": "integer" },
+            "repo": { "type": "string", "format": "did" },
+            "space": { "type": "string", "format": "space-ref" },
+            "rev": { "type": "string", "format": "tid" },
+            "data": { "type": "bytes" }
+          }
+        }
+      }
+    }
+    """
+
+  // The October 1 shape, and a commit whose `rev` has no format: neither gets
+  // the conformance.
+  private static let incompatibleCommit = """
     {
       "lexicon": 1,
       "id": "com.atproto.space.defs",
@@ -69,26 +93,16 @@ struct PermissionedRepoSyncGenerationTests {
             "mac": { "type": "bytes" },
             "rev": { "type": "string", "format": "tid" }
           }
-        }
-      }
-    }
-    """
-
-  private static let incompatibleSignedCommit = """
-    {
-      "lexicon": 1,
-      "id": "com.atproto.space.defs",
-      "defs": {
-        "signedCommit": {
+        },
+        "commit": {
           "type": "object",
-          "required": ["ver", "hash", "mac", "ikm", "sig", "rev"],
+          "required": ["ver", "repo", "space", "rev", "data"],
           "properties": {
             "ver": { "type": "integer" },
-            "hash": { "type": "bytes" },
-            "ikm": { "type": "bytes" },
-            "sig": { "type": "bytes" },
-            "mac": { "type": "bytes" },
-            "rev": { "type": "string" }
+            "repo": { "type": "string", "format": "did" },
+            "space": { "type": "string", "format": "space-ref" },
+            "rev": { "type": "string" },
+            "data": { "type": "bytes" }
           }
         }
       }

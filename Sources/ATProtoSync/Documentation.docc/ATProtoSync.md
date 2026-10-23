@@ -4,16 +4,20 @@ Verify Permissioned Data repository states without owning consumer persistence.
 
 ## Overview
 
-`ATProtoSync` authenticates a Permissioned Data signed commit and compares its
-hash claim with an ``LtHash`` accumulated from complete records, a DRISL index,
-or incremental operations. It also verifies the two roots and blocks in a
-streaming Permissioned Data repository CAR. It does not fetch repositories or
-decide how a consumer maps records and stores checkpoints.
+`ATProtoSync` authenticates a Permissioned Data commit with the MAC its
+response carried and compares its `data` with an ``LtHash`` accumulated from
+complete records or incremental operations. It also reads the STAR archive
+`getRepo` returns. It does not fetch repositories or decide how a consumer maps
+records and stores checkpoints.
 
-Generated `com.atproto.space.defs#signedCommit` and
+A commit carries no signature. For each request, the syncer shares a secret
+with the repo host through `ATProtoCrypto.SpaceKeyEncapsulation`, sends the key
+share in `Atproto-Space-Want-Mac`, and reads the MAC from `Atproto-Space-Mac`.
+``RepoCommitAuthentication`` carries what was requested, the secret, and that
+MAC. Generated `com.atproto.space.defs#commit` and
 `com.atproto.space.listRepoOps#opEntry` values expose the fields this module
 needs, so a consumer can pass generated values directly to ``RepoCommit`` and
-``SignedRepoCommitVerifier``.
+``RepoCommitVerifier``.
 
 ```swift
 let checkpoint = try RepoSyncCheckpoint(revision: persistedRevision, state: persistedState)
@@ -23,8 +27,8 @@ try update.apply(response.ops)
 if let commit = response.commit {
   let result = try update.finish(
     commit,
-    context: RepoCommitContext(space: space, author: author, revision: revision),
-    publicKey: authorKey
+    authentication: RepoCommitAuthentication(
+      space: space, repo: author, sharedSecret: encapsulation.sharedSecret, mac: mac)
   )
   switch result {
   case .synchronized(let replacement):
@@ -36,37 +40,20 @@ if let commit = response.commit {
 ```
 
 For full-state recovery, pass the body returned by a generated streaming
-`com.atproto.space.getRepo` call directly to ``PermissionedRepoCAR``. The
-signed commit and repository index are available immediately; record blocks
-remain pull-driven and are checked against their CIDs as they are consumed.
+`com.atproto.space.getRepo` call directly to ``PermissionedRepoSTAR``. The
+metadata commit is authenticated before `read` returns; records remain
+pull-driven and are folded into a set hash as they are consumed.
 
 ```swift
-let response = try await client.SpaceGetRepoStreaming(repo: repo, space: space)
-let car = try await PermissionedRepoCAR.read(from: response.body)
+let star = try await PermissionedRepoSTAR.read(
+  from: response.body,
+  authentication: RepoCommitAuthentication(
+    space: space, repo: author, sharedSecret: encapsulation.sharedSecret, mac: mac))
 
-let commit = try SignedRepoCommitVerifier.decode(
-  Com.Atproto.SpaceDefs_SignedCommit.self,
-  fromDRISL: car.signedCommitBlock.bytes
-)
-let context = RepoCommitContext(
-  space: expectedSpace,
-  author: repositoryAuthor,
-  revision: try TID(string: commit.permissionedRepoCommitRevision.rawValue)
-)
-try car.repository.verify(
-  commit,
-  context: context,
-  publicKey: authorPublicKey
-)
-
-for try await record in car.recordBlocks {
-  // Map the index-verified path and CID-verified value into consumer-owned storage.
+for try await record in star.records {
+  // Stage the path-ordered, CID-computed record in consumer-owned storage.
 }
-let replacement = try car.repository.verifiedCheckpoint(
-  commit,
-  context: context,
-  publicKey: authorPublicKey
-)
+let replacement = try star.verifiedCheckpoint()
 // Replace records and persist replacement only after the record stream reaches its end.
 ```
 
@@ -90,13 +77,13 @@ see `THIRD_PARTY_NOTICES.md` in the package repository.
 
 ### Full-state recovery
 
-- ``PermissionedRepoCAR``
-- ``PermissionedRepoCARBlock``
-- ``PermissionedRepoCARRecord``
+- ``PermissionedRepoSTAR``
+- ``PermissionedRepoSTARCommit``
+- ``PermissionedRepoSTARRecord``
 
-### Signed commits
+### Commits
 
-- ``RepoCommitContext``
-- ``SignedRepoCommitVerifier``
+- ``RepoCommitAuthentication``
+- ``RepoCommitVerifier``
 - ``RepoVerificationLimits``
 - ``RepoVerificationError``

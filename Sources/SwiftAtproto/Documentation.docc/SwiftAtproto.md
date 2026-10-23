@@ -105,7 +105,7 @@ let posts = try await client.call(
 
 ### Permissioned repository sync descriptors
 
-- ``PermissionedRepoSignedCommitDescribing``
+- ``PermissionedRepoCommitDescribing``
 - ``PermissionedRepoOperationDescribing``
 
 ### Space credentials
