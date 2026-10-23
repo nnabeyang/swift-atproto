@@ -227,8 +227,13 @@ public struct PermissionedRepoSTAR: Sendable {
           else {
             throw RepoVerificationError.truncatedSTAR
           }
-          // A record is a DRISL map: major type 5 with a definite length.
-          guard let first = value.first, first & 0xe0 == 0xa0, first != 0xbf else {
+          do {
+            _ = try drislDecoder(
+              maximumNestingDepth: records.limits.maximumNestingDepth,
+              maximumContainerElements: records.limits.maximumRecordBytes,
+              maximumStringBytes: records.limits.maximumRecordBytes
+            ).decode(RecordMap.self, from: value)
+          } catch {
             throw RepoVerificationError.malformedRecord(path)
           }
           let cid = try LexLink(
@@ -245,6 +250,14 @@ public struct PermissionedRepoSTAR: Sendable {
         }
       }
     }
+  }
+}
+
+/// Accepts any DRISL map. Decoding scans the whole value, so a record that is
+/// not canonical DRISL is rejected along with one that is not a map.
+private struct RecordMap: Decodable {
+  init(from decoder: any Decoder) throws {
+    _ = try decoder.container(keyedBy: AnyCodingKeys.self)
   }
 }
 

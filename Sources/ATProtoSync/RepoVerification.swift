@@ -62,7 +62,7 @@ public enum RepoVerificationError: Error, Hashable, Sendable {
   /// lexicographic byte order, so it was out of order or a duplicate.
   case recordOutOfOrder(String)
 
-  /// A STAR record value was not a DRISL map.
+  /// A STAR record value was not a canonical DRISL map.
   case malformedRecord(String)
 
   /// The record sequence was consumed more than once.

@@ -184,6 +184,46 @@ struct PermissionedRepoSTARTests {
     }
   }
 
+  @Test("accepts a record with nested values and a link")
+  func acceptsANestedRecord() async throws {
+    // {"a": [1, {"b": h'00'}], "c": 42(h'00' || CID)}
+    let value =
+      Data([0xa2, 0x61, 0x61, 0x82, 0x01, 0xa1, 0x61, 0x62, 0x41, 0x00])
+      + Data([0x61, 0x63, 0xd8, 0x2a, 0x58, 0x25, 0x00, 0x01, 0x71, 0x12, 0x20])
+      + Data(repeating: 0xab, count: 32)
+    let archive = try archive([("com.example.post/a", value)])
+    let star = try await PermissionedRepoSTAR.read(
+      from: XRPCBody(archive.bytes), authentication: archive.authentication)
+    var read: [Data] = []
+    for try await record in star.records { read.append(record.bytes) }
+    #expect(read == [value])
+    #expect(try star.verifiedCheckpoint().repository == archive.repository)
+  }
+
+  @Test(
+    "rejects a record that is not canonical DRISL past its first byte",
+    arguments: [
+      // {"a": missing value}
+      [0xa1, 0x61, 0x61],
+      // {"b": 1, "a": 2}, keys unsorted
+      [0xa2, 0x61, 0x62, 0x01, 0x61, 0x61, 0x02],
+      // {"a": 1} followed by another item
+      [0xa1, 0x61, 0x61, 0x01, 0x00],
+      // {"a": 1.0} as a half float
+      [0xa1, 0x61, 0x61, 0xf9, 0x3c, 0x00],
+      // {_ "a": 1}, indefinite length
+      [0xbf, 0x61, 0x61, 0x01, 0xff],
+    ] as [[UInt8]])
+  func rejectsANonCanonicalRecord(_ value: [UInt8]) async throws {
+    let archive = try archive([("com.example.post/a", Data(value))])
+    let star = try await PermissionedRepoSTAR.read(
+      from: XRPCBody(archive.bytes), authentication: archive.authentication)
+    var iterator = star.records.makeAsyncIterator()
+    await #expect(throws: RepoVerificationError.malformedRecord("com.example.post/a")) {
+      _ = try await iterator.next()
+    }
+  }
+
   @Test("rejects metadata of another profile or in non-canonical form")
   func rejectsMalformedMetadata() async throws {
     let archive = try archive([])
