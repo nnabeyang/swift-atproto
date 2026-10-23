@@ -5,47 +5,29 @@ import Testing
 @testable import ATProtoCrypto
 
 struct SpaceRequestSignatureTests {
-  private static let delegationToken = "delegation"
   private static let credential = "credential"
   private static let audience = "did:example:repo"
-
-  // MARK: - Exchange
-
-  @Test func exchangeCoversAuthorizationAndNamesTheKey() throws {
-    let key = try PrivateKey(type: .p256)
-    let signed = try SpaceRequestSignature.exchange(delegationToken: Self.delegationToken, key: key)
-
-    #expect(signed.authorization == "Bearer delegation")
-    #expect(signed.audience == nil)
-    #expect(signed.signatureInput == "atproto-space=(\"authorization\");keyid=\"\(key.publicKey.did)\"")
-    #expect(key.publicKey.did.hasPrefix("did:key:zDn"))
-    #expect(signed.headerFields.map(\.name) == ["authorization", "signature-input", "signature"])
-
-    let base = """
-      "authorization": Bearer delegation
-      "@signature-params": ("authorization");keyid="\(key.publicKey.did)"
-      """
-    #expect(try key.publicKey.isValidSignature(signature: Self.signatureBytes(signed), for: Data(base.utf8)))
-  }
 
   // MARK: - Use
 
   // The same authorization and audience as the fixed upstream implementation's
   // tests, so the signature base below is the one a space host rebuilds.
-  @Test func useCoversAuthorizationThenAudience() throws {
+  @Test func useCoversAuthorizationThenAudienceWithTheTag() throws {
     let key = try PrivateKey(type: .p256)
     let signed = try SpaceRequestSignature.use(credential: Self.credential, audience: Self.audience, key: key)
 
-    #expect(signed.authorization == "Atproto-Space credential")
+    #expect(signed.authorization == "Atproto-Space-Credential credential")
     #expect(signed.audience == Self.audience)
-    #expect(signed.signatureInput == "atproto-space=(\"authorization\" \"atproto-space-audience\")")
+    #expect(
+      signed.signatureInput
+        == "atproto-space-credential=(\"authorization\" \"atproto-space-audience\");tag=\"atproto-space-credential\"")
     #expect(
       signed.headerFields.map(\.name) == ["authorization", "atproto-space-audience", "signature-input", "signature"])
 
     let base = """
-      "authorization": Atproto-Space credential
+      "authorization": Atproto-Space-Credential credential
       "atproto-space-audience": did:example:repo
-      "@signature-params": ("authorization" "atproto-space-audience")
+      "@signature-params": ("authorization" "atproto-space-audience");tag="atproto-space-credential"
       """
     #expect(try key.publicKey.isValidSignature(signature: Self.signatureBytes(signed), for: Data(base.utf8)))
   }
@@ -56,19 +38,19 @@ struct SpaceRequestSignatureTests {
       SpaceRequestSignature.use(credential: Self.credential, audience: Self.audience, key: key))
 
     let changedAudience = """
-      "authorization": Atproto-Space credential
+      "authorization": Atproto-Space-Credential credential
       "atproto-space-audience": did:example:other
-      "@signature-params": ("authorization" "atproto-space-audience")
+      "@signature-params": ("authorization" "atproto-space-audience");tag="atproto-space-credential"
       """
     let changedAuthorization = """
-      "authorization": Atproto-Space other
+      "authorization": Atproto-Space-Credential other
       "atproto-space-audience": did:example:repo
-      "@signature-params": ("authorization" "atproto-space-audience")
+      "@signature-params": ("authorization" "atproto-space-audience");tag="atproto-space-credential"
       """
     let reordered = """
       "atproto-space-audience": did:example:repo
-      "authorization": Atproto-Space credential
-      "@signature-params": ("authorization" "atproto-space-audience")
+      "authorization": Atproto-Space-Credential credential
+      "@signature-params": ("authorization" "atproto-space-audience");tag="atproto-space-credential"
       """
     for base in [changedAudience, changedAuthorization, reordered] {
       #expect(!key.publicKey.isValidSignature(signature: signature, for: Data(base.utf8)))
@@ -79,9 +61,9 @@ struct SpaceRequestSignatureTests {
     let signed = try SpaceRequestSignature.use(
       credential: Self.credential, audience: Self.audience, key: PrivateKey(type: .p256))
     let base = """
-      "authorization": Atproto-Space credential
+      "authorization": Atproto-Space-Credential credential
       "atproto-space-audience": did:example:repo
-      "@signature-params": ("authorization" "atproto-space-audience")
+      "@signature-params": ("authorization" "atproto-space-audience");tag="atproto-space-credential"
       """
     let otherKey = try PrivateKey(type: .p256).publicKey
     #expect(try !otherKey.isValidSignature(signature: Self.signatureBytes(signed), for: Data(base.utf8)))
@@ -100,9 +82,9 @@ struct SpaceRequestSignatureTests {
     let der = try P256.Signing.ECDSASignature(rawRepresentation: raw).derRepresentation
     #expect(der.count != 64)
     let base = """
-      "authorization": Atproto-Space credential
+      "authorization": Atproto-Space-Credential credential
       "atproto-space-audience": did:example:repo
-      "@signature-params": ("authorization" "atproto-space-audience")
+      "@signature-params": ("authorization" "atproto-space-audience");tag="atproto-space-credential"
       """
     #expect(!key.publicKey.isValidSignature(signature: der, for: Data(base.utf8)))
   }
@@ -113,9 +95,6 @@ struct SpaceRequestSignatureTests {
     for type in [KeyType.secp256k1, .ed25519] {
       let key = try PrivateKey(type: type)
       #expect(throws: SpaceRequestSignatureError.unsupportedKeyType) {
-        try SpaceRequestSignature.exchange(delegationToken: Self.delegationToken, key: key)
-      }
-      #expect(throws: SpaceRequestSignatureError.unsupportedKeyType) {
         try SpaceRequestSignature.use(credential: Self.credential, audience: Self.audience, key: key)
       }
     }
@@ -124,9 +103,6 @@ struct SpaceRequestSignatureTests {
   @Test func rejectsValuesThatWouldBreakTheHeaderBlock() throws {
     let key = try PrivateKey(type: .p256)
     for value in ["", "   ", "a\r\nb", "a\nb", "a\rb"] {
-      #expect(throws: SpaceRequestSignatureError.invalidFieldValue) {
-        try SpaceRequestSignature.exchange(delegationToken: value, key: key)
-      }
       #expect(throws: SpaceRequestSignatureError.invalidFieldValue) {
         try SpaceRequestSignature.use(credential: value, audience: Self.audience, key: key)
       }
@@ -139,8 +115,17 @@ struct SpaceRequestSignatureTests {
   @Test func trimsSurroundingWhitespaceBeforeSigning() throws {
     let key = try PrivateKey(type: .p256)
     let signed = try SpaceRequestSignature.use(credential: " credential ", audience: " did:example:repo\t", key: key)
-    #expect(signed.authorization == "Atproto-Space credential")
+    #expect(signed.authorization == "Atproto-Space-Credential credential")
     #expect(signed.audience == Self.audience)
+  }
+
+  @Test func signatureIsPaddedBase64() throws {
+    for _ in 0..<8 {
+      let signed = try SpaceRequestSignature.use(
+        credential: Self.credential, audience: Self.audience, key: PrivateKey(type: .p256))
+      let encoded = signed.signature.dropFirst("atproto-space-credential=:".count).dropLast()
+      #expect(encoded.count % 4 == 0)
+    }
   }
 
   @Test func descriptionWithholdsTheCredential() throws {
@@ -152,9 +137,9 @@ struct SpaceRequestSignatureTests {
 }
 
 extension SpaceRequestSignatureTests {
-  /// The bytes of a `signature` field value, `atproto-space=:<base64>:`.
+  /// The bytes of a `signature` field value, `atproto-space-credential=:<base64>:`.
   fileprivate static func signatureBytes(_ signed: SpaceRequestSignature) throws -> Data {
-    let prefix = "atproto-space=:"
+    let prefix = "atproto-space-credential=:"
     #expect(signed.signature.hasPrefix(prefix) && signed.signature.hasSuffix(":"))
     let encoded = signed.signature.dropFirst(prefix.count).dropLast()
     return try #require(Data(base64Encoded: String(encoded)))

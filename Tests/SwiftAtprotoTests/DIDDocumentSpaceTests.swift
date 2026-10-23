@@ -37,160 +37,111 @@ struct DIDDocumentSpaceTests {
   // MARK: - spaceHostUrl
 
   @Test
-  func spaceHostUsesDedicatedEntry() throws {
-    let doc = makeDoc(services: [
-      pds(),
-      DocService(
-        id: "#atproto_space_host", type: "AtprotoSpaceHost",
-        serviceEndpoint: "https://space.example"),
-    ])
-    #expect(try doc.spaceHostUrl == URL(string: "https://space.example"))
-  }
-
-  @Test
-  func spaceHostAcceptsAbsoluteEntryID() throws {
-    let doc = makeDoc(services: [
-      pds(),
-      DocService(
-        id: "did:plc:example#atproto_space_host", type: "AtprotoSpaceHost",
-        serviceEndpoint: "https://space.example"),
-    ])
-    #expect(try doc.spaceHostUrl == URL(string: "https://space.example"))
-  }
-
-  // No service `type` is defined for the space host, so the entry is matched on id alone.
-  @Test
-  func spaceHostIgnoresServiceType() throws {
-    let doc = makeDoc(services: [
-      DocService(
-        id: "#atproto_space_host", type: "SomethingElse",
-        serviceEndpoint: "https://space.example")
-    ])
-    #expect(try doc.spaceHostUrl == URL(string: "https://space.example"))
-  }
-
-  @Test
-  func spaceHostFallsBackToPDSWhenAbsent() throws {
+  func spaceHostIsThePDS() throws {
     let doc = makeDoc(services: [pds()])
     #expect(try doc.spaceHostUrl == URL(string: "https://pds.example"))
   }
 
-  @Test
-  func spaceHostMayPointAtTheSameEndpointAsPDS() throws {
+  // The October 1 `#atproto_space_host` entry is ignored, valid or not.
+  @Test(arguments: ["https://space.example", "/xrpc", "ftp://space.example"])
+  func spaceHostIgnoresTheRetiredEntry(endpoint: String) throws {
     let doc = makeDoc(services: [
       pds(),
-      DocService(
-        id: "#atproto_space_host", type: "AtprotoSpaceHost",
-        serviceEndpoint: "https://pds.example"),
+      DocService(id: "#atproto_space_host", type: "AtprotoSpaceHost", serviceEndpoint: endpoint),
     ])
     #expect(try doc.spaceHostUrl == URL(string: "https://pds.example"))
   }
 
-  // A published-but-malformed entry is a misconfiguration, not an absent entry: it must not fall
-  // through to the PDS.
   @Test
-  func spaceHostWithRelativeEndpointThrows() {
+  func spaceHostThrowsWithoutAPDS() {
     let doc = makeDoc(services: [
-      pds(),
-      DocService(id: "#atproto_space_host", type: "AtprotoSpaceHost", serviceEndpoint: "/xrpc"),
-    ])
-    #expect(throws: DIDDocument.VerifyError.self) { try doc.spaceHostUrl }
-  }
-
-  @Test
-  func spaceHostWithNonHTTPEndpointThrows() {
-    let doc = makeDoc(services: [
-      pds(),
       DocService(
         id: "#atproto_space_host", type: "AtprotoSpaceHost",
-        serviceEndpoint: "ftp://space.example"),
+        serviceEndpoint: "https://space.example")
     ])
-    #expect(throws: DIDDocument.VerifyError.self) { try doc.spaceHostUrl }
-  }
-
-  @Test
-  func spaceHostThrowsWhenNeitherEntryExists() {
-    let doc = makeDoc()
     #expect(throws: DIDDocument.VerifyError.self) { try doc.spaceHostUrl }
   }
 
   // MARK: - spaceSigningKey
 
   @Test
-  func spaceSigningKeyPrefersDedicatedEntry() throws {
+  func spaceSigningKeyIsTheAccountKey() throws {
     let doc = makeDoc(verificationMethods: [
       key(id: "#atproto", multibase: "zAccount"),
       key(id: "#atproto_space", multibase: "zSpace"),
     ])
-    #expect(try doc.spaceSigningKey.publicKeyMultibase == "zSpace")
-  }
-
-  @Test
-  func spaceSigningKeyFallsBackToAccountKey() throws {
-    let doc = makeDoc(verificationMethods: [key(id: "#atproto", multibase: "zAccount")])
     #expect(try doc.spaceSigningKey.publicKeyMultibase == "zAccount")
   }
 
   @Test
   func spaceSigningKeyAcceptsAbsoluteEntryID() throws {
     let doc = makeDoc(verificationMethods: [
-      key(id: "did:plc:example#atproto_space", multibase: "zSpace")
+      key(id: "did:plc:example#atproto", multibase: "zAccount")
     ])
-    #expect(try doc.spaceSigningKey.publicKeyMultibase == "zSpace")
+    #expect(try doc.spaceSigningKey.publicKeyMultibase == "zAccount")
   }
 
   @Test
-  func spaceSigningKeyThrowsWhenNeitherEntryExists() {
-    let doc = makeDoc(verificationMethods: [key(id: "#other", multibase: "zOther")])
+  func spaceSigningKeyIgnoresTheRetiredEntry() {
+    let doc = makeDoc(verificationMethods: [key(id: "#atproto_space", multibase: "zSpace")])
     #expect(throws: DIDDocument.VerifyError.self) { try doc.spaceSigningKey }
   }
 
   // MARK: - spaceSigningKey(keyId:)
 
-  @Test(arguments: ["atproto", "#atproto"])
-  func spaceSigningKeyByIDResolvesAccountKey(keyId: String) throws {
-    let doc = makeDoc(verificationMethods: [
-      key(id: "#atproto", multibase: "zAccount"),
-      key(id: "#atproto_space", multibase: "zSpace"),
-    ])
-    #expect(try doc.spaceSigningKey(keyId: keyId).publicKeyMultibase == "zAccount")
-  }
-
-  @Test(arguments: ["atproto_space", "#atproto_space"])
-  func spaceSigningKeyByIDResolvesSpaceKey(keyId: String) throws {
-    let doc = makeDoc(verificationMethods: [
-      key(id: "#atproto", multibase: "zAccount"),
-      key(id: "#atproto_space", multibase: "zSpace"),
-    ])
-    #expect(try doc.spaceSigningKey(keyId: keyId).publicKeyMultibase == "zSpace")
-  }
-
-  // Unlike the fallback property, a named key that is absent is an error rather than a fallback.
   @Test
-  func spaceSigningKeyByIDDoesNotFallBack() {
-    let doc = makeDoc(verificationMethods: [key(id: "#atproto", multibase: "zAccount")])
-    #expect(throws: DIDDocument.VerifyError.self) {
-      try doc.spaceSigningKey(keyId: "atproto_space")
-    }
+  func spaceSigningKeyByIDResolvesAccountKey() throws {
+    let doc = makeDoc(verificationMethods: [
+      key(id: "#atproto", multibase: "zAccount"),
+      key(id: "#atproto_space", multibase: "zSpace"),
+    ])
+    #expect(try doc.spaceSigningKey(keyId: "#atproto").publicKeyMultibase == "zAccount")
   }
 
-  @Test(arguments: ["atproto_pds", "verificationKey", "", "#"])
-  func spaceSigningKeyByIDRejectsUnsupportedKeyID(keyId: String) {
-    let doc = makeDoc(verificationMethods: [key(id: "#atproto", multibase: "zAccount")])
+  @Test
+  func spaceSigningKeyByIDThrowsWhenAbsent() {
+    let doc = makeDoc(verificationMethods: [key(id: "#other", multibase: "zOther")])
+    #expect(throws: DIDDocument.VerifyError.self) { try doc.spaceSigningKey(keyId: "#atproto") }
+  }
+
+  // The `kid` has to be exactly `#atproto`.
+  @Test(arguments: ["atproto", "#atproto_space", "atproto_space", "atproto_pds", "verificationKey", "", "#"])
+  func spaceSigningKeyByIDRejectsOtherKeyIDs(keyId: String) {
+    let doc = makeDoc(verificationMethods: [
+      key(id: "#atproto", multibase: "zAccount"),
+      key(id: "#atproto_space", multibase: "zSpace"),
+    ])
     #expect(throws: DIDDocument.VerifyError.self) { try doc.spaceSigningKey(keyId: keyId) }
+  }
+
+  // MARK: - spaceKEMKey
+
+  @Test
+  func spaceKEMKeyIsTheDedicatedEntry() throws {
+    let doc = makeDoc(verificationMethods: [
+      key(id: "#atproto", multibase: "zAccount"),
+      key(id: "did:plc:example#atproto_kem", multibase: "zKEM"),
+    ])
+    #expect(try doc.spaceKEMKey.publicKeyMultibase == "zKEM")
+  }
+
+  @Test
+  func spaceKEMKeyDoesNotFallBackToTheSigningKey() {
+    let doc = makeDoc(verificationMethods: [key(id: "#atproto", multibase: "zAccount")])
+    #expect(throws: DIDDocument.VerifyError.self) { try doc.spaceKEMKey }
   }
 
   // MARK: - spaceHostAudience
 
   @Test
-  func spaceHostAudienceIsIndependentOfPublishedEntries() {
-    #expect(makeDoc().spaceHostAudience == "did:plc:example#atproto_space_host")
+  func spaceHostAudienceIsThePDSService() {
+    #expect(makeDoc().spaceHostAudience == "did:plc:example#atproto_pds")
     let withEntry = makeDoc(services: [
       DocService(
         id: "#atproto_space_host", type: "AtprotoSpaceHost",
         serviceEndpoint: "https://space.example")
     ])
-    #expect(withEntry.spaceHostAudience == "did:plc:example#atproto_space_host")
+    #expect(withEntry.spaceHostAudience == "did:plc:example#atproto_pds")
   }
 
   // MARK: - ServiceIdentifier

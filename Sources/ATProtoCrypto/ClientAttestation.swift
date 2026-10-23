@@ -22,7 +22,7 @@ public struct ClientAttestation: Sendable, Hashable {
   public let clientID: String
 
   /// How the space host being asked for a credential is addressed, which is its
-  /// authority's DID with the `#atproto_space_host` fragment.
+  /// authority's DID with the `#atproto_pds` fragment.
   ///
   /// `SwiftAtproto` derives this from a resolved DID document as
   /// `DIDDocument.spaceHostAudience`. It is taken as a string here because

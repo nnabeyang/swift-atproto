@@ -18,7 +18,7 @@ key to sign with — reach it at all.
 An attestation is structurally a `private_key_jwt` client assertion, the same
 shape an AT Protocol confidential client already presents to its authorization
 server. The difference is where it is addressed: a space host rather than an
-authorization server, named by the `#atproto_space_host` entry of the authority's
+authorization server, named by the `#atproto_pds` entry of the authority's
 DID document.
 
 ## Building one
@@ -30,7 +30,7 @@ encodes and signs them:
 let now = Date()
 let attestation = ClientAttestation(
   clientID: "https://app.example.com/client-metadata.json",
-  audience: "did:example:space_did#atproto_space_host",
+  audience: "did:example:space_did#atproto_pds",
   keyID: "key-1",
   issuedAt: now,
   expiresAt: now.addingTimeInterval(60),
@@ -45,8 +45,8 @@ requires to carry the same value, so there is no way to make the two disagree.
 
 ``ClientAttestation/audience`` names the space host. `SwiftAtproto` derives it
 from a resolved DID document as `DIDDocument.spaceHostAudience`, which is always
-that document's DID with the `#atproto_space_host` fragment, whether or not the
-document declares such an entry. It is taken as a string here because
+that document's DID with the `#atproto_pds` fragment, because a space
+authority's PDS is its space host. It is taken as a string here because
 `ATProtoCrypto` does not depend on that module.
 
 ``ClientAttestation/keyID`` becomes the `kid` header. The authority resolves

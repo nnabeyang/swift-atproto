@@ -53,8 +53,8 @@ struct XRPCMultiHostRoutingTests {
     #expect(requests.allSatisfy { $0.destination == nil })
   }
 
-  @Test("repo and space hosts are derived from DID documents")
-  func resolvesDedicatedHosts() async throws {
+  @Test("repo and space hosts are both the account's PDS")
+  func resolvesBothHostsFromThePDS() async throws {
     let did = try DID(string: "did:plc:authority")
     let resolver = StaticDIDDocumentResolver(
       document: document(
@@ -70,12 +70,13 @@ struct XRPCMultiHostRoutingTests {
     let repo = try await resolver.resolveRepoHost(for: did)
     let space = try await resolver.resolveSpaceHost(for: did)
 
+    // The October 1 `#atproto_space_host` entry is ignored.
     #expect(repo == .repoHost(did: did, serviceEndpoint: URL(string: "https://repo.example")!))
-    #expect(space == .spaceHost(did: did, serviceEndpoint: URL(string: "https://space.example")!))
+    #expect(space == .spaceHost(did: did, serviceEndpoint: URL(string: "https://repo.example")!))
   }
 
-  @Test("space host fallback retains its logical destination")
-  func spaceHostFallsBackToPDS() async throws {
+  @Test("the space host retains its logical destination")
+  func spaceHostIsThePDS() async throws {
     let did = try DID(string: "did:plc:authority")
     let resolver = StaticDIDDocumentResolver(
       document: document(
@@ -132,8 +133,8 @@ struct XRPCMultiHostRoutingTests {
     }
   }
 
-  @Test("an invalid dedicated space endpoint does not fall back")
-  func rejectsInvalidDedicatedSpaceEndpoint() async throws {
+  @Test("an invalid retired space endpoint is ignored")
+  func ignoresInvalidRetiredSpaceEndpoint() async throws {
     let did = try DID(string: "did:plc:authority")
     let resolver = StaticDIDDocumentResolver(
       document: document(
@@ -146,9 +147,9 @@ struct XRPCMultiHostRoutingTests {
             serviceEndpoint: "/xrpc"),
         ]))
 
-    await expectVerifyError(.invalidServiceEndpoint) {
-      _ = try await resolver.resolveSpaceHost(for: did)
-    }
+    #expect(
+      try await resolver.resolveSpaceHost(for: did)
+        == .spaceHost(did: did, serviceEndpoint: URL(string: "https://pds.example")!))
   }
 
   @Test("subscriptions continue to use the client's service endpoint")

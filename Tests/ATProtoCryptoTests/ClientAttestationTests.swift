@@ -7,7 +7,7 @@ struct ClientAttestationTests {
   // The worked example in the permissioned data proposal. `iat` and `exp` are
   // pinned so the encoded claims are reproducible.
   private static let clientID = "https://app.example.com/client-metadata.json"
-  private static let audience = "did:example:space_did#atproto_space_host"
+  private static let audience = "did:example:space_did#atproto_pds"
   private static let issuedAt = Date(timeIntervalSince1970: 1_738_368_000)
   private static let expiresAt = Date(timeIntervalSince1970: 1_738_368_060)
   private static let tokenID = "b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8"

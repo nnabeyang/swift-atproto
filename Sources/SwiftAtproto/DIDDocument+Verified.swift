@@ -12,11 +12,14 @@ extension DIDDocument {
     case invalidDID
     /// The advertised handle is not the one the caller expected.
     case handleMismatch
-    /// The document publishes neither an `#atproto_space` nor an `#atproto`
-    /// verification method, so no key signs its space credentials.
+    /// The document publishes no `#atproto` verification method, so no key
+    /// signs its space credentials.
     case missingSpaceSigningKey
-    /// A space token named a key other than `#atproto` or `#atproto_space`.
+    /// A space token named a key other than exactly `#atproto`.
     case unsupportedSpaceKeyId(String)
+    /// The document publishes no `#atproto_kem` verification method, so no
+    /// MAC secret can be shared with the account's repo host.
+    case missingSpaceKEMKey
     /// The document publishes no service entry for the requested fragment.
     case missingServiceEndpoint
     /// A service entry's endpoint is not an absolute `http`/`https` URL with a
