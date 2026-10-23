@@ -1,6 +1,5 @@
 import Foundation
 import SwiftAtproto
-import SwiftCbor
 import Testing
 
 @testable import ATProtoSync
@@ -16,18 +15,8 @@ struct RepoCommitTests {
     recordKey: try! RecordKey(string: "second"),
     cid: try! LexLink("bafyreidpw4cbv6gr4ukh33z23pvvrpr3wi4gnpmi4doamlsl3sa4rgri2a"))
 
-  @Test func recordsIndexAndOperationsConverge() throws {
+  @Test func recordsAndOperationsConverge() throws {
     let records = RepoCommit(records: [first, second])
-
-    let index = [
-      "com.example.post/first": first.cid,
-      "com.example.post/second": second.cid,
-    ]
-    let encodedIndex = try CborEncoder(
-      options: .lexicographicallySortedMapKeys,
-      allowedTags: [42]
-    ).encode(index)
-    let fromIndex = try RepoCommit(drislIndex: encodedIndex)
 
     var fromOperations = RepoCommit()
     try fromOperations.apply([
@@ -35,7 +24,6 @@ struct RepoCommitTests {
       StubOperation(record: second, previousCID: nil),
     ])
 
-    #expect(records == fromIndex)
     #expect(records == fromOperations)
   }
 
@@ -78,38 +66,6 @@ struct RepoCommitTests {
     var commit = RepoCommit()
     #expect(throws: RepoVerificationError.malformedOperation) {
       try commit.apply(malformed)
-    }
-  }
-
-  @Test func rejectsMalformedAndOversizedIndexes() throws {
-    let malformedPath = ["missing-separator": first.cid]
-    let encoded = try CborEncoder(
-      options: .lexicographicallySortedMapKeys,
-      allowedTags: [42]
-    ).encode(malformedPath)
-    #expect(throws: RepoVerificationError.malformedRecordPath("missing-separator")) {
-      try RepoCommit(drislIndex: encoded)
-    }
-    #expect(
-      throws: RepoVerificationError.inputTooLarge(limit: encoded.count - 1, actual: encoded.count)
-    ) {
-      try RepoCommit(
-        drislIndex: encoded,
-        limits: RepoVerificationLimits(maximumIndexBytes: encoded.count - 1))
-    }
-
-    let twoEntries = [
-      "com.example.post/first": first.cid,
-      "com.example.post/second": second.cid,
-    ]
-    let encodedTwoEntries = try CborEncoder(
-      options: .lexicographicallySortedMapKeys,
-      allowedTags: [42]
-    ).encode(twoEntries)
-    #expect(throws: RepoVerificationError.malformedRepositoryIndex) {
-      try RepoCommit(
-        drislIndex: encodedTwoEntries,
-        limits: RepoVerificationLimits(maximumIndexEntries: 1))
     }
   }
 }

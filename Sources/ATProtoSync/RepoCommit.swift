@@ -1,4 +1,3 @@
-import ATProtoCrypto
 import Foundation
 import SwiftAtproto
 
@@ -78,18 +77,6 @@ public struct RepoCommit: Hashable, Sendable {
     }
   }
 
-  /// Builds a repository state from a canonical DRISL index block.
-  ///
-  /// Index keys use `collection/rkey`; values are CID links. The input limits
-  /// bound both encoded allocation and the number of records folded into the
-  /// state.
-  public init(
-    drislIndex data: Data,
-    limits: RepoVerificationLimits = .init()
-  ) throws {
-    self.init(records: try PermissionedRepoIndex(drisl: data, limits: limits).records)
-  }
-
   /// Adds a complete record reference to the state.
   public mutating func add(_ record: RepoRecord) {
     setHash.add(Self.element(for: record))
@@ -145,23 +132,21 @@ public struct RepoCommit: Hashable, Sendable {
     }
   }
 
-  /// Whether the local LtHash digest equals a signed commit's claimed hash.
+  /// Whether the local LtHash digest equals a commit's claimed data.
   ///
   /// This comparison alone does not authenticate the claim. Prefer
-  /// ``verify(_:context:publicKey:limits:)`` when the author key is available.
-  public func matches(_ commit: any PermissionedRepoSignedCommitDescribing) -> Bool {
-    setHash.digest == commit.permissionedRepoCommitHash
+  /// ``verify(_:authentication:)``, which checks the response MAC first.
+  public func matches(_ commit: any PermissionedRepoCommitDescribing) -> Bool {
+    setHash.digest == commit.permissionedRepoCommitData
   }
 
-  /// Authenticates a signed commit and compares it with this repository state.
+  /// Authenticates a commit with its response MAC and compares it with this
+  /// repository state.
   public func verify(
-    _ commit: any PermissionedRepoSignedCommitDescribing,
-    context: RepoCommitContext,
-    publicKey: ATProtoCrypto.PublicKey,
-    limits: RepoVerificationLimits = .init()
+    _ commit: any PermissionedRepoCommitDescribing,
+    authentication: RepoCommitAuthentication
   ) throws {
-    try SignedRepoCommitVerifier.verify(
-      commit, context: context, publicKey: publicKey, limits: limits)
+    try RepoCommitVerifier.verify(commit, authentication: authentication)
     guard matches(commit) else {
       throw RepoVerificationError.setHashMismatch
     }

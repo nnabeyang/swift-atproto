@@ -18,27 +18,23 @@ covering the host the request is addressed to. A credential replayed elsewhere
 either lacks a signature or carries one for the wrong host.
 
 ``SpaceRequestSignature`` produces that signature. It uses the label
-`atproto-space` and the algorithm `ecdsa-p256-sha256`, and writes the
-signature as the 64-byte `r` and `s`, not DER.
+`atproto-space-credential`, the parameter `tag="atproto-space-credential"`, and
+the algorithm `ecdsa-p256-sha256`, and writes the signature as the 64-byte `r`
+and `s`, not DER, in padded base64.
 
 ## Obtaining a credential
 
-The exchange that trades a delegation token for a credential signs only the
-`authorization` field and names the key in `keyid`. That is how the space
-authority learns which key to bind the credential to:
-
-```swift
-let signed = try SpaceRequestSignature.exchange(delegationToken: token, key: key)
-// authorization:   Bearer <token>
-// signature-input: atproto-space=("authorization");keyid="did:key:zDn…"
-// signature:       atproto-space=:<base64>:
-```
+`com.atproto.space.getSpaceCredential` carries no signature. The key to bind
+the credential to is sent as a `did:key` in the request body's
+`credentialKid`, beside the delegation token and client attestation the space
+requires. Generate a fresh P-256 key for each new credential and keep it for
+the credential's lifetime.
 
 ## Presenting a credential
 
-Every later request signs `authorization` and then `atproto-space-audience`, the
-DID of the host it is addressed to. It names no key, because the credential's
-`cnf.kid` already does:
+Every request that presents the credential signs `authorization` and then
+`atproto-space-audience`, the DID of the host it is addressed to. It names no
+key, because the credential's `cnf.kid` already does:
 
 ```swift
 let signed = try SpaceRequestSignature.use(
@@ -46,6 +42,10 @@ let signed = try SpaceRequestSignature.use(
 for field in signed.headerFields {
   request.headers[field.name] = field.value
 }
+// authorization:          Atproto-Space-Credential <credential>
+// atproto-space-audience: did:plc:…
+// signature-input:        atproto-space-credential=("authorization" "atproto-space-audience");tag="atproto-space-credential"
+// signature:              atproto-space-credential=:<base64>:
 ```
 
 The key has to be the one the credential is bound to. Nothing here checks that,
@@ -56,10 +56,30 @@ because the credential is not parsed; `SwiftAtproto` reads `cnf.kid` as
 Which host a request is addressed to, and so which audience it names, is the
 caller's to decide, as is how the key is stored between requests.
 
+## Authenticating what a repo host returns
+
+A space repo commit carries no signature either. A syncer reading a repo with a
+credential establishes a secret with the repo host for each request and checks
+the MAC the response carries:
+
+```swift
+let encapsulation = try SpaceKeyEncapsulation.encapsulate(
+  authorKEMKey: authorDocument.spaceKEMKey.publicKeyMultibase)
+request.headers[.init(SpaceMAC.wantMACHeaderName)!] = SpaceMAC.wantMACHeader(
+  type: .repo, keyShare: encapsulation.keyShare)
+// … send the request …
+let mac = try SpaceMAC.mac(
+  fromMACHeader: response.headers[.init(SpaceMAC.macHeaderName)!], type: .repo)
+```
+
+Use a new ``SpaceKeyEncapsulation`` for every request, including retries and
+each page of a paginated response; it is unrelated to the key the credential is
+bound to. `ATProtoSync` verifies a commit with the secret and the MAC.
+
 ## Keeping credentials out of logs
 
-``SpaceRequestSignature/authorization`` carries the token or the credential, so
+``SpaceRequestSignature/authorization`` carries the credential, so
 `description` leaves it out, and ``SpaceRequestSignatureError`` carries no part
-of either. A value that is empty or contains a line break is refused before
+of it. A value that is empty or contains a line break is refused before
 anything is signed, because a line break would let it rewrite the header block
 it is written into.

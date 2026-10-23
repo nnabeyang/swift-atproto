@@ -110,16 +110,36 @@ extension _XRPCCallable where Self: XRPCStreamingCallable {
     try await callStreaming(query, input: input, destination: Optional(destination))
   }
 
+  /// Calls a binary query at an explicitly resolved destination with
+  /// additional request headers, without buffering its successful response
+  /// body. The response headers are in the returned components.
+  ///
+  /// `requestHeaders` are set before ``authorize(_:)`` runs, so an authorizer
+  /// can still replace them. A DPoP nonce retry resends the same headers.
+  public func callStreaming<X: XRPCQuery>(
+    _ query: X.Type,
+    input: X.Input.Query,
+    destination: XRPCRequestDestination,
+    requestHeaders: HTTPFields
+  ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
+    try await callStreaming(
+      query, input: input, destination: Optional(destination), requestHeaders: requestHeaders)
+  }
+
   private func callStreaming<X: XRPCQuery>(
     _ query: X.Type,
     input: X.Input.Query,
-    destination: XRPCRequestDestination?
+    destination: XRPCRequestDestination?,
+    requestHeaders: HTTPFields = .init()
   ) async throws -> XRPCStreamingResponseComponents where X: XRPCBinaryResponseRequest {
     let proxy = getProxy(nsid: X.id)
     try enforceRpcScopeGuard(X.self, proxy: proxy)
     var request = try constructRequest(query, input: input, destination: destination)
     if let proxy {
       request.headers[.atprotoProxy] = proxy
+    }
+    for field in requestHeaders {
+      request.headers[field.name] = field.value
     }
     return try await sendStreaming(query, for: request)
   }
@@ -272,6 +292,32 @@ extension _XRPCCallable {
     return try await send(procedure, for: request)
   }
 
+  /// Calls a query at an explicitly resolved destination with additional
+  /// request headers, and returns the response headers with the decoded body.
+  ///
+  /// Use this when a protocol carries part of a request or response in
+  /// headers, such as the space MAC of `Atproto-Space-Want-Mac` and
+  /// `Atproto-Space-Mac`. `requestHeaders` are set before ``authorize(_:)``
+  /// runs, so an authorizer can still replace them. A DPoP nonce retry resends
+  /// the same headers.
+  public func callWithHeaders<X: XRPCQuery>(
+    _ query: X.Type,
+    input: X.Input.Query,
+    destination: XRPCRequestDestination,
+    requestHeaders: HTTPFields
+  ) async throws -> XRPCCallResponse<X.ResponseBody> {
+    let proxy = getProxy(nsid: X.id)
+    try enforceRpcScopeGuard(X.self, proxy: proxy)
+    var request = try constructRequest(query, input: input, destination: destination)
+    if let proxy {
+      request.headers[.atprotoProxy] = proxy
+    }
+    for field in requestHeaders {
+      request.headers[field.name] = field.value
+    }
+    return try await sendWithMetadata(query, for: request)
+  }
+
   private func enforceRpcScopeGuard<X: XRPCRequest>(_: X.Type, proxy: String?) throws {
     guard let session = oauthSession else { return }
     guard let proxy else { return }
@@ -299,7 +345,13 @@ extension _XRPCCallable {
     }
   }
 
-  private func send<X: XRPCRequest>(_: X.Type, for request: XRPCRequestComponents) async throws -> X.ResponseBody {
+  private func send<X: XRPCRequest>(_ type: X.Type, for request: XRPCRequestComponents) async throws -> X.ResponseBody {
+    try await sendWithMetadata(type, for: request).body
+  }
+
+  private func sendWithMetadata<X: XRPCRequest>(
+    _: X.Type, for request: XRPCRequestComponents
+  ) async throws -> XRPCCallResponse<X.ResponseBody> {
     do {
       let firstResponse = try await perform(request)
       let response: XRPCResponseComponents
@@ -312,15 +364,16 @@ extension _XRPCCallable {
       }
       let data = try responseBody(from: response)
       if X.ResponseBody.self == EmptyResponse.self {
-        return EmptyResponse() as! X.ResponseBody
+        return .init(body: EmptyResponse() as! X.ResponseBody, headers: response.headers)
       }
       if X.ResponseBody.self == Data.self {
-        return data as! X.ResponseBody
+        return .init(body: data as! X.ResponseBody, headers: response.headers)
       }
       let decoder = JSONDecoder()
       decoder.dataDecodingStrategy = .atproto
       decoder.userInfo[.atprotoLexiconDecodingMode] = LexiconDecodingMode.permissive
-      return try decoder.decode(X.ResponseBody.self, from: data)
+      return .init(
+        body: try decoder.decode(X.ResponseBody.self, from: data), headers: response.headers)
     } catch let error as UnExpectedError {
       throw X.Error(error: error)
     }

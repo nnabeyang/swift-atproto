@@ -21,3 +21,19 @@ public struct XRPCResponseComponents: Sendable {
     self.body = body
   }
 }
+
+/// A decoded XRPC response body together with the response headers.
+///
+/// Returned by `_XRPCCallable.callWithHeaders(_:input:destination:requestHeaders:)`
+/// for protocols that carry part of a response in headers.
+public struct XRPCCallResponse<Body: Sendable>: Sendable {
+  /// The decoded response body.
+  public var body: Body
+  /// The HTTP response headers.
+  public var headers: HTTPFields
+
+  public init(body: Body, headers: HTTPFields) {
+    self.body = body
+    self.headers = headers
+  }
+}

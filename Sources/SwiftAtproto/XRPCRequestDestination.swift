@@ -10,8 +10,7 @@ public enum XRPCRequestDestination: Sendable, Hashable {
   /// A member's permissioned repository host, resolved from its
   /// `#atproto_pds` service.
   case repoHost(did: DID, serviceEndpoint: URL)
-  /// A space authority's host, resolved from `#atproto_space_host` or its PDS
-  /// fallback.
+  /// A space authority's host, resolved from its `#atproto_pds` service.
   case spaceHost(did: DID, serviceEndpoint: URL)
 
   /// The DID whose document supplied this destination.
@@ -34,8 +33,7 @@ public enum XRPCRequestDestination: Sendable, Hashable {
 ///
 /// Implementations own caching and cache invalidation. The default host
 /// helpers validate that the returned document belongs to the requested DID,
-/// then use ``DIDDocument/pdsUrl`` and ``DIDDocument/spaceHostUrl`` to derive
-/// validated endpoints.
+/// then use ``DIDDocument/pdsUrl`` to derive validated endpoints.
 public protocol DIDDocumentResolver: Sendable {
   /// Fetches the current document for `did`.
   func resolveDIDDocument(for did: DID) async throws -> DIDDocument
@@ -51,8 +49,8 @@ extension DIDDocumentResolver {
     return .repoHost(did: did, serviceEndpoint: try document.pdsUrl)
   }
 
-  /// Resolves `did` to its space host, falling back to its PDS when the
-  /// document publishes no `#atproto_space_host` service.
+  /// Resolves `did` to its space host, which is its PDS. A
+  /// `#atproto_space_host` service is ignored.
   ///
   /// Errors from document retrieval pass through unchanged. Invalid or missing
   /// document entries throw the corresponding ``DIDDocument/VerifyError``.

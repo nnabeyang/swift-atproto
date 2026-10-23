@@ -2,7 +2,6 @@ import ATProtoCrypto
 import Crypto
 import Foundation
 import SwiftAtproto
-import SwiftCbor
 import Testing
 
 @testable import ATProtoSync
@@ -14,8 +13,6 @@ struct RepoSyncTests {
   private let author = try! SwiftAtproto.DID(string: "did:plc:alice")
   private let baseRevision = try! TID(string: "3kbgyjzqfeq2e")
   private let headRevision = try! TID(string: "3kbgyjzqfeq2f")
-  private let key = try! PrivateKey(
-    type: .ed25519, rawValue: Data(repeating: 9, count: 32))
   private let first = RepoRecord(
     collection: try! NSID(string: "com.example.record"),
     recordKey: try! RecordKey(string: "first"),
@@ -31,11 +28,9 @@ struct RepoSyncTests {
     var update = RepoIncrementalSync(checkpoint: checkpoint)
     try update.apply([SyncStubOperation(record: second, previousCID: nil)])
     let repository = RepoCommit(records: [first, second])
-    let context = headContext()
-    let commit = try signedCommit(repository: repository, context: context)
+    let (commit, authentication) = try headCommit(repository)
 
-    let result = try update.finish(
-      commit, context: context, publicKey: key.publicKey)
+    let result = try update.finish(commit, authentication: authentication)
     let replacement: RepoSyncCheckpoint
     switch result {
     case .synchronized(let value):
@@ -53,27 +48,22 @@ struct RepoSyncTests {
 
   @Test("maps missing history to full-state recovery")
   func requiresRecoveryForMissingHistory() throws {
-    let checkpoint = try restoredCheckpoint(records: [first])
-    let update = RepoIncrementalSync(checkpoint: checkpoint)
-    let context = headContext()
-    let commit = try signedCommit(
-      repository: RepoCommit(records: [first, second]), context: context)
+    let update = RepoIncrementalSync(checkpoint: try restoredCheckpoint(records: [first]))
+    let (commit, authentication) = try headCommit(RepoCommit(records: [first, second]))
 
     #expect(
-      try update.finish(commit, context: context, publicKey: key.publicKey)
+      try update.finish(commit, authentication: authentication)
         == .fullStateRecoveryRequired(.incrementalStateMismatch))
   }
 
   @Test("maps a divergent local state to the same recovery result")
   func requiresRecoveryForDivergentState() throws {
-    let checkpoint = try restoredCheckpoint(records: [first])
-    var update = RepoIncrementalSync(checkpoint: checkpoint)
+    var update = RepoIncrementalSync(checkpoint: try restoredCheckpoint(records: [first]))
     try update.apply([SyncStubOperation(record: second, previousCID: nil)])
-    let context = headContext()
-    let commit = try signedCommit(repository: RepoCommit(records: [first]), context: context)
+    let (commit, authentication) = try headCommit(RepoCommit(records: [first]))
 
     #expect(
-      try update.finish(commit, context: context, publicKey: key.publicKey)
+      try update.finish(commit, authentication: authentication)
         == .fullStateRecoveryRequired(.incrementalStateMismatch))
   }
 
@@ -81,12 +71,66 @@ struct RepoSyncTests {
   func rejectsUnauthenticatedCommit() throws {
     let checkpoint = try restoredCheckpoint(records: [first])
     let update = RepoIncrementalSync(checkpoint: checkpoint)
-    let context = headContext()
-    var commit = try signedCommit(repository: checkpoint.repository, context: context)
-    commit.mac[0] ^= 0xff
+    let (commit, authentication) = try headCommit(checkpoint.repository)
+    var mac = authentication.mac
+    mac[0] ^= 0xff
 
     #expect(throws: RepoVerificationError.macMismatch) {
-      try update.finish(commit, context: context, publicKey: key.publicKey)
+      try update.finish(commit, authentication: authentication.replacing(mac: mac))
+    }
+    #expect(throws: RepoVerificationError.macMismatch) {
+      try update.finish(
+        commit, authentication: authentication.replacing(sharedSecret: SymmetricKey(size: .bits256)))
+    }
+  }
+
+  @Test("does not trust a commit whose data changed after the MAC")
+  func rejectsAChangedClaim() throws {
+    let checkpoint = try restoredCheckpoint(records: [first])
+    let update = RepoIncrementalSync(checkpoint: checkpoint)
+    var (commit, authentication) = try headCommit(RepoCommit(records: [first, second]))
+    // A response whose data was replaced to match the candidate still fails.
+    commit.data = checkpoint.repository.setHash.digest
+
+    #expect(throws: RepoVerificationError.macMismatch) {
+      try update.finish(commit, authentication: authentication)
+    }
+  }
+
+  @Test("rejects a commit for another repo or space")
+  func rejectsAnotherIdentity() throws {
+    let update = RepoIncrementalSync(checkpoint: try restoredCheckpoint(records: [first]))
+    let (commit, authentication) = try headCommit(RepoCommit(records: [first]))
+    let otherSpace = try SpaceRef(string: "at://did:plc:spaceauthority/space/com.example.project/other")
+
+    #expect(throws: RepoVerificationError.commitIdentityMismatch) {
+      try update.finish(
+        commit, authentication: authentication.replacing(repo: try SwiftAtproto.DID(string: "did:plc:bob")))
+    }
+    #expect(throws: RepoVerificationError.commitIdentityMismatch) {
+      try update.finish(commit, authentication: authentication.replacing(space: otherSpace))
+    }
+  }
+
+  @Test("rejects an unsupported version and malformed fields")
+  func rejectsMalformedCommits() throws {
+    let update = RepoIncrementalSync(checkpoint: try restoredCheckpoint(records: [first]))
+    let (commit, authentication) = try headCommit(RepoCommit(records: [first]))
+
+    var version = commit
+    version.ver = 2
+    #expect(throws: RepoVerificationError.unsupportedCommitVersion(2)) {
+      try update.finish(version, authentication: authentication)
+    }
+    var data = commit
+    data.data = Data(count: 31)
+    #expect(throws: RepoVerificationError.invalidCommitField(field: "data")) {
+      try update.finish(data, authentication: authentication)
+    }
+    var revision = commit
+    revision.rev = .init(rawValue: "not-a-tid")
+    #expect(throws: RepoVerificationError.invalidCommitField(field: "rev")) {
+      try update.finish(revision, authentication: authentication)
     }
   }
 
@@ -96,14 +140,13 @@ struct RepoSyncTests {
       revision: headRevision,
       state: RepoCommit(records: [first]).setHash.state)
     let update = RepoIncrementalSync(checkpoint: checkpoint)
-    let context = RepoCommitContext(space: space, author: author, revision: baseRevision)
-    let commit = try signedCommit(repository: checkpoint.repository, context: context)
+    let (commit, authentication) = try headCommit(checkpoint.repository, revision: baseRevision)
 
     #expect(
       throws: RepoVerificationError.staleCommitRevision(
         checkpoint: headRevision, commit: baseRevision)
     ) {
-      try update.finish(commit, context: context, publicKey: key.publicKey)
+      try update.finish(commit, authentication: authentication)
     }
   }
 
@@ -121,10 +164,9 @@ struct RepoSyncTests {
       ])
     }
 
-    let context = headContext()
-    let commit = try signedCommit(repository: checkpoint.repository, context: context)
+    let (commit, authentication) = try headCommit(checkpoint.repository)
     #expect(
-      try update.finish(commit, context: context, publicKey: key.publicKey)
+      try update.finish(commit, authentication: authentication)
         == .synchronized(
           RepoSyncCheckpoint(revision: headRevision, repository: checkpoint.repository)))
   }
@@ -132,59 +174,16 @@ struct RepoSyncTests {
   @Test("creates a replacement checkpoint from a verified full state")
   func createsFullStateCheckpoint() throws {
     let repository = RepoCommit(records: [first, second])
-    let context = headContext()
-    let commit = try signedCommit(repository: repository, context: context)
+    let (commit, authentication) = try headCommit(repository)
 
-    let checkpoint = try repository.verifiedCheckpoint(
-      commit, context: context, publicKey: key.publicKey)
+    let checkpoint = try repository.verifiedCheckpoint(commit, authentication: authentication)
 
     #expect(checkpoint.revision == headRevision)
     #expect(checkpoint.repository == repository)
     #expect(checkpoint.state == repository.setHash.state)
-  }
-
-  @Test("replaces a checkpoint after consuming a verified repository CAR")
-  func replacesCheckpointFromCAR() async throws {
-    let recordPayload = try CborEncoder(
-      options: .lexicographicallySortedMapKeys
-    ).encode(["text": "hello"])
-    let recordCID = try carCID(for: recordPayload)
-    let record = RepoRecord(
-      collection: try NSID(string: "com.example.record"),
-      recordKey: try RecordKey(string: "car"),
-      cid: recordCID)
-    let repository = RepoCommit(records: [record])
-    let context = headContext()
-    let commit = try signedCommit(repository: repository, context: context)
-    let commitPayload = try CborEncoder(
-      options: .lexicographicallySortedMapKeys
-    ).encode(commit)
-    let indexPayload = try CborEncoder(
-      options: .lexicographicallySortedMapKeys,
-      allowedTags: [42]
-    ).encode(["com.example.record/car": recordCID])
-    let commitCID = try carCID(for: commitPayload)
-    let indexCID = try carCID(for: indexPayload)
-    let carBytes =
-      try carHeader(roots: [commitCID, indexCID])
-      + carBlock(cid: commitCID, payload: commitPayload)
-      + carBlock(cid: indexCID, payload: indexPayload)
-      + carBlock(cid: recordCID, payload: recordPayload)
-
-    let car = try await PermissionedRepoCAR.read(from: XRPCBody(carBytes))
-    let decoded = try SignedRepoCommitVerifier.decode(
-      SyncTestSignedCommit.self,
-      fromDRISL: car.signedCommitBlock.bytes)
-    try car.repository.verify(decoded, context: context, publicKey: key.publicKey)
-
-    var records = car.recordBlocks.makeAsyncIterator()
-    #expect(try await records.next()?.bytes == recordPayload)
-    #expect(try await records.next() == nil)
-
-    let replacement = try car.repository.verifiedCheckpoint(
-      decoded, context: context, publicKey: key.publicKey)
-    #expect(replacement.revision == headRevision)
-    #expect(replacement.repository == repository)
+    #expect(throws: RepoVerificationError.setHashMismatch) {
+      try RepoCommit(records: [first]).verifiedCheckpoint(commit, authentication: authentication)
+    }
   }
 
   private func restoredCheckpoint(records: [RepoRecord]) throws -> RepoSyncCheckpoint {
@@ -193,81 +192,13 @@ struct RepoSyncTests {
       state: RepoCommit(records: records).setHash.state)
   }
 
-  private func headContext() -> RepoCommitContext {
-    RepoCommitContext(space: space, author: author, revision: headRevision)
+  private func headCommit(
+    _ repository: RepoCommit, revision: TID? = nil
+  ) throws -> (SyncTestCommit, RepoCommitAuthentication) {
+    let commit = SyncTestCommit(
+      repository: repository, space: space, repo: author, revision: revision ?? headRevision)
+    return (commit, try SyncTestResponse(commit: commit, space: space, repo: author).authentication)
   }
-
-  private func signedCommit(
-    repository: RepoCommit,
-    context: RepoCommitContext
-  ) throws -> SyncTestSignedCommit {
-    let inputKeyMaterial = Data((0..<32).map(UInt8.init))
-    let contextBytes = try context.encoded(inputKeyMaterial: inputKeyMaterial)
-    let macKey = HKDF<SHA256>.expand(
-      pseudoRandomKey: SymmetricKey(data: inputKeyMaterial),
-      info: contextBytes,
-      outputByteCount: 32)
-    let hash = repository.setHash.digest
-    return SyncTestSignedCommit(
-      ver: 1,
-      hash: hash,
-      ikm: inputKeyMaterial,
-      sig: try key.sign(contextBytes),
-      mac: Data(HMAC<SHA256>.authenticationCode(for: hash, using: macKey)),
-      rev: .init(rawValue: context.revision.rawValue))
-  }
-
-  private func carCID(for payload: Data) throws -> LexLink {
-    try LexLink(
-      Data([0x01, 0x71, 0x12, 0x20])
-        + Data(SHA256.hash(data: payload)))
-  }
-
-  private func carHeader(roots: [LexLink]) throws -> Data {
-    let payload = try CborEncoder(
-      options: .lexicographicallySortedMapKeys,
-      allowedTags: [42]
-    ).encode(SyncCARHeader(roots: roots, version: 1))
-    return unsignedVarint(UInt64(payload.count)) + payload
-  }
-
-  private func carBlock(cid: LexLink, payload: Data) -> Data {
-    let cidBytes = Data(cid.cid.rawBuffer)
-    return unsignedVarint(UInt64(cidBytes.count + payload.count)) + cidBytes + payload
-  }
-
-  private func unsignedVarint(_ input: UInt64) -> Data {
-    var value = input
-    var result = Data()
-    repeat {
-      var byte = UInt8(value & 0x7f)
-      value >>= 7
-      if value != 0 { byte |= 0x80 }
-      result.append(byte)
-    } while value != 0
-    return result
-  }
-}
-
-private struct SyncTestSignedCommit: Codable, Hashable, PermissionedRepoSignedCommitDescribing {
-  var ver: Int
-  var hash: Data
-  var ikm: Data
-  var sig: Data
-  var mac: Data
-  var rev: FormatString<TID>
-
-  var permissionedRepoCommitVersion: Int { ver }
-  var permissionedRepoCommitHash: Data { hash }
-  var permissionedRepoCommitInputKeyMaterial: Data { ikm }
-  var permissionedRepoCommitSignature: Data { sig }
-  var permissionedRepoCommitMAC: Data { mac }
-  var permissionedRepoCommitRevision: FormatString<TID> { rev }
-}
-
-private struct SyncCARHeader: Encodable {
-  let roots: [LexLink]
-  let version: Int
 }
 
 private struct SyncStubOperation: PermissionedRepoOperationDescribing {
