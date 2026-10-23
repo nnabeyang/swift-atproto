@@ -37,6 +37,9 @@ key.publicKey.did                                                   // "did:key:
 - ``DPoPProof``
 - <doc:SpaceRequestSignatures>
 - ``SpaceRequestSignature``
+- ``SpaceKeyEncapsulation``
+- ``SpaceMAC``
+- ``SpaceMACType``
 
 ### Identifiers
 
@@ -53,4 +56,5 @@ key.publicKey.did                                                   // "did:key:
 
 - ``DPoPProofError``
 - ``SpaceRequestSignatureError``
+- ``SpaceMACError``
 - ``VarintError``

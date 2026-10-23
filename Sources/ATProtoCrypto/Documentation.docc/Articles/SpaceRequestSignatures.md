@@ -56,6 +56,26 @@ because the credential is not parsed; `SwiftAtproto` reads `cnf.kid` as
 Which host a request is addressed to, and so which audience it names, is the
 caller's to decide, as is how the key is stored between requests.
 
+## Authenticating what a repo host returns
+
+A space repo commit carries no signature either. A syncer reading a repo with a
+credential establishes a secret with the repo host for each request and checks
+the MAC the response carries:
+
+```swift
+let encapsulation = try SpaceKeyEncapsulation.encapsulate(
+  authorKEMKey: authorDocument.spaceKEMKey.publicKeyMultibase)
+request.headers[.init(SpaceMAC.wantMACHeaderName)!] = SpaceMAC.wantMACHeader(
+  type: .repo, keyShare: encapsulation.keyShare)
+// … send the request …
+let mac = try SpaceMAC.mac(
+  fromMACHeader: response.headers[.init(SpaceMAC.macHeaderName)!], type: .repo)
+```
+
+Use a new ``SpaceKeyEncapsulation`` for every request, including retries and
+each page of a paginated response; it is unrelated to the key the credential is
+bound to. `ATProtoSync` verifies a commit with the secret and the MAC.
+
 ## Keeping credentials out of logs
 
 ``SpaceRequestSignature/authorization`` carries the credential, so
