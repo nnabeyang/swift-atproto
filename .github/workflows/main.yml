@@ -93,6 +93,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      # Package.resolved pins swift-crypto 4.x because 5.x requires Swift tools
+      # 6.2. Re-resolving it here exercises the version a downstream package
+      # would get: 5.x on newer toolchains, and 4.x on Swift 6.1 where 5.x
+      # must be skipped. The Apple platform jobs keep testing the pinned 4.x.
+      - name: Resolve latest compatible swift-crypto
+        run: |
+          swift package update swift-crypto
+          swift package show-dependencies | grep swift-crypto
       - name: Run SwiftPM tests
         run: swift test
 
