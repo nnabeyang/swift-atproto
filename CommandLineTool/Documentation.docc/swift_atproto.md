@@ -66,6 +66,10 @@ For each configured Lexicon namespace the command writes:
 - `XRPCAPIProtocol.swift` — the server-side protocol, when `generate` includes
   `"server"`.
 
+Every top-level declaration in these files is marked `nonisolated`, so the
+generated code compiles in a target whose default actor isolation is
+`MainActor` as well as in one that keeps the default `nonisolated` isolation.
+
 Generated files carry a `// DO NOT EDIT` header. Change the Lexicon or the
 configuration and regenerate rather than editing them.
 
