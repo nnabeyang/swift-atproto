@@ -285,7 +285,7 @@ func writeSchemaCode(
     }
   }
   let clientSrc: String = Lex.renderSourceFile(
-    Lex.applyingAccessModifier(to: clientTree, accessModifier: accessModifier))
+    Lex.applyingAccessModifier(to: Lex.applyingNonisolated(to: clientTree), accessModifier: accessModifier))
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
@@ -387,6 +387,41 @@ enum Lex {
     return AccessModifierRewriter(accessModifier: accessModifier)
       .rewrite(source)
       .cast(SourceFileSyntax.self)
+  }
+
+  /// Marks every top-level declaration in `source` `nonisolated`.
+  ///
+  /// A module whose default actor isolation is `MainActor` would otherwise
+  /// infer `MainActor` for the generated types. Their `Codable` conformances
+  /// then become isolated conformances, which cannot satisfy the
+  /// `Sendable`-constrained associated types of `XRPCRequest`, and the server
+  /// code cannot call the generated helpers from its nonisolated closures.
+  ///
+  /// Only top-level declarations need the modifier: nested types inherit it
+  /// from an enclosing `nonisolated` type or extension. The modifier changes
+  /// nothing in a module that keeps the default `nonisolated` isolation, so it
+  /// is always emitted.
+  static func applyingNonisolated(to source: SourceFileSyntax) -> SourceFileSyntax {
+    let statements = source.statements.map { item -> CodeBlockItemSyntax in
+      guard case .decl(let decl) = item.item,
+        !decl.is(ImportDeclSyntax.self),
+        var declWithModifiers = decl.asProtocol(WithModifiersSyntax.self)
+      else {
+        return item
+      }
+      // Appending to a declaration without modifiers, such as an extension,
+      // makes the modifier its first token. Move the leading trivia onto it so
+      // that the blank lines stay in front of the declaration.
+      let leadingTrivia = declWithModifiers.leadingTrivia
+      declWithModifiers.leadingTrivia = []
+      declWithModifiers.modifiers.append(
+        DeclModifierSyntax(name: .keyword(.nonisolated)))
+      declWithModifiers.leadingTrivia = leadingTrivia
+      return item.with(
+        \.item,
+        .decl(Syntax(fromProtocol: declWithModifiers).cast(DeclSyntax.self)))
+    }
+    return source.with(\.statements, CodeBlockItemListSyntax(statements))
   }
 
   static var fileHeader: Trivia {
@@ -750,7 +785,7 @@ enum Lex {
       }
     }
     .with(\.trailingTrivia, .newline)
-    return renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
+    return renderSourceFile(applyingAccessModifier(to: applyingNonisolated(to: src), accessModifier: accessModifier))
   }
 
   static func buildExtDefMap(schemasMap: [String: [Schema]]) -> ExtDefMap {

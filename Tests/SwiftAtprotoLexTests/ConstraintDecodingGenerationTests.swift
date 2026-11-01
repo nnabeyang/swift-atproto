@@ -147,7 +147,7 @@ struct ConstraintDecodingGenerationTests {
     let packageClient = try String(
       contentsOf: output.appending(path: "XRPCAPIClient.swift"), encoding: .utf8)
 
-    #expect(packageClient.contains("package enum Com"))
+    #expect(packageClient.contains("package nonisolated enum Com"))
     #expect(!packageClient.contains("public "))
     #expect(!Parser.parse(source: packageClient).hasError)
   }

@@ -62,7 +62,7 @@ extension Lex {
         genUnversalServerExtension(leadingTrivia: .newlines(2), for: methodTypes, defMap: defMap)
       },
       trailingTrivia: .newline)
-    return renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
+    return renderSourceFile(applyingAccessModifier(to: applyingNonisolated(to: src), accessModifier: accessModifier))
   }
 
   private static func genXRPCAPIProtocol(
