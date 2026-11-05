@@ -2,8 +2,11 @@ import Foundation
 
 /// A value that violates a constraint its Lexicon declares.
 ///
-/// Thrown only while decoding in ``LexiconDecodingMode/strict``; see
-/// <doc:DecodingLexiconRecords>. Each case names the field it applies to.
+/// Thrown by ``LexiconValidatable/validateConstraints()``, and while decoding
+/// in ``LexiconDecodingMode/strict``, where it is wrapped in
+/// `DecodingError.dataCorrupted` as the underlying error; see
+/// <doc:DecodingLexiconRecords>. Each case names the field it applies to, and
+/// carries the limit the field exceeded.
 public enum LexiconConstraintError: Error {
   case stringTooLong(_ field: String, limit: Int)
   case stringTooShort(_ field: String, minimum: Int)

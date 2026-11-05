@@ -17,8 +17,9 @@ public struct EmptyResponse: Codable, Sendable, Hashable {
 ///
 /// The generated conformance encodes ``nsId`` as the record's `$type`, which is
 /// what lets ``UnknownATPValueProtocol`` dispatch a decoded value back to its
-/// concrete type.
-public protocol ATProtoRecord: Codable, Sendable, Hashable {
+/// concrete type. Refining ``LexiconValidatable`` lets a record held as
+/// `any ATProtoRecord` be validated without knowing its type.
+public protocol ATProtoRecord: Codable, Sendable, Hashable, LexiconValidatable {
   /// The NSID of the Lexicon this record was generated from.
   static var nsId: String { get }
 }
