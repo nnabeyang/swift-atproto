@@ -302,6 +302,9 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             bindings: [query]
           )
         }
+        if let constants = LexiconConstraint.constantsEnumDecl(properties: parameters?.sortedProperties ?? []) {
+          constants
+        }
         let requiredParams = Set(parameters?.required ?? [])
         InitializerDeclSyntax(
           leadingTrivia: [.newlines(2)],

@@ -500,7 +500,7 @@ enum Lex {
       EnumDeclSyntax(
         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
         name: .identifier("UnknownATPValue"),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["UnknownATPValueProtocol"])
+        inheritanceClause: InheritanceClauseSyntax(typeNames: ["UnknownATPValueProtocol", ValidationDecl.protocolName])
       ) {
         EnumCaseDeclSyntax(leadingTrivia: .newline) {
           EnumCaseElementSyntax(
@@ -782,6 +782,42 @@ enum Lex {
             )
           ]
         )
+        // Strict decoding checks a record it knows while decoding it. A value
+        // of a type it doesn't know has no limits to check.
+        ValidationDecl.validateDecl {
+          SwitchExprSyntax(subject: DeclReferenceExprSyntax(baseName: .keyword(.self))) {
+            SwitchCaseSyntax(
+              label: .case(
+                .init(caseItems: [
+                  .init(
+                    pattern: ExpressionPatternSyntax(
+                      expression: FunctionCallExprSyntax(
+                        callee: MemberAccessExprSyntax(name: .identifier("record"))
+                      ) {
+                        LabeledExprSyntax(
+                          expression: PatternExprSyntax(
+                            pattern: ValueBindingPatternSyntax(
+                              bindingSpecifier: .keyword(.let),
+                              pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
+                            )))
+                      }
+                    ))
+                ])
+              )
+            ) {
+              FieldTypeDefinition.validateCall(on: DeclReferenceExprSyntax(baseName: .identifier("record")), optional: false)
+            }
+            SwitchCaseSyntax(
+              label: .case(
+                .init(caseItems: [
+                  .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("any"))))
+                ])
+              )
+            ) {
+              BreakStmtSyntax()
+            }
+          }
+        }
       }
     }
     .with(\.trailingTrivia, .newline)

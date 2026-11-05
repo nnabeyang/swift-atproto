@@ -109,7 +109,7 @@ struct ConstraintDecodingGenerationTests {
           "main": {
             "type": "object",
             "required": ["value"],
-            "properties": {"value": {"type": "string"}}
+            "properties": {"value": {"type": "string", "maxLength": 10}}
           }
         }
       }
@@ -132,6 +132,8 @@ struct ConstraintDecodingGenerationTests {
       contentsOf: output.appending(path: "XRPCAPIProtocol.swift"), encoding: .utf8)
 
     #expect(!client.contains("public "))
+    #expect(client.contains("enum Constraints {"))
+    #expect(client.contains("func validateConstraints() throws(LexiconConstraintError) {"))
     #expect(!unknown.contains("public "))
     #expect(!server.contains("public "))
     #expect(!Parser.parse(source: client).hasError)
