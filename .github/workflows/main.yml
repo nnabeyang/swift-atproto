@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # Detect whether this change touches code/CI/formatter files.
   # When only docs (e.g. README.md) change, downstream test jobs are skipped
@@ -15,11 +18,17 @@ jobs:
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
+    # paths-filter lists the changed files of a pull request with the API.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           predicate-quantifier: 'some'
@@ -43,17 +52,22 @@ jobs:
       needs.changes.outputs.code == 'true'
       || github.event_name == 'push'
       || github.event_name == 'workflow_dispatch'
-    name: Test on Apple Platforms (Xcode 26.5)
-    runs-on: macOS-26
+    name: Test on Apple Platforms (Xcode 27.2)
+    # Xcode 27 is only available on the xcode-27 image for now.
+    runs-on: xcode-27
     timeout-minutes: 30
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_26.5.app
     strategy:
       matrix:
         target: [iOS, macOS]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Xcode 27.2
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: '27.2'
       - name: Test platform ${{ matrix.target }}
         run: |
           # Without pipefail the step reports xcpretty's exit status, so a
@@ -61,7 +75,9 @@ jobs:
           set -o pipefail
 
           if [ "${{ matrix.target }}" = "iOS" ]; then
-            DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=26.5"
+            # The xcode-27 image has no simulator of iOS 27.2, and downloading
+            # one takes minutes, so the tests run on iOS 27.0.
+            DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=27.0"
           else
             DESTINATION="platform=macOS"
           fi
@@ -92,7 +108,9 @@ jobs:
             container_image: "swift:6.3.2-noble"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # Package.resolved pins swift-crypto 4.x because 5.x requires Swift tools
       # 6.2. Re-resolving it here exercises the version a downstream package
       # would get: 5.x on newer toolchains, and 4.x on Swift 6.1 where 5.x
@@ -114,13 +132,18 @@ jobs:
       || github.event_name == 'push'
       || github.event_name == 'workflow_dispatch'
     name: Build documentation
-    runs-on: macOS-26
+    # Xcode 27 is only available on the xcode-27 image for now.
+    runs-on: xcode-27
     timeout-minutes: 30
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_26.5.app
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Xcode 27.2
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: '27.2'
       - name: Build DocC documentation
         run: ./scripts/build-documentation.sh --strict
 
