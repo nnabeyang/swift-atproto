@@ -30,18 +30,29 @@ extension FieldTypeDefinition {
     }
   }
 
+  /// Whether a value of this field, or an element of it when it is an array,
+  /// is a generated type whose `validateConstraints()` may find violations.
+  ///
+  /// This is exactly when ``nestedValidationItems(for:optional:ts:defMap:)``
+  /// returns statements, so that the generator and the check for name
+  /// collisions agree on which types get a `validateConstraints()`.
+  func holdsValidatableValues(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    if isValidatable(ts: ts, defMap: defMap) { return true }
+    guard case .array(let def) = self else { return false }
+    return def.items.isValidatable(ts: ts, defMap: defMap)
+  }
+
   /// The statements that call `validateConstraints()` on the values nested in
   /// this field, or none when the field holds nothing to validate.
   func nestedValidationItems(for key: String, optional: Bool, ts: TypeSchema, defMap: ExtDefMap) -> [CodeBlockItemSyntax] {
+    guard holdsValidatableValues(ts: ts, defMap: defMap) else { return [] }
     if isValidatable(ts: ts, defMap: defMap) {
       return [
         CodeBlockItemSyntax(
           item: .expr(Self.validateCall(on: DeclReferenceExprSyntax(baseName: .lexIdentifier(key)), optional: optional)))
       ]
     }
-    guard case .array(let def) = self, def.items.isValidatable(ts: ts, defMap: defMap) else {
-      return []
-    }
+    // `holdsValidatableValues` holds, so this is an array of validatable values.
     let field = ExprSyntax(DeclReferenceExprSyntax(baseName: .lexIdentifier(key)))
     // An absent array has no elements to check.
     let sequence: ExprSyntax =
@@ -93,21 +104,6 @@ enum ValidationDecl {
 
   /// The name of the enum that holds a type's limits.
   static let constantsEnumName = "Constraints"
-
-  /// Stops generation when a field would share its name with a declaration
-  /// generated next to it, which Swift rejects as a redeclaration.
-  ///
-  /// The Swift compiler would report this only in the generated file, where
-  /// the Lexicon that caused it is no longer visible, so it is reported here
-  /// with the schema's NSID instead.
-  static func checkNoCollision(fieldNames: [String], ts: TypeSchema, emitsConstants: Bool, emitsValidate: Bool) {
-    if emitsValidate, fieldNames.contains(methodName) {
-      fatalError("field \(methodName) in \(ts.id) collides with the generated \(methodName)() method")
-    }
-    if emitsConstants, fieldNames.contains(constantsEnumName) {
-      fatalError("field \(constantsEnumName) in \(ts.id) collides with the generated \(constantsEnumName) enum")
-    }
-  }
 
   /// `public func validateConstraints() throws(LexiconConstraintError)` with
   /// `body`.

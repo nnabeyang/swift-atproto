@@ -42,6 +42,20 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
   }
 
+  /// Whether the generated type has a `Constraints` enum, a `make` that checks
+  /// the limits, and a strict decoding path: some field declares a limit.
+  var emitsConstraintConstants: Bool {
+    sortedProperties.contains { $0.1.hasConstraints }
+  }
+
+  /// Whether the generated type has its own `validateConstraints()`: some
+  /// field declares a limit or holds a value that may.
+  ///
+  /// `ts` is the schema of this type, which resolves its local references.
+  func emitsValidateConstraints(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    emitsConstraintConstants || sortedProperties.contains { $0.1.holdsValidatableValues(ts: ts, defMap: defMap) }
+  }
+
   private var declModifierSyntax: DeclModifierSyntax {
     guard let description else { return DeclModifierSyntax(name: .keyword(.public)) }
     return DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.docLineComment("/// \(description)"), .newlines(1)]))
@@ -60,14 +74,10 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     for key in nullable ?? [] {
       required[key] = false
     }
-    let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
+    let hasConstraints = emitsConstraintConstants
     let nestedValidationItems = sortedProperties.flatMap { key, property in
       property.nestedValidationItems(for: key, optional: !(required[key] ?? false), ts: ts, defMap: defMap)
     }
-    ValidationDecl.checkNoCollision(
-      fieldNames: sortedKeys, ts: ts,
-      emitsConstants: hasConstraints,
-      emitsValidate: hasConstraints || !nestedValidationItems.isEmpty)
     let repoWriteActions = Self.repoWriteActions(nsid: ts.id, inputName: name)
     let isRepoApplyWritesInput =
       ts.id == "com.atproto.repo.applyWrites" && name.hasSuffix("_Input")
@@ -172,7 +182,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
           .with(\.leadingTrivia, .newlines(2))
       }
-      if hasConstraints || !nestedValidationItems.isEmpty {
+      if emitsValidateConstraints(ts: ts, defMap: defMap) {
         // Strict decoding checks the nested values while it decodes the fields
         // and the type's own fields afterwards in `make`. Checking in the same
         // order reports the same violation when a value has several.

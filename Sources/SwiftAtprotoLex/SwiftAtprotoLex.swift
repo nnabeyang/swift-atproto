@@ -19,6 +19,9 @@ public func main(
   let fileURLs = collectJSONFileURLs(at: url)
   let schemasMap = try await decodeSchemasByPrefix(from: fileURLs)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
+  // Before writing anything, so that a Lexicon whose Swift form can't be
+  // written leaves no half-generated files behind.
+  try checkGeneratedNameCollisions(schemasMap: schemasMap, defMap: defMap)
   try await writeSchemaCode(
     for: schemasMap,
     with: defMap,
