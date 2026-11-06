@@ -132,7 +132,7 @@ struct RepoWriteGenerationTests {
     #expect(!Parser.parse(source: source).hasError)
     #expect(
       source.contains(
-        "public struct RepoApplyWrites_Input: Codable, Hashable, Sendable, RepoWriteOperationDescribing"
+        "public struct RepoApplyWrites_Input: Codable, Hashable, Sendable, SwiftAtproto.LexiconValidatable, SwiftAtproto.RepoWriteOperationDescribing"
       ))
     #expect(source.contains("case .repoApplyWritesCreate(let value):"))
     #expect(source.contains("case .repoApplyWritesUpdate(let value):"))

@@ -1,0 +1,7 @@
+# The actions of the workflows are pinned to commits, with their versions in comments. Dependabot updates both.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

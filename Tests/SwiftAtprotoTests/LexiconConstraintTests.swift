@@ -9,6 +9,14 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
   let tags: [String]?
   let _unknownValues: [String: AnyCodable]
 
+  public enum Constraints {
+    public static let limitMinimum: Int = 1
+    public static let limitMaximum: Int = 100
+    public static let tagsMaxLength: Int = 8
+    public static let textMaxLength: Int = 3000
+    public static let textMaxGraphemes: Int = 300
+  }
+
   public init(text: String, limit: Int? = nil, tags: [String]? = nil, _unknownValues: [String: AnyCodable] = [:]) {
     self.text = text
     self.limit = limit
@@ -17,24 +25,24 @@ private struct ConstrainedRecord: Codable, Hashable, Sendable {
   }
 
   public static func make(text: String, limit: Int? = nil, tags: [String]? = nil, _unknownValues: [String: AnyCodable] = [:]) throws -> Self {
-    guard text.utf8.count <= 3000 else {
-      throw LexiconConstraintError.stringTooLong("text", limit: 3000)
-    }
-    guard text.count <= 300 else {
-      throw LexiconConstraintError.tooManyGraphemes("text", limit: 300)
-    }
     if let limit {
-      guard limit >= 1 else {
-        throw LexiconConstraintError.integerBelowMinimum("limit", minimum: 1)
+      guard limit >= Constraints.limitMinimum else {
+        throw LexiconConstraintError.integerBelowMinimum("limit", minimum: Constraints.limitMinimum)
       }
-      guard limit <= 100 else {
-        throw LexiconConstraintError.integerAboveMaximum("limit", maximum: 100)
+      guard limit <= Constraints.limitMaximum else {
+        throw LexiconConstraintError.integerAboveMaximum("limit", maximum: Constraints.limitMaximum)
       }
     }
     if let tags {
-      guard tags.count <= 8 else {
-        throw LexiconConstraintError.arrayTooLong("tags", limit: 8)
+      guard tags.count <= Constraints.tagsMaxLength else {
+        throw LexiconConstraintError.arrayTooLong("tags", limit: Constraints.tagsMaxLength)
       }
+    }
+    guard text.utf8.count <= Constraints.textMaxLength else {
+      throw LexiconConstraintError.stringTooLong("text", limit: Constraints.textMaxLength)
+    }
+    guard text.count <= Constraints.textMaxGraphemes else {
+      throw LexiconConstraintError.tooManyGraphemes("text", limit: Constraints.textMaxGraphemes)
     }
     return Self(text: text, limit: limit, tags: tags, _unknownValues: _unknownValues)
   }

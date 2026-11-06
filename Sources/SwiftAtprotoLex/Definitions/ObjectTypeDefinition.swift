@@ -42,6 +42,23 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     }
   }
 
+  /// Whether the generated type has a `Constraints` enum, a `make` that checks
+  /// the limits, and a strict decoding path: some field declares a limit,
+  /// here or in a string definition it refers to.
+  ///
+  /// `ts` is the schema of this type, which resolves its references.
+  func emitsConstraintConstants(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    sortedProperties.contains { $0.1.hasConstraints(ts: ts, defMap: defMap) }
+  }
+
+  /// Whether the generated type has its own `validateConstraints()`: some
+  /// field declares a limit or holds a value that may.
+  ///
+  /// `ts` is the schema of this type, which resolves its local references.
+  func emitsValidateConstraints(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    emitsConstraintConstants(ts: ts, defMap: defMap) || sortedProperties.contains { $0.1.holdsValidatableValues(ts: ts, defMap: defMap) }
+  }
+
   private var declModifierSyntax: DeclModifierSyntax {
     guard let description else { return DeclModifierSyntax(name: .keyword(.public)) }
     return DeclModifierSyntax(name: .keyword(.public, leadingTrivia: [.docLineComment("/// \(description)"), .newlines(1)]))
@@ -60,22 +77,25 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     for key in nullable ?? [] {
       required[key] = false
     }
-    let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
+    let hasConstraints = emitsConstraintConstants(ts: ts, defMap: defMap)
+    let nestedValidationItems = sortedProperties.flatMap { key, property in
+      property.nestedValidationItems(for: key, optional: !(required[key] ?? false), ts: ts, defMap: defMap)
+    }
     let repoWriteActions = Self.repoWriteActions(nsid: ts.id, inputName: name)
     let isRepoApplyWritesInput =
       ts.id == "com.atproto.repo.applyWrites" && name.hasSuffix("_Input")
     let permissionedRepoDescriptor = permissionedRepoDescriptor(ts: ts)
     let inheritedNames: [String] = {
-      if ts.isRecord { return ["ATProtoRecord"] }
-      var names = ["Codable", "Hashable", "Sendable"]
+      if ts.isRecord { return [Lex.runtime("ATProtoRecord")] }
+      var names = ["Codable", "Hashable", "Sendable", ValidationDecl.protocolName]
       if repoWriteActions != nil || isRepoApplyWritesInput {
-        names.append("RepoWriteOperationDescribing")
+        names.append(Lex.runtime("RepoWriteOperationDescribing"))
       }
       switch permissionedRepoDescriptor {
       case .commit:
-        names.append("PermissionedRepoCommitDescribing")
+        names.append(Lex.runtime("PermissionedRepoCommitDescribing"))
       case .operation:
-        names.append("PermissionedRepoOperationDescribing")
+        names.append(Lex.runtime("PermissionedRepoOperationDescribing"))
       case nil:
         break
       }
@@ -158,18 +178,36 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 leftSquare: .leftSquareToken(),
                 key: Lex.typeSyntax("Swift.String"),
                 colon: .colonToken(),
-                value: TypeSyntax(IdentifierTypeSyntax(name: .identifier("AnyCodable"))),
+                value: Lex.typeSyntax(Lex.runtime("AnyCodable")),
                 rightSquare: .rightSquareToken()
               )
             )
           )
         ]
       )
+      if let constants = LexiconConstraint.constantsEnumDecl(properties: sortedProperties, ts: ts, defMap: defMap) {
+        constants
+      }
       memberwiseInitDecl(ts: ts, name: name, defMap: defMap, required: required)
         .with(\.leadingTrivia, .newlines(2))
       if hasConstraints {
         staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
           .with(\.leadingTrivia, .newlines(2))
+      }
+      if emitsValidateConstraints(ts: ts, defMap: defMap) {
+        // Strict decoding checks the nested values while it decodes the fields
+        // and the type's own fields afterwards in `make`. Checking in the same
+        // order reports the same violation when a value has several.
+        ValidationDecl.validateDecl {
+          for item in nestedValidationItems {
+            item
+          }
+          for (key, property) in sortedProperties {
+            for item in property.constraintGuardItems(for: key, optional: !(required[key] ?? false), ts: ts, defMap: defMap) {
+              item
+            }
+          }
+        }
       }
       if let actionRaws = repoWriteActions {
         Self.repoWriteRequirementsAccessor(actionRaws: actionRaws)
@@ -344,7 +382,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                         colon: .colonToken(),
                         expression: ExprSyntax(
                           MemberAccessExprSyntax(
-                            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
+                            base: Lex.refExpr(Lex.runtime("AnyCodingKeys")),
                             period: .periodToken(),
                             declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                           ))
@@ -370,7 +408,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                           DictionaryElementSyntax(
                             key: Lex.refExpr("Swift.String"),
                             colon: .colonToken(),
-                            value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                            value: Lex.refExpr(Lex.runtime("AnyCodable"))
                           )
                         ])),
                       rightSquare: .rightSquareToken()
@@ -430,7 +468,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 ) {
                   LabeledExprSyntax(
                     expression: MemberAccessExprSyntax(
-                      base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
+                      base: Lex.refExpr(Lex.runtime("AnyCodable")),
                       period: .periodToken(),
                       declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                     )
@@ -592,7 +630,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       firstName: .identifier("_unknownValues"),
       type: DictionaryTypeSyntax(
         key: Lex.typeSyntax("Swift.String"),
-        value: TypeSyntax(IdentifierTypeSyntax(name: .identifier("AnyCodable")))
+        value: Lex.typeSyntax(Lex.runtime("AnyCodable"))
       ),
       defaultValue: InitializerClauseSyntax(
         value: DictionaryExprSyntax(content: .colon(.colonToken()))
@@ -638,7 +676,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     ) {
       for (key, property) in sortedProperties {
         let isRequired = required[key] ?? false
-        for item in property.constraintGuardItems(for: key, optional: !isRequired) {
+        for item in property.constraintGuardItems(for: key, optional: !isRequired, ts: ts, defMap: defMap) {
           item
         }
       }
@@ -652,7 +690,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         ) {
           for (key, _) in sortedProperties {
             LabeledExprSyntax(
-              label: .lexIdentifier(key),
+              label: .lexArgumentLabel(key),
               colon: .colonToken(),
               expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
             )
@@ -757,7 +795,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                     colon: .colonToken(),
                     expression: ExprSyntax(
                       MemberAccessExprSyntax(
-                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
+                        base: Lex.refExpr(Lex.runtime("AnyCodingKeys")),
                         period: .periodToken(),
                         declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                       ))
@@ -783,7 +821,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                       DictionaryElementSyntax(
                         key: Lex.refExpr("Swift.String"),
                         colon: .colonToken(),
-                        value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                        value: Lex.refExpr(Lex.runtime("AnyCodable"))
                       )
                     ])),
                   rightSquare: .rightSquareToken()
@@ -841,7 +879,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
             ) {
               LabeledExprSyntax(
                 expression: MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
+                  base: Lex.refExpr(Lex.runtime("AnyCodable")),
                   period: .periodToken(),
                   declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                 )
@@ -861,7 +899,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
             operator: .prefixOperator("!"),
             expression: FunctionCallExprSyntax(
               callee: MemberAccessExprSyntax(
-                base: DeclReferenceExprSyntax(baseName: .identifier("LexiconDecodingMode")),
+                base: Lex.refExpr(Lex.runtime("LexiconDecodingMode")),
                 period: .periodToken(),
                 declName: DeclReferenceExprSyntax(baseName: .identifier("shouldValidateConstraints"))
               )
@@ -887,7 +925,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           ) {
             for (key, _) in sortedProperties {
               LabeledExprSyntax(
-                label: .lexIdentifier(key),
+                label: .lexArgumentLabel(key),
                 colon: .colonToken(),
                 expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
               )
@@ -912,7 +950,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               ) {
                 for (key, _) in sortedProperties {
                   LabeledExprSyntax(
-                    label: .lexIdentifier(key),
+                    label: .lexArgumentLabel(key),
                     colon: .colonToken(),
                     expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                   )
@@ -936,7 +974,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                             pattern: IdentifierPatternSyntax(identifier: .identifier("error"))
                           )
                           UnresolvedAsExprSyntax()
-                          TypeExprSyntax(type: IdentifierTypeSyntax(name: .identifier("LexiconConstraintError")))
+                          TypeExprSyntax(type: Lex.typeSyntax(Lex.runtime("LexiconConstraintError")))
                         }
                       )
                     )
@@ -1057,13 +1095,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
   private static func formatStringType(_ wrappedName: String, optional: Bool = false)
     -> TypeSyntax
   {
-    let type = TypeSyntax(
-      IdentifierTypeSyntax(
-        name: .identifier("FormatString"),
-        genericArgumentClause: GenericArgumentClauseSyntax {
-          GenericArgumentSyntax.create(
-            argument: IdentifierTypeSyntax(name: .identifier(wrappedName)))
-        }))
+    let type = Lex.typeSyntax("\(Lex.runtime("FormatString"))<\(Lex.runtime(wrappedName))>")
     return optional ? TypeSyntax(OptionalTypeSyntax(wrappedType: type)) : type
   }
 
@@ -1125,7 +1157,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 ])
               )
             ) {
-              FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("RepoWriteRequirement"))) {
+              FunctionCallExprSyntax(callee: Lex.refExpr(Lex.runtime("RepoWriteRequirement"))) {
                 LabeledExprSyntax(
                   label: .identifier("collection"), colon: .colonToken(),
                   expression: StringLiteralExprSyntax(content: "unsupported"),
@@ -1133,7 +1165,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 LabeledExprSyntax(
                   label: .identifier("action"), colon: .colonToken(),
                   expression: FunctionCallExprSyntax(
-                    callee: DeclReferenceExprSyntax(baseName: .identifier("LexPermissionAction"))
+                    callee: Lex.refExpr(Lex.runtime("LexPermissionAction"))
                   ) {
                     LabeledExprSyntax(
                       label: .identifier("rawValue"), colon: .colonToken(),
@@ -1187,7 +1219,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       name: .identifier("rawValue")
     )
     return FunctionCallExprSyntax(
-      callee: DeclReferenceExprSyntax(baseName: .identifier("RepoWriteRequirement"))
+      callee: Lex.refExpr(Lex.runtime("RepoWriteRequirement"))
     ) {
       LabeledExprSyntax(
         label: .identifier("collection"), colon: .colonToken(),
@@ -1209,7 +1241,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           pattern: IdentifierPatternSyntax(identifier: .identifier("repoWriteRequirements")),
           typeAnnotation: TypeAnnotationSyntax(
             type: ArrayTypeSyntax(
-              element: IdentifierTypeSyntax(name: .identifier("RepoWriteRequirement")))),
+              element: Lex.typeSyntax(Lex.runtime("RepoWriteRequirement")))),
           accessorBlock: AccessorBlockSyntax(
             accessors: .getter(
               CodeBlockItemListSyntax {

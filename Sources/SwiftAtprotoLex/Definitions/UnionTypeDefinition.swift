@@ -40,7 +40,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
       name: .init(stringLiteral: name),
-      inheritanceClause: InheritanceClauseSyntax(typeNames: ["Codable", "Hashable", "Sendable"])
+      inheritanceClause: InheritanceClauseSyntax(typeNames: ["Codable", "Hashable", "Sendable", ValidationDecl.protocolName])
     ) {
       for cts in tss {
         let id = cts.defName == "main" ? cts.id : #"\#(cts.id)#\#(cts.defName)"#
@@ -65,7 +65,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
           parameterClause: EnumCaseParameterClauseSyntax(
             leftParen: .leftParenToken(),
             parameters: EnumCaseParameterListSyntax([
-              EnumCaseParameterSyntax(stringLiteral: "UnknownRecord")
+              EnumCaseParameterSyntax(type: Lex.typeSyntax(Lex.runtime("UnknownRecord")))
             ]),
             rightParen: .rightParenToken()
           )
@@ -300,6 +300,59 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
                 })
             )
           }
+        }
+      }
+      validateDecl(tss: tss, ts: ts)
+    }
+  }
+
+  /// Calls `validateConstraints()` on the value of the case, as strict
+  /// decoding checks the value when it decodes it. A value of an unknown type
+  /// has no limits to check.
+  private func validateDecl(tss: [TypeSchema], ts: TypeSchema) -> FunctionDeclSyntax {
+    ValidationDecl.validateDecl {
+      SwitchExprSyntax(subject: DeclReferenceExprSyntax(baseName: .keyword(.self))) {
+        for cts in tss {
+          let id = cts.defName == "main" ? cts.id : #"\#(cts.id)#\#(cts.defName)"#
+          let validatable = cts.type.isValidatableDefinition
+          SwitchCaseSyntax(
+            label: .case(
+              .init(caseItems: [
+                .init(
+                  pattern: ExpressionPatternSyntax(
+                    expression: FunctionCallExprSyntax(
+                      callee: MemberAccessExprSyntax(name: .lexIdentifier(Lex.caseNameFromId(id: id, prefix: ts.prefix)))
+                    ) {
+                      LabeledExprSyntax(
+                        expression: PatternExprSyntax(
+                          pattern: ValueBindingPatternSyntax(
+                            bindingSpecifier: .keyword(.let),
+                            pattern: validatable
+                              ? PatternSyntax(IdentifierPatternSyntax(identifier: .identifier("value")))
+                              : PatternSyntax(WildcardPatternSyntax())
+                          )
+                        )
+                      )
+                    }
+                  ))
+              ])
+            )
+          ) {
+            if validatable {
+              FieldTypeDefinition.validateCall(on: DeclReferenceExprSyntax(baseName: .identifier("value")), optional: false)
+            } else {
+              BreakStmtSyntax()
+            }
+          }
+        }
+        SwitchCaseSyntax(
+          label: .case(
+            .init(caseItems: [
+              .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("_other"))))
+            ])
+          )
+        ) {
+          BreakStmtSyntax()
         }
       }
     }

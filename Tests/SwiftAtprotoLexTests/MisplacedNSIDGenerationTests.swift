@@ -50,7 +50,7 @@ final class MisplacedNSIDGenerationTests: XCTestCase {
 
     XCTAssertFalse(source.contains("enum Jp "), "top-level `Jp` shadow enum must not be emitted")
     XCTAssertFalse(source.contains("Jp.Example"), "`Jp.Example` extension target must not appear")
-    XCTAssertTrue(source.contains("public enum Com "), "canonical `Com` namespace must be emitted")
+    XCTAssertTrue(source.contains("public nonisolated enum Com "), "canonical `Com` namespace must be emitted")
     XCTAssertTrue(source.contains("extension Com.Atproto "), "extension must attach to canonical `Com.Atproto`")
     XCTAssertTrue(source.contains("RepoStrongRef"), "canonical `RepoStrongRef` type must be emitted")
   }

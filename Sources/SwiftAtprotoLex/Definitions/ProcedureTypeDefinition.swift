@@ -54,7 +54,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       case .json, .jsonl:
         let token: String = {
           guard let schema = input.schema else {
-            return "EmptyResponse"
+            return Lex.runtime("EmptyResponse")
           }
           let outname: String
           if case .ref(let def) = schema.type {
@@ -113,7 +113,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       case .json, .jsonl:
         let token: String = {
           guard let schema = input.schema else {
-            return "EmptyResponse"
+            return Lex.runtime("EmptyResponse")
           }
           let outname: String
           if case .ref(let def) = schema.type {
@@ -127,7 +127,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       case .text:
         return Lex.typeSyntax("Swift.String")
       case .any:
-        return Lex.typeSyntax("SwiftAtproto.XRPCBlobUpload")
+        return Lex.typeSyntax(Lex.runtime("XRPCBlobUpload"))
       case .cbor, .car, .mp4, .other:
         return Lex.typeSyntax("Foundation.Data")
       }
@@ -141,7 +141,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       case .json, .jsonl:
         let token: String = {
           guard let schema = output.schema else {
-            return "EmptyResponse"
+            return Lex.runtime("EmptyResponse")
           }
           let outname: String
           if case .ref(let def) = schema.type {
@@ -158,7 +158,7 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return Lex.typeSyntax("Foundation.Data")
       }
     }
-    return Lex.typeSyntax("EmptyResponse")
+    return Lex.typeSyntax(Lex.runtime("EmptyResponse"))
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement _: Bool) -> [FunctionParameterSyntax] {
@@ -166,14 +166,14 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     guard let input else { return arguments }
     switch input.encoding {
     case .any:
-      let tname = "SwiftAtproto.XRPCBlobUpload"
-      arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname)))
+      let tname = Lex.runtime("XRPCBlobUpload")
+      arguments.append(.init(firstName: .identifier("input"), type: Lex.typeSyntax(tname)))
     case .cbor, .car, .mp4, .other:
       let tname = "Foundation.Data"
-      arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname)))
+      arguments.append(.init(firstName: .identifier("input"), type: Lex.typeSyntax(tname)))
     case .text:
       let tname = "Swift.String"
-      arguments.append(.init(firstName: .identifier("input"), type: TypeSyntax(stringLiteral: tname)))
+      arguments.append(.init(firstName: .identifier("input"), type: Lex.typeSyntax(tname)))
     case .json, .jsonl:
       let tname: String
       if case .ref(let ref) = input.schema?.type {
@@ -223,9 +223,9 @@ struct ProcedureTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       ],
       name: .lexIdentifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCProcedure")))
+        InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCProcedure")))
         if output?.isBinary == true {
-          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCBinaryResponseRequest")))
+          InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCBinaryResponseRequest")))
         }
       }
     ) {

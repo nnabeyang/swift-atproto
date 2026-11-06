@@ -62,7 +62,7 @@ extension Lex {
         genUnversalServerExtension(leadingTrivia: .newlines(2), for: methodTypes, defMap: defMap)
       },
       trailingTrivia: .newline)
-    return renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
+    return renderSourceFile(applyingAccessModifier(to: applyingNonisolated(to: src), accessModifier: accessModifier))
   }
 
   private static func genXRPCAPIProtocol(
@@ -1108,7 +1108,7 @@ extension Lex {
             equal: .equalToken(),
             value: {
               let callee: ExprSyntax =
-                def.paramsHaveConstraints
+                def.paramsHaveConstraints(ts: schema, defMap: defMap)
                 ? ExprSyntax(
                   MemberAccessExprSyntax(
                     parts: prefix.lexIdentifierSegments + [
@@ -1126,13 +1126,13 @@ extension Lex {
               let call = FunctionCallExprSyntax(callee: callee) {
                 for (i, (key, _)) in (def.parameters?.sortedProperties ?? []).enumerated() {
                   LabeledExprSyntax(
-                    label: .lexIdentifier(key),
+                    label: .lexArgumentLabel(key),
                     colon: .colonToken(),
                     expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query\(i)")))
                   )
                 }
               }
-              return def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+              return def.paramsHaveConstraints(ts: schema, defMap: defMap) ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
             }()
           )
         )

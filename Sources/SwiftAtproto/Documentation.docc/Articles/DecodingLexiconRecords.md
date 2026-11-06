@@ -1,7 +1,7 @@
 # Decoding Lexicon records
 
-Choose whether authoring constraints are enforced, and handle records whose type
-you do not know.
+Choose whether authoring constraints are enforced, check your own values before
+sending them, and handle records whose type you do not know.
 
 ## Overview
 
@@ -26,13 +26,78 @@ Responses decoded by `_XRPCCallable.call(_:input:)` use
 ``LexiconDecodingMode/permissive`` deliberately. Constraints describe what a
 client should *create*; a record already published by another implementation
 that exceeds one is still a record you have to display. Validate your own input
-before sending it, and stay permissive about what you receive.
+before sending it (see <doc:#Validating-values-before-sending>), and stay
+permissive about what you receive.
 
 ```swift
 let decoder = JSONDecoder()
 decoder.userInfo[.atprotoLexiconDecodingMode] = LexiconDecodingMode.strict
 let record = try decoder.decode(MyRecord.self, from: data)
 ```
+
+## Validating values before sending
+
+Every generated object, record, and union conforms to ``LexiconValidatable``.
+Call ``LexiconValidatable/validateConstraints()`` on a value you built before
+you send it. It checks the same constraints as ``LexiconDecodingMode/strict``
+decoding, including those of the values nested in it — the objects a field
+refers to, the elements of an array, the value of a union, and a known record
+in an `unknown` field — and throws the ``LexiconConstraintError`` that strict
+decoding would report:
+
+```swift
+let post = App.Bsky.FeedPost(createdAt: now, text: text)
+do throws(LexiconConstraintError) {
+  try post.validateConstraints()
+} catch {
+  // `error` names the field and its limit, such as
+  // `.tooManyGraphemes("text", limit: 300)`.
+}
+```
+
+A grapheme limit counts the string's `Character`s, so `text.count` is what the
+check compares, while a length limit counts its UTF-8 bytes.
+
+The limits of an array's `items` apply to each element, and an element that
+exceeds one is named by its position: the third element of `tags` is reported as
+`.tooManyGraphemes("tags[2]", limit: 64)`. A limit on the array itself, such as
+its length, is reported under the field's name and checked before the elements.
+
+## Reading the limits
+
+A generated type whose fields declare limits has a nested `Constraints` enum
+with one constant per limit, named after the field and the Lexicon keyword:
+`textMaxGraphemes` for the `maxGraphemes` of `text`, `videoMaxSize` for the
+`maxSize` of `video`. A limit on the elements of an array has `Item` in its
+name: `tagsItemMaxGraphemes` for the `maxGraphemes` of each element of `tags`.
+A field that refers to a string definition with `ref` takes that definition's
+limits as its own, so they are checked and named the same way. A `const` is a
+constant of the field's type (`notFoundConst`, a `Bool`), and a blob's `accept`
+is the list of MIME types it allows (`videoAccept`, a `[String]`). The
+generated checks read the same constants, so the
+value you show or compare against is the one that
+``LexiconValidatable/validateConstraints()`` and strict decoding enforce, and it
+follows the Lexicon when you regenerate.
+
+Use them where a value can't be checked as part of a record yet. A blob's size
+and MIME type are checked only after you upload it, so check the file before
+uploading. ``LexBlob/isAccepted(mimeType:by:)`` matches a MIME type against an
+`accept` list the way the generated checks do, including patterns such as
+`image/*`:
+
+```swift
+let video = App.Bsky.EmbedVideo.Constraints.self
+guard data.count <= video.videoMaxSize else { throw VideoTooLarge() }
+guard LexBlob.isAccepted(mimeType: "video/mp4", by: video.videoAccept) else {
+  throw UnsupportedVideo()
+}
+// Send this as the input of com.atproto.repo.uploadBlob.
+let upload = XRPCBlobUpload(data: data, mimeType: "video/mp4")
+```
+
+The parameters of a query have their constants in the `Constraints` enum of the
+query's `Input.Query`. The generated client method checks them before it sends
+the request.
 
 ## Unknown record types
 

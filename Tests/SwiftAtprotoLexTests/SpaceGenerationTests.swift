@@ -14,20 +14,20 @@ struct SpaceGenerationTests {
     ])
     #expect(!Parser.parse(source: source).hasError)
 
-    #expect(source.contains("public enum Forum: LexSpace"))
+    #expect(source.contains("public enum Forum: SwiftAtproto.LexSpace"))
     #expect(source.contains(#"public static let id = "com.atmoboards.forum""#))
-    #expect(source.contains("public static let key: LexRecordKeyType = .any"))
+    #expect(source.contains("public static let key: SwiftAtproto.LexRecordKeyType = .any"))
     #expect(source.contains(#"public static let name: Swift.String = "AtmoBoards Forum""#))
     #expect(source.contains(#"public static let description: Swift.String? = "A discussion forum""#))
     #expect(source.contains(#""es": "Foro AtmoBoards""#))
     #expect(source.contains(#""ja": "AtmoBoards 掲示板""#))
-    #expect(source.contains(#"FormatString<NSID>(rawValue: "com.atmoboards.thread")"#))
-    #expect(source.contains(#"FormatString<NSID>(rawValue: "com.atmoboards.reply")"#))
+    #expect(source.contains(#"SwiftAtproto.FormatString<SwiftAtproto.NSID>(rawValue: "com.atmoboards.thread")"#))
+    #expect(source.contains(#"SwiftAtproto.FormatString<SwiftAtproto.NSID>(rawValue: "com.atmoboards.reply")"#))
 
-    #expect(source.contains("public enum Empty: LexSpace"))
-    #expect(source.contains("public static let key: LexRecordKeyType = .tid"))
+    #expect(source.contains("public enum Empty: SwiftAtproto.LexSpace"))
+    #expect(source.contains("public static let key: SwiftAtproto.LexRecordKeyType = .tid"))
     #expect(source.contains("public static let nameLang: [Swift.String: Swift.String]? = nil"))
-    #expect(source.contains("public static let collections: [FormatString<NSID>] = []"))
+    #expect(source.contains("public static let collections: [SwiftAtproto.FormatString<SwiftAtproto.NSID>] = []"))
     #expect(source.contains("public static let description: Swift.String? = nil"))
   }
 
@@ -62,14 +62,14 @@ struct SpaceGenerationTests {
   func unrecognizedKeyTypeIsGeneratedAsARawValue() async throws {
     let source = try await generateClient(fixtures: ["space.json": Self.spaceWithInvalidKeyType])
     #expect(!Parser.parse(source: source).hasError)
-    #expect(source.contains(#"public static let key: LexRecordKeyType = LexRecordKeyType(rawValue: "bogus")"#))
+    #expect(source.contains(#"public static let key: SwiftAtproto.LexRecordKeyType = SwiftAtproto.LexRecordKeyType(rawValue: "bogus")"#))
   }
 
   @Test("a literal key type keeps its payload")
   func literalKeyTypeKeepsItsPayload() async throws {
     let source = try await generateClient(fixtures: ["space.json": Self.spaceWithLiteralKey])
     #expect(!Parser.parse(source: source).hasError)
-    #expect(source.contains(#"public static let key: LexRecordKeyType = LexRecordKeyType(rawValue: "literal:self")"#))
+    #expect(source.contains(#"public static let key: SwiftAtproto.LexRecordKeyType = SwiftAtproto.LexRecordKeyType(rawValue: "literal:self")"#))
   }
 
   private func generateClient(fixtures: [String: String]) async throws -> String {

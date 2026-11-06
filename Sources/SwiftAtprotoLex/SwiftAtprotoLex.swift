@@ -19,6 +19,9 @@ public func main(
   let fileURLs = collectJSONFileURLs(at: url)
   let schemasMap = try await decodeSchemasByPrefix(from: fileURLs)
   let defMap = Lex.buildExtDefMap(schemasMap: schemasMap)
+  // Before writing anything, so that a Lexicon whose Swift form can't be
+  // written leaves no half-generated files behind.
+  try checkGeneratedNameCollisions(schemasMap: schemasMap, defMap: defMap)
   try await writeSchemaCode(
     for: schemasMap,
     with: defMap,
@@ -275,7 +278,7 @@ func writeSchemaCode(
         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
         name: .identifier("XRPCCallable"),
         inheritanceClause: InheritanceClauseSyntax(
-          typeNames: ["_XRPCCallable"])
+          typeNames: [Lex.runtime("_XRPCCallable")])
       ) {
         requirements
       }
@@ -285,7 +288,7 @@ func writeSchemaCode(
     }
   }
   let clientSrc: String = Lex.renderSourceFile(
-    Lex.applyingAccessModifier(to: clientTree, accessModifier: accessModifier))
+    Lex.applyingAccessModifier(to: Lex.applyingNonisolated(to: clientTree), accessModifier: accessModifier))
   let clientURL = baseURL.appending(path: "XRPCAPIClient.swift")
   try clientSrc.write(to: clientURL, atomically: true, encoding: .utf8)
 }
@@ -389,6 +392,41 @@ enum Lex {
       .cast(SourceFileSyntax.self)
   }
 
+  /// Marks every top-level declaration in `source` `nonisolated`.
+  ///
+  /// A module whose default actor isolation is `MainActor` would otherwise
+  /// infer `MainActor` for the generated types. Their `Codable` conformances
+  /// then become isolated conformances, which cannot satisfy the
+  /// `Sendable`-constrained associated types of `XRPCRequest`, and the server
+  /// code cannot call the generated helpers from its nonisolated closures.
+  ///
+  /// Only top-level declarations need the modifier: nested types inherit it
+  /// from an enclosing `nonisolated` type or extension. The modifier changes
+  /// nothing in a module that keeps the default `nonisolated` isolation, so it
+  /// is always emitted.
+  static func applyingNonisolated(to source: SourceFileSyntax) -> SourceFileSyntax {
+    let statements = source.statements.map { item -> CodeBlockItemSyntax in
+      guard case .decl(let decl) = item.item,
+        !decl.is(ImportDeclSyntax.self),
+        var declWithModifiers = decl.asProtocol(WithModifiersSyntax.self)
+      else {
+        return item
+      }
+      // Appending to a declaration without modifiers, such as an extension,
+      // makes the modifier its first token. Move the leading trivia onto it so
+      // that the blank lines stay in front of the declaration.
+      let leadingTrivia = declWithModifiers.leadingTrivia
+      declWithModifiers.leadingTrivia = []
+      declWithModifiers.modifiers.append(
+        DeclModifierSyntax(name: .keyword(.nonisolated)))
+      declWithModifiers.leadingTrivia = leadingTrivia
+      return item.with(
+        \.item,
+        .decl(Syntax(fromProtocol: declWithModifiers).cast(DeclSyntax.self)))
+    }
+    return source.with(\.statements, CodeBlockItemListSyntax(statements))
+  }
+
   static var fileHeader: Trivia {
     Trivia(pieces: [
       .lineComment("//"),
@@ -484,7 +522,7 @@ enum Lex {
       EnumDeclSyntax(
         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
         name: .identifier("UnknownATPValue"),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["UnknownATPValueProtocol"])
+        inheritanceClause: InheritanceClauseSyntax(typeNames: [Lex.runtime("UnknownATPValueProtocol"), ValidationDecl.protocolName])
       ) {
         EnumCaseDeclSyntax(leadingTrivia: .newline) {
           EnumCaseElementSyntax(
@@ -494,7 +532,7 @@ enum Lex {
                 EnumCaseParameterSyntax(
                   type: SomeOrAnyTypeSyntax(
                     someOrAnySpecifier: .keyword(.any),
-                    constraint: TypeSyntax(IdentifierTypeSyntax(name: .identifier("ATProtoRecord")))
+                    constraint: Lex.typeSyntax(Lex.runtime("ATProtoRecord"))
                   )
                 )
               ]
@@ -545,7 +583,7 @@ enum Lex {
                   value: SomeOrAnyTypeSyntax(
                     someOrAnySpecifier: .keyword(.any),
                     constraint: MetatypeTypeSyntax(
-                      baseType: IdentifierTypeSyntax(name: .identifier("ATProtoRecord")),
+                      baseType: Lex.typeSyntax(Lex.runtime("ATProtoRecord")),
                       period: .periodToken(),
                       metatypeSpecifier: .keyword(.Type)
                     )
@@ -766,10 +804,46 @@ enum Lex {
             )
           ]
         )
+        // Strict decoding checks a record it knows while decoding it. A value
+        // of a type it doesn't know has no limits to check.
+        ValidationDecl.validateDecl {
+          SwitchExprSyntax(subject: DeclReferenceExprSyntax(baseName: .keyword(.self))) {
+            SwitchCaseSyntax(
+              label: .case(
+                .init(caseItems: [
+                  .init(
+                    pattern: ExpressionPatternSyntax(
+                      expression: FunctionCallExprSyntax(
+                        callee: MemberAccessExprSyntax(name: .identifier("record"))
+                      ) {
+                        LabeledExprSyntax(
+                          expression: PatternExprSyntax(
+                            pattern: ValueBindingPatternSyntax(
+                              bindingSpecifier: .keyword(.let),
+                              pattern: IdentifierPatternSyntax(identifier: .identifier("record"))
+                            )))
+                      }
+                    ))
+                ])
+              )
+            ) {
+              FieldTypeDefinition.validateCall(on: DeclReferenceExprSyntax(baseName: .identifier("record")), optional: false)
+            }
+            SwitchCaseSyntax(
+              label: .case(
+                .init(caseItems: [
+                  .init(pattern: ExpressionPatternSyntax(expression: MemberAccessExprSyntax(name: .identifier("any"))))
+                ])
+              )
+            ) {
+              BreakStmtSyntax()
+            }
+          }
+        }
       }
     }
     .with(\.trailingTrivia, .newline)
-    return renderSourceFile(applyingAccessModifier(to: src, accessModifier: accessModifier))
+    return renderSourceFile(applyingAccessModifier(to: applyingNonisolated(to: src), accessModifier: accessModifier))
   }
 
   static func buildExtDefMap(schemasMap: [String: [Schema]]) -> ExtDefMap {

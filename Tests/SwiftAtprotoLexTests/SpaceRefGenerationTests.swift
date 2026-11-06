@@ -62,8 +62,8 @@ struct SpaceRefGenerationTests {
 
     #expect(!Parser.parse(source: clientSource).hasError)
     #expect(!Parser.parse(source: serverSource).hasError)
-    #expect(clientSource.contains("FormatString<SpaceRef>"))
-    #expect(serverSource.contains("FormatString<SpaceRef>"))
+    #expect(clientSource.contains("SwiftAtproto.FormatString<SwiftAtproto.SpaceRef>"))
+    #expect(serverSource.contains("SwiftAtproto.FormatString<SwiftAtproto.SpaceRef>"))
     // An unrecognized format still falls back to a plain string.
     #expect(clientSource.contains("Swift.String"))
     #expect(!clientSource.contains("FormatString<not-a-real-format>"))

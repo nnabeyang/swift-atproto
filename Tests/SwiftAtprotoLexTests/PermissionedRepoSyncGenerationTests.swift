@@ -16,16 +16,16 @@ struct PermissionedRepoSyncGenerationTests {
     #expect(!Parser.parse(source: source).hasError)
     #expect(
       source.contains(
-        "public struct SpaceDefs_Commit: Codable, Hashable, Sendable, PermissionedRepoCommitDescribing"
+        "public struct SpaceDefs_Commit: Codable, Hashable, Sendable, SwiftAtproto.LexiconValidatable, SwiftAtproto.PermissionedRepoCommitDescribing"
       ))
-    #expect(source.contains("public var permissionedRepoCommitRepo: FormatString<DID>"))
-    #expect(source.contains("public var permissionedRepoCommitSpace: FormatString<SpaceRef>"))
+    #expect(source.contains("public var permissionedRepoCommitRepo: SwiftAtproto.FormatString<SwiftAtproto.DID>"))
+    #expect(source.contains("public var permissionedRepoCommitSpace: SwiftAtproto.FormatString<SwiftAtproto.SpaceRef>"))
     #expect(source.contains("public var permissionedRepoCommitData: Foundation.Data"))
     #expect(
       source.contains(
-        "public struct SpaceListRepoOps_OpEntry: Codable, Hashable, Sendable, PermissionedRepoOperationDescribing"
+        "public struct SpaceListRepoOps_OpEntry: Codable, Hashable, Sendable, SwiftAtproto.LexiconValidatable, SwiftAtproto.PermissionedRepoOperationDescribing"
       ))
-    #expect(source.contains("public var permissionedRepoOperationPreviousCID: FormatString<LexLink>?"))
+    #expect(source.contains("public var permissionedRepoOperationPreviousCID: SwiftAtproto.FormatString<SwiftAtproto.LexLink>?"))
   }
 
   @Test("a similarly named but incompatible definition gets no conformance")
