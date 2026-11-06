@@ -20,4 +20,10 @@ public enum LexiconConstraintError: Error {
   case bytesTooLong(_ field: String, limit: Int)
   case bytesTooShort(_ field: String, minimum: Int)
   case blobTooLarge(_ field: String, limit: Int)
+  /// The field isn't the value its Lexicon fixes with `const`. `expected` is
+  /// that value as text, such as `"true"` or `"42"`.
+  case notConstant(_ field: String, expected: String)
+  /// The blob's MIME type is none that the field's `accept` list allows; see
+  /// ``LexBlob/isAccepted(mimeType:by:)``.
+  case blobTypeNotAccepted(_ field: String, accepted: [String])
 }
