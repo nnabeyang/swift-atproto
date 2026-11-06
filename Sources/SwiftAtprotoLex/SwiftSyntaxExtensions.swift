@@ -6,6 +6,19 @@ extension TokenSyntax {
   static func lexIdentifier(_ name: String) -> TokenSyntax {
     .identifier(name.escapedSwiftKeyword)
   }
+
+  /// An argument label in a call, for a parameter declared with
+  /// ``lexIdentifier(_:)``.
+  ///
+  /// A call's argument label can be almost any keyword as it is, and Swift
+  /// warns that a backquoted one "does not need to be escaped in argument
+  /// list", which fails a target that treats warnings as errors. Only `inout`
+  /// still has to be backquoted there. A name that starts with a digit gets
+  /// the same `_` prefix as in the declaration, so the label matches it.
+  static func lexArgumentLabel(_ name: String) -> TokenSyntax {
+    let label = name.first?.isASCII == true && name.first?.isNumber == true ? "_\(name)" : name
+    return .identifier(label == "inout" ? "`inout`" : label)
+  }
 }
 
 extension String {

@@ -1126,7 +1126,7 @@ extension Lex {
               let call = FunctionCallExprSyntax(callee: callee) {
                 for (i, (key, _)) in (def.parameters?.sortedProperties ?? []).enumerated() {
                   LabeledExprSyntax(
-                    label: .lexIdentifier(key),
+                    label: .lexArgumentLabel(key),
                     colon: .colonToken(),
                     expression: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("query\(i)")))
                   )

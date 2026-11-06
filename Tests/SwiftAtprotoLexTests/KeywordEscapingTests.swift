@@ -17,6 +17,17 @@ final class KeywordEscapingTests: XCTestCase {
     XCTAssertEqual(TokenSyntax.lexIdentifier("foo").text, "foo")
   }
 
+  // Call labels are backquoted only where Swift requires it, so that the
+  // generated calls compile without the "does not need to be escaped" warning.
+  func testLexArgumentLabel() {
+    XCTAssertEqual(TokenSyntax.lexArgumentLabel("default").text, "default")
+    XCTAssertEqual(TokenSyntax.lexArgumentLabel("Type").text, "Type")
+    XCTAssertEqual(TokenSyntax.lexArgumentLabel("self").text, "self")
+    XCTAssertEqual(TokenSyntax.lexArgumentLabel("inout").text, "`inout`")
+    XCTAssertEqual(TokenSyntax.lexArgumentLabel("0040000").text, "_0040000")
+    XCTAssertEqual(TokenSyntax.lexArgumentLabel("ordinary").text, "ordinary")
+  }
+
   func testTypeSyntax() {
     XCTAssertEqual(Lex.typeSyntax("App.Bsky.Foo").description, "App.Bsky.Foo")
     XCTAssertEqual(Lex.typeSyntax("App.Type.Foo").description, "App.`Type`.Foo")
