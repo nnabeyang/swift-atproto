@@ -70,7 +70,9 @@ with one constant per limit, named after the field and the Lexicon keyword:
 `textMaxGraphemes` for the `maxGraphemes` of `text`, `videoMaxSize` for the
 `maxSize` of `video`. A limit on the elements of an array has `Item` in its
 name: `tagsItemMaxGraphemes` for the `maxGraphemes` of each element of `tags`.
-The generated checks read the same constants, so the
+A field that refers to a string definition with `ref` takes that definition's
+limits as its own, so they are checked and named the same way. The generated
+checks read the same constants, so the
 value you show or compare against is the one that
 ``LexiconValidatable/validateConstraints()`` and strict decoding enforce, and it
 follows the Lexicon when you regenerate.

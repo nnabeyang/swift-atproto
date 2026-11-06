@@ -64,14 +64,14 @@ func checkGeneratedNameCollisions(schemasMap: [String: [Schema]], defMap: ExtDef
         try checkObject(def, ts: ts, typeName: "\(namespace).\(name)", defMap: defMap)
       case .record(let def):
         try checkObject(def.record, ts: ts, typeName: "\(namespace).\(name)", defMap: defMap)
-      case .query(let def) where def.paramsHaveConstraints:
+      case .query(let def) where def.paramsHaveConstraints(ts: ts, defMap: defMap):
         // `Input.Query` holds the parameters and their `Constraints`.
         let fields = (def.parameters?.properties.keys).map { Array($0) } ?? []
         let typeName = "\(namespace).\(ts.typeName).Input.Query"
         try check(
           fields: fields, ts: ts, typeName: typeName,
           generatedName: ValidationDecl.constantsEnumName, display: "\(ValidationDecl.constantsEnumName) enum")
-        try checkConstantNames(of: def.parameters?.sortedProperties ?? [], ts: ts, typeName: typeName)
+        try checkConstantNames(of: def.parameters?.sortedProperties ?? [], ts: ts, typeName: typeName, defMap: defMap)
       default:
         break
       }
@@ -81,11 +81,11 @@ func checkGeneratedNameCollisions(schemasMap: [String: [Schema]], defMap: ExtDef
 
 private func checkObject(_ def: ObjectTypeDefinition, ts: TypeSchema, typeName: String, defMap: ExtDefMap) throws {
   let fields = Array(def.properties.keys)
-  if def.emitsConstraintConstants {
+  if def.emitsConstraintConstants(ts: ts, defMap: defMap) {
     try check(
       fields: fields, ts: ts, typeName: typeName,
       generatedName: ValidationDecl.constantsEnumName, display: "\(ValidationDecl.constantsEnumName) enum")
-    try checkConstantNames(of: def.sortedProperties, ts: ts, typeName: typeName)
+    try checkConstantNames(of: def.sortedProperties, ts: ts, typeName: typeName, defMap: defMap)
   }
   if def.emitsValidateConstraints(ts: ts, defMap: defMap) {
     try check(
@@ -103,10 +103,10 @@ private func check(fields: [String], ts: TypeSchema, typeName: String, generated
 /// Throws when two fields of one type would declare a constant of the same
 /// name in its `Constraints` enum. The names come from
 /// `constraintConstantNames(for:)`, which the generator also declares them by.
-private func checkConstantNames(of properties: [(String, FieldTypeDefinition)], ts: TypeSchema, typeName: String) throws {
+private func checkConstantNames(of properties: [(String, FieldTypeDefinition)], ts: TypeSchema, typeName: String, defMap: ExtDefMap) throws {
   var owners: [String: String] = [:]
   for (key, property) in properties {
-    for name in property.constraintConstantNames(for: key) {
+    for name in property.constraintConstantNames(for: key, ts: ts, defMap: defMap) {
       if let other = owners[name], other != key {
         throw GeneratedNameCollisionError.constantName(nsid: ts.id, typeName: typeName, name: name, fields: [other, key])
       }

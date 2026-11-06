@@ -57,9 +57,10 @@ extension LexiconConstraint {
   /// client can read a limit (a blob's size before uploading it, say) without
   /// copying the number from the Lexicon.
   ///
-  /// Returns `nil` when no property declares a limit.
-  static func constantsEnumDecl(properties: [(String, FieldTypeDefinition)]) -> EnumDeclSyntax? {
-    let decls = properties.flatMap { key, property in property.constraintConstantDecls(for: key) }
+  /// Returns `nil` when no property declares a limit. `ts` is the schema of
+  /// the type that holds `properties`, which resolves their references.
+  static func constantsEnumDecl(properties: [(String, FieldTypeDefinition)], ts: TypeSchema, defMap: ExtDefMap) -> EnumDeclSyntax? {
+    let decls = properties.flatMap { key, property in property.constraintConstantDecls(for: key, ts: ts, defMap: defMap) }
     guard !decls.isEmpty else { return nil }
     return EnumDeclSyntax(
       leadingTrivia: [
@@ -76,17 +77,24 @@ extension LexiconConstraint {
 }
 
 extension FieldTypeDefinition {
-  var hasConstraints: Bool {
-    !constraints.isEmpty
+  /// Whether this field declares a limit, here or in a string definition it
+  /// refers to. `ts` is the schema that holds the field.
+  func hasConstraints(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    !constraints(ts: ts, defMap: defMap).isEmpty
   }
 
   /// The limits this field declares that the generated code checks.
   ///
   /// Strings with an `enum` are checked by their closed set of cases instead,
   /// so their length limits are left out. An array's limits are followed by
-  /// those of its `items`, which apply to each element.
-  var constraints: [LexiconConstraint] {
-    constraints(asElement: false)
+  /// those of its `items`, which apply to each element. A reference to a
+  /// string definition brings that definition's limits.
+  ///
+  /// `ts` is the schema that holds the field, which resolves its references;
+  /// there is no form without it, so that no caller can miss the limits of a
+  /// referenced definition.
+  func constraints(ts: TypeSchema, defMap: ExtDefMap) -> [LexiconConstraint] {
+    constraints(asElement: false, ts: ts, defMap: defMap)
   }
 
   /// The limits, for a value of this type held as a field (`asElement` false)
@@ -96,7 +104,7 @@ extension FieldTypeDefinition {
   /// guard measures `rawValue`: a field with `knownValues` gets a type of its
   /// own, while an element with `knownValues` stays a `Swift.String`. A `format`
   /// wraps both in `FormatString`.
-  private func constraints(asElement: Bool) -> [LexiconConstraint] {
+  private func constraints(asElement: Bool, ts: TypeSchema, defMap: ExtDefMap) -> [LexiconConstraint] {
     switch self {
     case .string(let def) where def.enum == nil:
       let wrapped = (!asElement && def.knownValues != nil) || def.format?.swiftFormatTypeName != nil
@@ -131,7 +139,7 @@ extension FieldTypeDefinition {
         def.minLength.map {
           LexiconConstraint(keyword: "minLength", value: $0, measure: .count, op: ">=", errorCase: "arrayTooShort", argLabel: "minimum")
         },
-      ].compactMap { $0 } + def.items.constraints(asElement: true).map(\.forElements)
+      ].compactMap { $0 } + def.items.constraints(asElement: true, ts: ts, defMap: defMap).map(\.forElements)
     case .bytes(let def):
       return [
         def.maxLength.map {
@@ -147,21 +155,32 @@ extension FieldTypeDefinition {
           LexiconConstraint(keyword: "maxSize", value: $0, measure: .blobSize, op: "<=", errorCase: "blobTooLarge", argLabel: "limit")
         }
       ].compactMap { $0 }
+    case .ref(let def):
+      // A referenced string definition has the type it is generated with
+      // wherever it is referenced: its own type with `knownValues`,
+      // `FormatString` with a `format`. So it is measured as a field, even as
+      // an element of an array. Its own references resolve in its schema.
+      // Integer definitions get no type of their own, so only strings are
+      // looked through; objects and unions check themselves.
+      let target = ts.lookupRef(ref: def.ref, defMap: defMap)
+      guard case .string(let string) = target.type, string.enum == nil else { return [] }
+      return target.type.constraints(asElement: false, ts: target, defMap: defMap)
     default:
       return []
     }
   }
 
-  /// The names of the constants that ``constraintConstantDecls(for:)``
-  /// declares for this field, in the same order.
-  func constraintConstantNames(for key: String) -> [String] {
-    constraints.map { $0.constantName(for: key) }
+  /// The names of the constants that
+  /// ``constraintConstantDecls(for:ts:defMap:)`` declares for this field, in
+  /// the same order.
+  func constraintConstantNames(for key: String, ts: TypeSchema, defMap: ExtDefMap) -> [String] {
+    constraints(ts: ts, defMap: defMap).map { $0.constantName(for: key) }
   }
 
   /// The `static let` declarations of this field's limits, for the
   /// `Constraints` enum of the type that holds the field.
-  func constraintConstantDecls(for key: String) -> [VariableDeclSyntax] {
-    constraints.map { constraint in
+  func constraintConstantDecls(for key: String, ts: TypeSchema, defMap: ExtDefMap) -> [VariableDeclSyntax] {
+    constraints(ts: ts, defMap: defMap).map { constraint in
       let subject = constraint.appliesToElements ? "each element of `\(key)`" : "`\(key)`"
       return VariableDeclSyntax(
         leadingTrivia: [
@@ -186,9 +205,9 @@ extension FieldTypeDefinition {
     }
   }
 
-  func constraintGuardItems(for key: String, optional: Bool) -> CodeBlockItemListSyntax {
+  func constraintGuardItems(for key: String, optional: Bool, ts: TypeSchema, defMap: ExtDefMap) -> CodeBlockItemListSyntax {
     let ref = key.escapedSwiftKeyword
-    let all = constraints
+    let all = constraints(ts: ts, defMap: defMap)
     // The field's own limits first, then one loop over the elements, so an
     // array that is too long is reported before any of its elements.
     var stmts = all.filter { !$0.appliesToElements }.map {

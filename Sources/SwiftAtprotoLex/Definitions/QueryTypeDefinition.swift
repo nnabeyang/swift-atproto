@@ -36,11 +36,15 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     try container.encodeIfPresent(errors, forKey: .errors)
   }
 
-  /// Whether any query parameter carries a Lexicon constraint. Drives both the
-  /// generation of `Input.Query.make(...)` and every call site that must route
-  /// through it, so the two can never disagree.
-  var paramsHaveConstraints: Bool {
-    (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
+  /// Whether any query parameter carries a Lexicon constraint, here or in a
+  /// string definition it refers to. Drives both the generation of
+  /// `Input.Query.make(...)` and every call site that must route through it,
+  /// so the two can never disagree.
+  ///
+  /// `ts` is the schema of the query, which resolves the parameters'
+  /// references.
+  func paramsHaveConstraints(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints(ts: ts, defMap: defMap) }
   }
 
   var hasParameters: Bool {
@@ -302,7 +306,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             bindings: [query]
           )
         }
-        if let constants = LexiconConstraint.constantsEnumDecl(properties: parameters?.sortedProperties ?? []) {
+        if let constants = LexiconConstraint.constantsEnumDecl(properties: parameters?.sortedProperties ?? [], ts: ts, defMap: defMap) {
           constants
         }
         let requiredParams = Set(parameters?.required ?? [])
@@ -327,7 +331,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             }
           }
         }
-        if paramsHaveConstraints {
+        if paramsHaveConstraints(ts: ts, defMap: defMap) {
           FunctionDeclSyntax(
             leadingTrivia: .newlines(2),
             modifiers: [
@@ -348,7 +352,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             )
           ) {
             for (key, property) in parameters?.sortedProperties ?? [] {
-              for item in property.constraintGuardItems(for: key, optional: !requiredParams.contains(key)) {
+              for item in property.constraintGuardItems(for: key, optional: !requiredParams.contains(key), ts: ts, defMap: defMap) {
                 item.with(\.leadingTrivia, .newline)
               }
             }
