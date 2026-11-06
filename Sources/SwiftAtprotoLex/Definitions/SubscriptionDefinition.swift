@@ -134,11 +134,11 @@ struct SubscriptionDefinition: Encodable, DecodableWithConfiguration, SwiftCodeG
       "case .\($0.name.camelCased())(let message): return message"
     }.joined(separator: "\n")
     let errorDeclaration = """
-      public enum Error: XRPCError {
+      public enum Error: \(Lex.runtime("XRPCError")) {
         \(errorCases)
         case unexpected(error: Swift.String?, message: Swift.String?)
 
-        public init(error: UnExpectedError) {
+        public init(error: \(Lex.runtime("UnExpectedError"))) {
           switch error.error {
           \(errorInitCases)
           default: self = .unexpected(error: error.error, message: error.message)
@@ -160,19 +160,21 @@ struct SubscriptionDefinition: Encodable, DecodableWithConfiguration, SwiftCodeG
         }
       }
       """
+    // Unlike the other declarations, this one is still assembled as source
+    // text, so the runtime names inside it are qualified in the text.
     let source = """
-      \(description.map { "/// \($0)\n" } ?? "")public enum \(ts.typeName): XRPCSubscription {
+      \(description.map { "/// \($0)\n" } ?? "")public enum \(ts.typeName): \(Lex.runtime("XRPCSubscription")) {
         public static let id = "\(typeName)"
         public static let messageTypes: Set<Swift.String> = [\(messageTypes)]
         public typealias Message = \(prefix).\(name)_Message
-        public struct Input: XRPCQueryInput {
-          public struct Query: XRPCInputQuery {
+        public struct Input: \(Lex.runtime("XRPCQueryInput")) {
+          public struct Query: \(Lex.runtime("XRPCInputQuery")) {
             \(queryProperties)
             public init(\(initArguments)) {
               \(assignments)
             }
-            public var asParameters: Parameters? {
-              Parameters(dictionary: [\(params)])
+            public var asParameters: \(Lex.runtime("Parameters"))? {
+              \(Lex.runtime("Parameters"))(dictionary: [\(params)])
             }
           }
           public let query: Query

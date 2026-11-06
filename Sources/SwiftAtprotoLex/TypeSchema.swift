@@ -231,7 +231,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     }
     if case .string(let def) = ts.type, def.knownValues == nil, def.enum == nil {
       if applyStringFormat, let formatType = def.format?.swiftFormatTypeName {
-        return ("INVALID", "FormatString<\(formatType)>")
+        return ("INVALID", "\(Lex.runtime("FormatString"))<\(formatType)>")
       }
       return ("INVALID", "Swift.String")
     }
@@ -286,13 +286,13 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .boolean:
       return "Swift.Bool"
     case .blob:
-      return "LexBlob"
+      return Lex.runtime("LexBlob")
     case .bytes:
       return "Foundation.Data"
     case .string(let def):
       if def.isPrimitive {
         if applyStringFormat, let formatType = def.format?.swiftFormatTypeName {
-          return "FormatString<\(formatType)>"
+          return "\(Lex.runtime("FormatString"))<\(formatType)>"
         }
         return "Swift.String"
       }
@@ -313,7 +313,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
     case .unknown:
       return "UnknownATPValue"
     case .cidLink:
-      return "LexLink"
+      return Lex.runtime("LexLink")
     case .ref(let def):
       let (_, tn) = v.namesFromRef(ref: def.ref, defMap: defMap, dropPrefix: dropPrefix, applyStringFormat: applyStringFormat)
       return tn
@@ -462,7 +462,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                         // Lexicon puts constraints on the parameters, so an
                         // out-of-range value fails before the request is sent.
                         let callee: ExprSyntax =
-                          def.paramsHaveConstraints
+                          def.paramsHaveConstraints(ts: self, defMap: defMap)
                           ? ExprSyntax(
                             MemberAccessExprSyntax(
                               parts: prefixIdentifiers + [
@@ -478,14 +478,14 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                           if let properties = def.parameters?.sortedProperties {
                             for (name, _) in properties {
                               LabeledExprSyntax(
-                                label: .lexIdentifier(name),
+                                label: .lexArgumentLabel(name),
                                 colon: .colonToken(),
                                 expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(name))
                               )
                             }
                           }
                         }
-                        return def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+                        return def.paramsHaveConstraints(ts: self, defMap: defMap) ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
                       }()
                     )
                   }
@@ -499,13 +499,13 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
   func writeStreamingQuery(def: QueryTypeDefinition, typeName: String, defMap: ExtDefMap, prefix: String) -> DeclSyntaxProtocol {
     let prefixIdentifiers = Lex.enumIdentifiersFor(prefix: prefix)
     let callee: ExprSyntax =
-      def.paramsHaveConstraints
+      def.paramsHaveConstraints(ts: self, defMap: defMap)
       ? ExprSyntax(MemberAccessExprSyntax(parts: prefixIdentifiers + [.identifier(typeName), .identifier("Input"), .identifier("Query"), .identifier("make")]))
       : ExprSyntax(MemberAccessExprSyntax(period: .periodToken(), declName: DeclReferenceExprSyntax(baseName: .keyword(.`init`))))
     let call = FunctionCallExprSyntax(callee: callee) {
       if let properties = def.parameters?.sortedProperties {
         for (name, _) in properties {
-          LabeledExprSyntax(label: .lexIdentifier(name), colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(name)))
+          LabeledExprSyntax(label: .lexArgumentLabel(name), colon: .colonToken(), expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(name)))
         }
       }
     }
@@ -514,7 +514,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
       typeName: typeName,
       defMap: defMap,
       prefix: prefix,
-      input: def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+      input: def.paramsHaveConstraints(ts: self, defMap: defMap) ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
     )
   }
 
@@ -701,20 +701,24 @@ struct StringFormat: Codable, RawRepresentable {
   static let recordKey: Self = .init("record-key")
   static let spaceRef: Self = .init("space-ref")
 
+  /// The type that `FormatString` projects this format to, qualified with its
+  /// module: `Date` belongs to Foundation and the others to the runtime.
   var swiftFormatTypeName: String? {
     switch rawValue {
+    // Foundation's `Date`, which isn't qualified yet, like the other stdlib and
+    // Foundation types the generated code leaves unqualified.
     case "datetime": "Date"
-    case "cid": "LexLink"
-    case "at-uri": "ATURI"
-    case "language": "Language"
-    case "uri": "URI"
-    case "did": "DID"
-    case "handle": "Handle"
-    case "nsid": "NSID"
-    case "tid": "TID"
-    case "record-key": "RecordKey"
-    case "at-identifier": "AtIdentifier"
-    case "space-ref": "SpaceRef"
+    case "cid": Lex.runtime("LexLink")
+    case "at-uri": Lex.runtime("ATURI")
+    case "language": Lex.runtime("Language")
+    case "uri": Lex.runtime("URI")
+    case "did": Lex.runtime("DID")
+    case "handle": Lex.runtime("Handle")
+    case "nsid": Lex.runtime("NSID")
+    case "tid": Lex.runtime("TID")
+    case "record-key": Lex.runtime("RecordKey")
+    case "at-identifier": Lex.runtime("AtIdentifier")
+    case "space-ref": Lex.runtime("SpaceRef")
     default: nil
     }
   }
@@ -789,7 +793,7 @@ struct OutputType: Encodable, DecodableWithConfiguration {
     case .json, .jsonl:
       let token: String = {
         guard let schema = schema else {
-          return "EmptyResponse"
+          return Lex.runtime("EmptyResponse")
         }
         let outname: String
         if case .ref(let def) = schema.type {

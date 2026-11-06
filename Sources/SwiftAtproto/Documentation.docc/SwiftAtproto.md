@@ -131,6 +131,7 @@ let posts = try await client.call(
 
 - <doc:DecodingLexiconRecords>
 - ``LexiconDecodingMode``
+- ``LexiconValidatable``
 - ``UnknownATPValueProtocol``
 - ``UnknownRecord``
 - ``AnyCodable``

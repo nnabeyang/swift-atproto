@@ -40,11 +40,11 @@ struct ConstraintDecodingGenerationTests {
     let syntax = Parser.parse(source: source)
 
     #expect(!syntax.hasError)
-    #expect(source.contains("if !LexiconDecodingMode.shouldValidateConstraints(in: decoder)"))
+    #expect(source.contains("if !SwiftAtproto.LexiconDecodingMode.shouldValidateConstraints(in: decoder)"))
     #expect(source.contains("self = Self.init(value: value, _unknownValues: _unknownValues)"))
     #expect(source.contains("self = try Self.make(value: value, _unknownValues: _unknownValues)"))
-    #expect(source.contains("public init(value: Swift.String, _unknownValues: [Swift.String: AnyCodable] = [:])"))
-    #expect(source.contains("public static func make(value: Swift.String, _unknownValues: [Swift.String: AnyCodable] = [:]) throws -> Self"))
+    #expect(source.contains("public init(value: Swift.String, _unknownValues: [Swift.String: SwiftAtproto.AnyCodable] = [:])"))
+    #expect(source.contains("public static func make(value: Swift.String, _unknownValues: [Swift.String: SwiftAtproto.AnyCodable] = [:]) throws -> Self"))
     #expect(source.contains("return Self.init(value: value, _unknownValues: _unknownValues)"))
   }
 
@@ -109,7 +109,7 @@ struct ConstraintDecodingGenerationTests {
           "main": {
             "type": "object",
             "required": ["value"],
-            "properties": {"value": {"type": "string"}}
+            "properties": {"value": {"type": "string", "maxLength": 10}}
           }
         }
       }
@@ -132,6 +132,8 @@ struct ConstraintDecodingGenerationTests {
       contentsOf: output.appending(path: "XRPCAPIProtocol.swift"), encoding: .utf8)
 
     #expect(!client.contains("public "))
+    #expect(client.contains("enum Constraints {"))
+    #expect(client.contains("func validateConstraints() throws(SwiftAtproto.LexiconConstraintError) {"))
     #expect(!unknown.contains("public "))
     #expect(!server.contains("public "))
     #expect(!Parser.parse(source: client).hasError)
@@ -147,7 +149,7 @@ struct ConstraintDecodingGenerationTests {
     let packageClient = try String(
       contentsOf: output.appending(path: "XRPCAPIClient.swift"), encoding: .utf8)
 
-    #expect(packageClient.contains("package enum Com"))
+    #expect(packageClient.contains("package nonisolated enum Com"))
     #expect(!packageClient.contains("public "))
     #expect(!Parser.parse(source: packageClient).hasError)
   }

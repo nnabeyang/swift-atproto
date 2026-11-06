@@ -36,11 +36,15 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
     try container.encodeIfPresent(errors, forKey: .errors)
   }
 
-  /// Whether any query parameter carries a Lexicon constraint. Drives both the
-  /// generation of `Input.Query.make(...)` and every call site that must route
-  /// through it, so the two can never disagree.
-  var paramsHaveConstraints: Bool {
-    (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints }
+  /// Whether any query parameter carries a Lexicon constraint, here or in a
+  /// string definition it refers to. Drives both the generation of
+  /// `Input.Query.make(...)` and every call site that must route through it,
+  /// so the two can never disagree.
+  ///
+  /// `ts` is the schema of the query, which resolves the parameters'
+  /// references.
+  func paramsHaveConstraints(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    (parameters?.sortedProperties ?? []).contains { $0.1.hasConstraints(ts: ts, defMap: defMap) }
   }
 
   var hasParameters: Bool {
@@ -126,7 +130,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       switch output.encoding {
       case .json, .jsonl:
         guard let schema = output.schema else {
-          return Lex.typeSyntax("EmptyResponse")
+          return Lex.typeSyntax(Lex.runtime("EmptyResponse"))
         }
         let outname: String
         if case .ref(let def) = schema.type {
@@ -141,7 +145,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return Lex.typeSyntax("Foundation.Data")
       }
     }
-    return Lex.typeSyntax("EmptyResponse")
+    return Lex.typeSyntax(Lex.runtime("EmptyResponse"))
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> [FunctionParameterSyntax] {
@@ -229,9 +233,9 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       ],
       name: .lexIdentifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQuery")))
+        InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCQuery")))
         if output?.isBinary == true {
-          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCBinaryResponseRequest")))
+          InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCBinaryResponseRequest")))
         }
       }
     ) {
@@ -282,7 +286,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       ],
       name: .identifier("Input"),
       inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQueryInput")))
+        InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCQueryInput")))
       }
     ) {
       StructDeclSyntax(
@@ -292,7 +296,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         ],
         name: .identifier("Query"),
         inheritanceClause: InheritanceClauseSyntax {
-          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCInputQuery")))
+          InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCInputQuery")))
         }
       ) {
         for query in queries(ts: ts, fname: name, defMap: defMap, prefix: prefix) {
@@ -304,6 +308,9 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             bindingSpecifier: .keyword(.var),
             bindings: [query]
           )
+        }
+        if let constants = LexiconConstraint.constantsEnumDecl(properties: parameters?.sortedProperties ?? [], ts: ts, defMap: defMap) {
+          constants
         }
         let requiredParams = Set(parameters?.required ?? [])
         InitializerDeclSyntax(
@@ -327,7 +334,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             }
           }
         }
-        if paramsHaveConstraints {
+        if paramsHaveConstraints(ts: ts, defMap: defMap) {
           FunctionDeclSyntax(
             leadingTrivia: .newlines(2),
             modifiers: [
@@ -348,7 +355,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
             )
           ) {
             for (key, property) in parameters?.sortedProperties ?? [] {
-              for item in property.constraintGuardItems(for: key, optional: !requiredParams.contains(key)) {
+              for item in property.constraintGuardItems(for: key, optional: !requiredParams.contains(key), ts: ts, defMap: defMap) {
                 item.with(\.leadingTrivia, .newline)
               }
             }
@@ -363,7 +370,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
               ) {
                 for (key, _) in parameters?.sortedProperties ?? [] {
                   LabeledExprSyntax(
-                    label: .lexIdentifier(key),
+                    label: .lexArgumentLabel(key),
                     colon: .colonToken(),
                     expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                   )
@@ -384,7 +391,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                 colon: .colonToken(),
                 type: TypeSyntax(
                   OptionalTypeSyntax(
-                    wrappedType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Parameters"))),
+                    wrappedType: Lex.typeSyntax(Lex.runtime("Parameters")),
                     questionMark: .postfixQuestionMarkToken()
                   ))
               ),
