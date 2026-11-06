@@ -6,7 +6,8 @@ import Foundation
 /// in ``LexiconDecodingMode/strict``, where it is wrapped in
 /// `DecodingError.dataCorrupted` as the underlying error; see
 /// <doc:DecodingLexiconRecords>. Each case names the field it applies to, and
-/// carries the limit the field exceeded.
+/// carries the limit the field exceeded. An element of an array is named with
+/// its position, such as `tags[2]`.
 public enum LexiconConstraintError: Error {
   case stringTooLong(_ field: String, limit: Int)
   case stringTooShort(_ field: String, minimum: Int)

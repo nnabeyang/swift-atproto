@@ -118,6 +118,20 @@ struct GeneratedNameCollisionTests {
     #expect(output.writtenFiles.isEmpty)
   }
 
+  @Test("two limits whose constants would have the same name")
+  func constantNames() async throws {
+    let output = try await generate([
+      "c.json": object(
+        "com.example.c",
+        properties: #""tagsItem": {"type": "string", "maxLength": 3}, "tags": {"type": "array", "items": {"type": "string", "maxLength": 5}}"#
+      )
+    ])
+    #expect(
+      output.error as? GeneratedNameCollisionError
+        == .constantName(nsid: "com.example.c", typeName: "Com.Example.C", name: "tagsItemMaxLength", fields: ["tags", "tagsItem"]))
+    #expect(output.writtenFiles.isEmpty)
+  }
+
   @Test("the module error names the module it hides")
   func moduleNameDescription() {
     #expect(
