@@ -61,12 +61,17 @@ public struct PermissionedRepoSTARRecord: Hashable, Sendable {
   public let bytes: Data
 }
 
-/// A Permissioned Data repository read from a `getRepo` STAR-lite v1 archive
-/// of the `atproto-space-repo` profile.
+/// A Permissioned Data repository read from a `getRepo` STAR archive of the
+/// `atproto-space-repo` profile.
 ///
 /// ```
-/// [ magic | len | metadata ] [ len | path | len | record ] ...
+/// [ magic | len | metadata ] [ 0x01 | len | path | len | record ] ... [ 0x00 ]
 /// ```
+///
+/// A control byte follows the metadata and each pair: `0x01` starts another
+/// pair and `0x00` ends the archive, which must have no bytes after it. An
+/// archive that ends before its `0x00` is truncated, so a cut-off download
+/// can't pass for a complete one.
 ///
 /// The metadata commit is checked against the response MAC before ``read(from:authentication:limits:)``
 /// returns. Records stay pull-driven: each is folded into a running set hash
@@ -75,9 +80,9 @@ public struct PermissionedRepoSTARRecord: Hashable, Sendable {
 /// then nothing read from it is trustworthy, so stage records and persist them
 /// with ``verifiedCheckpoint()`` only after the sequence reaches its `nil`.
 ///
-/// See the [STAR specification](https://tangled.org/microcosm.blue/star/tree/main/v1-star).
+/// See the [STAR specification](https://dasl.ing/star.html).
 public struct PermissionedRepoSTAR: Sendable {
-  /// The STAR-lite v1 magic bytes.
+  /// The STAR magic bytes.
   public static let magic: [UInt8] = [0x2a, 0x6c, 0x01, 0x00]
 
   /// The MAC-authenticated commit from the archive's metadata.
@@ -101,13 +106,8 @@ public struct PermissionedRepoSTAR: Sendable {
   ) async throws -> Self {
     let reader = STARReader(body: body)
     do {
-      guard try await reader.readExactly(magic.count) == Data(magic) else {
-        throw RepoVerificationError.invalidSTARMagic
-      }
-      guard let metadata = try await reader.readFrame(maximumBytes: limits.maximumCommitBytes)
-      else {
-        throw RepoVerificationError.truncatedSTAR
-      }
+      try await reader.readMagic()
+      let metadata = try await reader.readFrame(maximumBytes: limits.maximumCommitBytes)
       let commit: PermissionedRepoSTARCommit
       do {
         commit = try drislDecoder(
@@ -196,11 +196,9 @@ public struct PermissionedRepoSTAR: Sendable {
         if let error { throw error }
         guard let records, !finished else { return nil }
         do {
-          guard
-            let key = try await records.reader.readFrame(
-              maximumBytes: records.limits.maximumRecordPathBytes)
-          else {
-            // EOF at a pair boundary ends the archive.
+          // The control byte after the metadata is read here, not in `read`,
+          // so that reading the archive's start never pulls a record.
+          guard try await records.reader.readControlByte() else {
             finished = true
             guard repository.matches(records.commit) else {
               throw RepoVerificationError.setHashMismatch
@@ -209,6 +207,8 @@ public struct PermissionedRepoSTAR: Sendable {
               RepoSyncCheckpoint(revision: records.revision, repository: repository))
             return nil
           }
+          let key = try await records.reader.readFrame(
+            maximumBytes: records.limits.maximumRecordPathBytes)
           let path = String(decoding: key, as: UTF8.self)
           let keyBytes = [UInt8](key)
           // Strictly increasing bytes: a repeat is a duplicate, a decrease out of order.
@@ -221,12 +221,8 @@ public struct PermissionedRepoSTAR: Sendable {
             throw RepoVerificationError.inputTooLarge(
               limit: records.limits.maximumRecords, actual: count)
           }
-          guard
-            let value = try await records.reader.readFrame(
-              maximumBytes: records.limits.maximumRecordBytes)
-          else {
-            throw RepoVerificationError.truncatedSTAR
-          }
+          let value = try await records.reader.readFrame(
+            maximumBytes: records.limits.maximumRecordBytes)
           do {
             _ = try drislDecoder(
               maximumNestingDepth: records.limits.maximumNestingDepth,
@@ -261,7 +257,9 @@ private struct RecordMap: Decodable {
   }
 }
 
-private final class STARReader: @unchecked Sendable {
+/// Reads the framing of a STAR archive, whatever its profile: the magic,
+/// length-prefixed frames, and the control bytes between them.
+final class STARReader: @unchecked Sendable {
   private let body: XRPCBody
   private var iterator: XRPCBody.Iterator
   private var buffered: ArraySlice<UInt8> = []
@@ -275,14 +273,51 @@ private final class STARReader: @unchecked Sendable {
     body.cancel()
   }
 
-  /// One length-prefixed frame, or `nil` at EOF before the frame starts.
-  func readFrame(maximumBytes: Int) async throws -> Data? {
-    guard let length = try await readUnsignedVarint() else { return nil }
+  /// Reads the magic bytes that start an archive.
+  func readMagic() async throws {
+    guard try await readExactly(PermissionedRepoSTAR.magic.count) == Data(PermissionedRepoSTAR.magic)
+    else {
+      throw RepoVerificationError.invalidSTARMagic
+    }
+  }
+
+  /// One length-prefixed frame.
+  ///
+  /// The control byte before a frame says whether one follows, so EOF where
+  /// a frame should start truncates the archive.
+  func readFrame(maximumBytes: Int) async throws -> Data {
+    guard let length = try await readUnsignedVarint() else {
+      throw RepoVerificationError.truncatedSTAR
+    }
     guard length <= UInt64(max(maximumBytes, 0)) else {
       throw RepoVerificationError.inputTooLarge(
         limit: maximumBytes, actual: Int(exactly: length) ?? Int.max)
     }
     return try await readExactly(Int(length))
+  }
+
+  /// The control byte after the metadata or a pair: `true` when another pair
+  /// follows, `false` at the `0x00` that ends the archive.
+  ///
+  /// - Throws: ``RepoVerificationError/truncatedSTAR`` at EOF,
+  ///   ``RepoVerificationError/invalidSTARControlByte(_:)`` for a byte other
+  ///   than `0x00` and `0x01`, and ``RepoVerificationError/trailingSTARBytes``
+  ///   when anything follows the `0x00`.
+  func readControlByte() async throws -> Bool {
+    guard let byte = try await readByte() else {
+      throw RepoVerificationError.truncatedSTAR
+    }
+    switch byte {
+    case 0x01:
+      return true
+    case 0x00:
+      guard try await readByte() == nil else {
+        throw RepoVerificationError.trailingSTARBytes
+      }
+      return false
+    default:
+      throw RepoVerificationError.invalidSTARControlByte(byte)
+    }
   }
 
   // Unsigned varint: 7 bits per byte, least significant group first, in its
