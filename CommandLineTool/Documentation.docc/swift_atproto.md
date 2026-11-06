@@ -75,7 +75,10 @@ protocol of the `SwiftAtproto` module, whose `validateConstraints()` checks a
 value against the constraints of its Lexicon before it is sent. A type whose fields
 declare constraints also carries their limits as constants in a nested
 `Constraints` enum. The `SwiftAtproto` documentation describes both under
-"Decoding Lexicon records".
+"Decoding Lexicon records". A field or query parameter named `Constraints` or
+`validateConstraints` in a type that gets that declaration can't be written in
+Swift, so the command stops with an error naming the field, before it writes
+any file.
 
 Generated files carry a `// DO NOT EDIT` header. Change the Lexicon or the
 configuration and regenerate rather than editing them.
