@@ -28,9 +28,28 @@ extension String {
 }
 
 extension Lex {
+  /// The syntax of the type `name`, which may be dotted (`Swift.String`), an
+  /// array (`[X]`), or generic (`SwiftAtproto.FormatString<SwiftAtproto.DID>`).
+  ///
+  /// Generic arguments are parsed into a `GenericArgumentClauseSyntax` rather
+  /// than kept in the text of an identifier: once names are qualified, cutting
+  /// the whole string on `.` would also cut inside the arguments.
   static func typeSyntax(_ name: String) -> TypeSyntax {
     if name.hasPrefix("["), name.hasSuffix("]") {
       return TypeSyntax(ArrayTypeSyntax(element: typeSyntax(String(name.dropFirst().dropLast()))))
+    }
+    if let (base, arguments) = splitGenericArguments(name) {
+      let clause = GenericArgumentClauseSyntax(
+        arguments: GenericArgumentListSyntax {
+          for argument in arguments {
+            GenericArgumentSyntax.create(argument: typeSyntax(argument))
+          }
+        })
+      let segments = base.lexIdentifierSegments
+      if segments.count <= 1 {
+        return TypeSyntax(IdentifierTypeSyntax(name: .lexIdentifier(base), genericArgumentClause: clause))
+      }
+      return TypeSyntax(MemberTypeSyntax(parts: segments).with(\.genericArgumentClause, clause))
     }
     let segments = name.lexIdentifierSegments
     if segments.count <= 1 {
@@ -39,12 +58,55 @@ extension Lex {
     return TypeSyntax(MemberTypeSyntax(parts: segments))
   }
 
+  /// The type `name` written as an expression, such as the base of `X.self`.
+  /// It accepts the same forms as ``typeSyntax(_:)``.
   static func refExpr(_ name: String) -> ExprSyntax {
+    if name.hasPrefix("["), name.hasSuffix("]") {
+      return ExprSyntax(ArrayExprSyntax { ArrayElementSyntax(expression: refExpr(String(name.dropFirst().dropLast()))) })
+    }
+    if let (base, arguments) = splitGenericArguments(name) {
+      return ExprSyntax(
+        GenericSpecializationExprSyntax(
+          expression: refExpr(base),
+          genericArgumentClause: GenericArgumentClauseSyntax(
+            arguments: GenericArgumentListSyntax {
+              for argument in arguments {
+                GenericArgumentSyntax.create(argument: typeSyntax(argument))
+              }
+            })
+        ))
+    }
     let segments = name.lexIdentifierSegments
     if segments.count <= 1 {
       return ExprSyntax(DeclReferenceExprSyntax(baseName: .lexIdentifier(name)))
     }
     return ExprSyntax(MemberAccessExprSyntax(parts: segments))
+  }
+
+  /// Splits `Base<A, B>` into `Base` and its top-level arguments, or returns
+  /// `nil` when `name` isn't generic. Commas inside nested `<…>` or `[…]`
+  /// belong to the argument they are in.
+  static func splitGenericArguments(_ name: String) -> (base: String, arguments: [String])? {
+    guard name.hasSuffix(">"), let open = name.firstIndex(of: "<") else { return nil }
+    let base = String(name[..<open])
+    let inner = name[name.index(after: open)..<name.index(before: name.endIndex)]
+    var arguments: [String] = []
+    var current = ""
+    var depth = 0
+    for character in inner {
+      switch character {
+      case "<", "[": depth += 1
+      case ">", "]": depth -= 1
+      case "," where depth == 0:
+        arguments.append(current.trimmingCharacters(in: .whitespaces))
+        current = ""
+        continue
+      default: break
+      }
+      current.append(character)
+    }
+    arguments.append(current.trimmingCharacters(in: .whitespaces))
+    return (base, arguments)
   }
 }
 
