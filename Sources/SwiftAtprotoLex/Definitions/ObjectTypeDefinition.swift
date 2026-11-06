@@ -93,9 +93,9 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       }
       switch permissionedRepoDescriptor {
       case .commit:
-        names.append("PermissionedRepoCommitDescribing")
+        names.append(Lex.runtime("PermissionedRepoCommitDescribing"))
       case .operation:
-        names.append("PermissionedRepoOperationDescribing")
+        names.append(Lex.runtime("PermissionedRepoOperationDescribing"))
       case nil:
         break
       }
@@ -1095,13 +1095,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
   private static func formatStringType(_ wrappedName: String, optional: Bool = false)
     -> TypeSyntax
   {
-    let type = TypeSyntax(
-      IdentifierTypeSyntax(
-        name: .identifier("FormatString"),
-        genericArgumentClause: GenericArgumentClauseSyntax {
-          GenericArgumentSyntax.create(
-            argument: IdentifierTypeSyntax(name: .identifier(wrappedName)))
-        }))
+    let type = Lex.typeSyntax("\(Lex.runtime("FormatString"))<\(Lex.runtime(wrappedName))>")
     return optional ? TypeSyntax(OptionalTypeSyntax(wrappedType: type)) : type
   }
 

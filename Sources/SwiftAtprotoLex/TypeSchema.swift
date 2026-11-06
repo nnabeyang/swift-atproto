@@ -538,7 +538,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
           asyncSpecifier: .keyword(.async),
           throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
         ),
-        returnClause: ReturnClauseSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCStreamingResponseComponents")))
+        returnClause: ReturnClauseSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCStreamingResponseComponents")))
       ),
       genericWhereClause: GenericWhereClauseSyntax(
         requirements: GenericRequirementListSyntax([
@@ -547,7 +547,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
               ConformanceRequirementSyntax(
                 leftType: IdentifierTypeSyntax(name: .keyword(.Self)),
                 colon: .colonToken(),
-                rightType: IdentifierTypeSyntax(name: .identifier("XRPCStreamingCallable"))
+                rightType: Lex.typeSyntax(Lex.runtime("XRPCStreamingCallable"))
               )))
         ])
       )

@@ -32,13 +32,13 @@ extension SpaceTypeDefinition: SwiftCodeGeneratable {
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
       name: .lexIdentifier(declName),
       inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("LexSpace")))
+        InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("LexSpace")))
       }
     ) {
       staticLetDecl(leadingTrivia: .newline, ident: "id", value: StringLiteralExprSyntax(content: typeName))
       Self.typedStaticLet(
         ident: "key",
-        type: Lex.typeSyntax("LexRecordKeyType"),
+        type: Lex.typeSyntax(Lex.runtime("LexRecordKeyType")),
         value: Self.keyExpr(key)
       )
       Self.typedStaticLet(
@@ -60,7 +60,7 @@ extension SpaceTypeDefinition: SwiftCodeGeneratable {
       )
       Self.typedStaticLet(
         ident: "collections",
-        type: Lex.typeSyntax("[FormatString<NSID>]"),
+        type: Lex.typeSyntax("[\(Lex.runtime("FormatString"))<\(Lex.runtime("NSID"))>]"),
         value: Self.collectionsExpr(collections)
       )
       Self.typedStaticLet(
@@ -98,7 +98,7 @@ extension SpaceTypeDefinition: SwiftCodeGeneratable {
     default:
       ExprSyntax(
         FunctionCallExprSyntax(
-          calledExpression: DeclReferenceExprSyntax(baseName: .identifier("LexRecordKeyType")),
+          calledExpression: Lex.refExpr(Lex.runtime("LexRecordKeyType")),
           leftParen: .leftParenToken(),
           arguments: LabeledExprListSyntax([
             LabeledExprSyntax(
@@ -166,7 +166,7 @@ extension SpaceTypeDefinition: SwiftCodeGeneratable {
   private static func formatStringInit(_ collection: String) -> ExprSyntax {
     ExprSyntax(
       FunctionCallExprSyntax(
-        calledExpression: DeclReferenceExprSyntax(baseName: .identifier("FormatString<NSID>")),
+        calledExpression: Lex.refExpr("\(Lex.runtime("FormatString"))<\(Lex.runtime("NSID"))>"),
         leftParen: .leftParenToken(),
         arguments: LabeledExprListSyntax([
           LabeledExprSyntax(

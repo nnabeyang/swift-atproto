@@ -11,7 +11,7 @@ struct PermissionGenerationTests {
     let source = try await generateClient(fixture: Self.spacePermissionSet)
 
     #expect(!Parser.parse(source: source).hasError)
-    #expect(source.contains("public enum AuthForums: LexPermissionSet"))
+    #expect(source.contains("public enum AuthForums: SwiftAtproto.LexPermissionSet"))
     #expect(source.contains("resource: .space"))
     #expect(source.contains(#"spaceType: "com.example.forum""#))
     #expect(source.contains(#"authority: "*""#))

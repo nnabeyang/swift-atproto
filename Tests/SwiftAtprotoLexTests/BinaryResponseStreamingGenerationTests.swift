@@ -15,11 +15,11 @@ struct BinaryResponseStreamingGenerationTests {
     ])
 
     #expect(!Parser.parse(source: source).hasError)
-    #expect(source.contains("XRPCQuery, XRPCBinaryResponseRequest"))
-    #expect(source.contains("XRPCProcedure, XRPCBinaryResponseRequest"))
+    #expect(source.contains("SwiftAtproto.XRPCQuery, SwiftAtproto.XRPCBinaryResponseRequest"))
+    #expect(source.contains("SwiftAtproto.XRPCProcedure, SwiftAtproto.XRPCBinaryResponseRequest"))
     #expect(source.contains("func GetArchiveStreaming("))
     #expect(source.contains("func ExportVideoStreaming("))
-    #expect(source.contains("where Self: XRPCStreamingCallable"))
+    #expect(source.contains("where Self: SwiftAtproto.XRPCStreamingCallable"))
     #expect(!source.contains("func GetMetadataStreaming("))
   }
 
