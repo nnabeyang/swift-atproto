@@ -28,6 +28,28 @@ extension String {
 }
 
 extension Lex {
+  /// The module that the generated code imports for the runtime types.
+  static let runtimeModule = "SwiftAtproto"
+
+  /// The modules whose names the generated code writes before the types it
+  /// uses from them, such as `Swift.String` or `SwiftAtproto.AnyCodable`.
+  ///
+  /// Generated types live in namespace enums such as `Com.Example`, so a
+  /// type or namespace generated from a Lexicon with one of these names would
+  /// hide the module and break every qualified reference to it. Generation
+  /// stops on such a Lexicon instead (see `checkGeneratedNameCollisions`).
+  static let qualifyingModules = [runtimeModule, "Swift", "Foundation", "OpenAPIRuntime", "HTTPTypes"]
+
+  /// `name` qualified with the runtime module, such as
+  /// `SwiftAtproto.AnyCodable`.
+  ///
+  /// The generated code refers to every runtime type this way, so that a type
+  /// that a Lexicon generates under the same name, such as `AnyCodable` from
+  /// `com.example.anyCodable`, can't take its place.
+  static func runtime(_ name: String) -> String {
+    "\(runtimeModule).\(name)"
+  }
+
   /// The syntax of the type `name`, which may be dotted (`Swift.String`), an
   /// array (`[X]`), or generic (`SwiftAtproto.FormatString<SwiftAtproto.DID>`).
   ///

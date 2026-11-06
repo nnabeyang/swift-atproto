@@ -97,7 +97,7 @@ extension FieldTypeDefinition {
 enum ValidationDecl {
   /// The protocol that generated types conform to so that a containing type
   /// can call `validateConstraints()` on them.
-  static let protocolName = "LexiconValidatable"
+  static let protocolName = Lex.runtime("LexiconValidatable")
 
   /// The name of the method that checks a value before it is sent.
   static let methodName = "validateConstraints"
@@ -130,7 +130,7 @@ enum ValidationDecl {
           throwsClause: ThrowsClauseSyntax(
             throwsSpecifier: .keyword(.throws),
             leftParen: .leftParenToken(),
-            type: IdentifierTypeSyntax(name: .identifier("LexiconConstraintError")),
+            type: Lex.typeSyntax(Lex.runtime("LexiconConstraintError")),
             rightParen: .rightParenToken()
           )
         )

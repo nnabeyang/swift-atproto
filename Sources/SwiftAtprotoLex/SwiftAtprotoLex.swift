@@ -278,7 +278,7 @@ func writeSchemaCode(
         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
         name: .identifier("XRPCCallable"),
         inheritanceClause: InheritanceClauseSyntax(
-          typeNames: ["_XRPCCallable"])
+          typeNames: [Lex.runtime("_XRPCCallable")])
       ) {
         requirements
       }
@@ -503,7 +503,7 @@ enum Lex {
       EnumDeclSyntax(
         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
         name: .identifier("UnknownATPValue"),
-        inheritanceClause: InheritanceClauseSyntax(typeNames: ["UnknownATPValueProtocol", ValidationDecl.protocolName])
+        inheritanceClause: InheritanceClauseSyntax(typeNames: [Lex.runtime("UnknownATPValueProtocol"), ValidationDecl.protocolName])
       ) {
         EnumCaseDeclSyntax(leadingTrivia: .newline) {
           EnumCaseElementSyntax(
@@ -513,7 +513,7 @@ enum Lex {
                 EnumCaseParameterSyntax(
                   type: SomeOrAnyTypeSyntax(
                     someOrAnySpecifier: .keyword(.any),
-                    constraint: TypeSyntax(IdentifierTypeSyntax(name: .identifier("ATProtoRecord")))
+                    constraint: Lex.typeSyntax(Lex.runtime("ATProtoRecord"))
                   )
                 )
               ]
@@ -564,7 +564,7 @@ enum Lex {
                   value: SomeOrAnyTypeSyntax(
                     someOrAnySpecifier: .keyword(.any),
                     constraint: MetatypeTypeSyntax(
-                      baseType: IdentifierTypeSyntax(name: .identifier("ATProtoRecord")),
+                      baseType: Lex.typeSyntax(Lex.runtime("ATProtoRecord")),
                       period: .periodToken(),
                       metatypeSpecifier: .keyword(.Type)
                     )

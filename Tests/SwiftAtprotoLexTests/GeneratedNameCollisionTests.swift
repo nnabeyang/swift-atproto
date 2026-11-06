@@ -102,6 +102,30 @@ struct GeneratedNameCollisionTests {
     #expect(output.writtenFiles.isEmpty)
   }
 
+  // A generated type or namespace named like a module the generated code
+  // qualifies with would be found first and hide the module.
+  @Test(
+    "a generated type or namespace named like a module the generated code refers to",
+    arguments: [
+      ("com.example.swiftAtproto", "Com.Example.SwiftAtproto"),
+      ("com.example.foundation", "Com.Example.Foundation"),
+      ("com.example.swift", "Com.Example.Swift"),
+      ("com.swift.example", "Com.Swift"),
+    ])
+  func moduleNames(nsid: String, typeName: String) async throws {
+    let output = try await generate(["x.json": object(nsid, properties: #""x": {"type": "string"}"#)])
+    #expect(output.error as? GeneratedNameCollisionError == .moduleName(nsid: nsid, typeName: typeName))
+    #expect(output.writtenFiles.isEmpty)
+  }
+
+  @Test("the module error names the module it hides")
+  func moduleNameDescription() {
+    #expect(
+      GeneratedNameCollisionError.moduleName(nsid: "com.example.swiftAtproto", typeName: "Com.Example.SwiftAtproto").description
+        == "com.example.swiftAtproto generates Com.Example.SwiftAtproto, which hides the SwiftAtproto module that the generated code refers to; rename it in the Lexicon"
+    )
+  }
+
   @Test("the error names the field, the type, and the NSID")
   func description() {
     let error = GeneratedNameCollisionError.field(

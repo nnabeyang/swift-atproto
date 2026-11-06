@@ -91,9 +91,9 @@ struct QueryConstraintValidationTests {
     #expect(source.contains("public static let limitMaximum: Swift.Int = 100"))
     #expect(source.contains("guard limit >= Constraints.limitMinimum else {"))
     #expect(
-      source.contains("throw LexiconConstraintError.integerBelowMinimum(\"limit\", minimum: Constraints.limitMinimum)"))
+      source.contains("throw SwiftAtproto.LexiconConstraintError.integerBelowMinimum(\"limit\", minimum: Constraints.limitMinimum)"))
     #expect(
-      source.contains("throw LexiconConstraintError.integerAboveMaximum(\"limit\", maximum: Constraints.limitMaximum)"))
+      source.contains("throw SwiftAtproto.LexiconConstraintError.integerAboveMaximum(\"limit\", maximum: Constraints.limitMaximum)"))
   }
 
   @Test("unconstrained query clients keep the plain initializer")

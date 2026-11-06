@@ -71,7 +71,7 @@ struct RecordNamespaceCollisionTests {
 
     #expect(!syntax.hasError)
     // Record keeps its natural name — no `_` suffix.
-    #expect(source.contains("public struct Repo: ATProtoRecord"))
+    #expect(source.contains("public struct Repo: SwiftAtproto.ATProtoRecord"))
     #expect(!source.contains("public struct Repo_"))
     // The conflicting namespace enum is omitted.
     #expect(!source.contains("public enum Repo "))

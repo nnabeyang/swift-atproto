@@ -66,7 +66,7 @@ struct SubscriptionGenerationTests {
     let source = try String(
       contentsOf: output.appending(path: "XRPCAPIClient.swift"), encoding: .utf8)
     #expect(!Parser.parse(source: source).hasError)
-    #expect(source.contains("public enum SyncSubscribeRepos: XRPCSubscription"))
+    #expect(source.contains("public enum SyncSubscribeRepos: SwiftAtproto.XRPCSubscription"))
     #expect(source.contains("public typealias Message = Com.Atproto.SyncSubscribeRepos_Message"))
     #expect(!source.contains("public protocol XRPCCallable: XRPCSubscriptionCallable"))
     #expect(source.contains("atprotoSubscriptionMessageType"))
