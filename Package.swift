@@ -150,7 +150,8 @@ let package = Package(
         "SwiftAtproto",
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "SwiftCbor", package: "swift-cbor"),
-      ]
+      ],
+      resources: [.copy("Fixtures")]
     ),
     .testTarget(
       name: "SourceControlTests",
