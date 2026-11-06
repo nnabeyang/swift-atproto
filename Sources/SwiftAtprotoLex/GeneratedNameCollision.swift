@@ -16,6 +16,10 @@ enum GeneratedNameCollisionError: Error, Equatable, CustomStringConvertible {
   /// component is the name of a module the generated code qualifies its
   /// references with (`Lex.qualifyingModules`), so it would hide that module.
   case moduleName(nsid: String, typeName: String)
+  /// `fields` of the generated type `typeName` declare limits whose constants
+  /// in its `Constraints` enum would all be named `name`, such as `tagsItem`'s
+  /// `maxLength` and the `maxLength` of each element of `tags`.
+  case constantName(nsid: String, typeName: String, name: String, fields: [String])
 
   var description: String {
     switch self {
@@ -23,14 +27,17 @@ enum GeneratedNameCollisionError: Error, Equatable, CustomStringConvertible {
       "field \(field) of \(typeName) (\(nsid)) collides with the generated \(generatedName); rename the field in the Lexicon"
     case .moduleName(let nsid, let typeName):
       "\(nsid) generates \(typeName), which hides the \(typeName.split(separator: ".").last.map(String.init) ?? typeName) module that the generated code refers to; rename it in the Lexicon"
+    case .constantName(let nsid, let typeName, let name, let fields):
+      "fields \(fields.joined(separator: " and ")) of \(typeName) (\(nsid)) both generate the constant \(name) in its Constraints enum; rename one of them in the Lexicon"
     }
   }
 }
 
 /// Throws the first name, in a stable order, that the generated code can't
 /// use: a field that would collide with a declaration the generator adds to
-/// its type, or a generated type or namespace that would hide a module the
-/// generated code refers to.
+/// its type, two limits whose constants would have the same name, or a
+/// generated type or namespace that would hide a module the generated code
+/// refers to.
 ///
 /// It walks the same types as code generation (`TypeSchema.allTypes(prefix:)`)
 /// and asks the definitions the same questions the generator does, so that it
@@ -60,9 +67,11 @@ func checkGeneratedNameCollisions(schemasMap: [String: [Schema]], defMap: ExtDef
       case .query(let def) where def.paramsHaveConstraints:
         // `Input.Query` holds the parameters and their `Constraints`.
         let fields = (def.parameters?.properties.keys).map { Array($0) } ?? []
+        let typeName = "\(namespace).\(ts.typeName).Input.Query"
         try check(
-          fields: fields, ts: ts, typeName: "\(namespace).\(ts.typeName).Input.Query",
+          fields: fields, ts: ts, typeName: typeName,
           generatedName: ValidationDecl.constantsEnumName, display: "\(ValidationDecl.constantsEnumName) enum")
+        try checkConstantNames(of: def.parameters?.sortedProperties ?? [], ts: ts, typeName: typeName)
       default:
         break
       }
@@ -76,6 +85,7 @@ private func checkObject(_ def: ObjectTypeDefinition, ts: TypeSchema, typeName: 
     try check(
       fields: fields, ts: ts, typeName: typeName,
       generatedName: ValidationDecl.constantsEnumName, display: "\(ValidationDecl.constantsEnumName) enum")
+    try checkConstantNames(of: def.sortedProperties, ts: ts, typeName: typeName)
   }
   if def.emitsValidateConstraints(ts: ts, defMap: defMap) {
     try check(
@@ -87,5 +97,20 @@ private func checkObject(_ def: ObjectTypeDefinition, ts: TypeSchema, typeName: 
 private func check(fields: [String], ts: TypeSchema, typeName: String, generatedName: String, display: String) throws {
   if fields.contains(generatedName) {
     throw GeneratedNameCollisionError.field(nsid: ts.id, typeName: typeName, field: generatedName, generatedName: display)
+  }
+}
+
+/// Throws when two fields of one type would declare a constant of the same
+/// name in its `Constraints` enum. The names come from
+/// `constraintConstantNames(for:)`, which the generator also declares them by.
+private func checkConstantNames(of properties: [(String, FieldTypeDefinition)], ts: TypeSchema, typeName: String) throws {
+  var owners: [String: String] = [:]
+  for (key, property) in properties {
+    for name in property.constraintConstantNames(for: key) {
+      if let other = owners[name], other != key {
+        throw GeneratedNameCollisionError.constantName(nsid: ts.id, typeName: typeName, name: name, fields: [other, key])
+      }
+      owners[name] = key
+    }
   }
 }

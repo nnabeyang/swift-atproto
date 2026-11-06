@@ -58,12 +58,19 @@ do throws(LexiconConstraintError) {
 A grapheme limit counts the string's `Character`s, so `text.count` is what the
 check compares, while a length limit counts its UTF-8 bytes.
 
+The limits of an array's `items` apply to each element, and an element that
+exceeds one is named by its position: the third element of `tags` is reported as
+`.tooManyGraphemes("tags[2]", limit: 64)`. A limit on the array itself, such as
+its length, is reported under the field's name and checked before the elements.
+
 ## Reading the limits
 
 A generated type whose fields declare limits has a nested `Constraints` enum
 with one constant per limit, named after the field and the Lexicon keyword:
 `textMaxGraphemes` for the `maxGraphemes` of `text`, `videoMaxSize` for the
-`maxSize` of `video`. The generated checks read the same constants, so the
+`maxSize` of `video`. A limit on the elements of an array has `Item` in its
+name: `tagsItemMaxGraphemes` for the `maxGraphemes` of each element of `tags`.
+The generated checks read the same constants, so the
 value you show or compare against is the one that
 ``LexiconValidatable/validateConstraints()`` and strict decoding enforce, and it
 follows the Lexicon when you regenerate.

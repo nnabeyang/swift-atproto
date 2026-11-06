@@ -33,11 +33,22 @@ struct LexiconConstraint {
   let errorCase: String
   /// The label of the error case's limit argument.
   let argLabel: String
+  /// Whether the limit applies to each element of an array field (from its
+  /// `items`) rather than to the field's value itself.
+  var appliesToElements = false
 
   /// The constant's name: the field's name followed by the keyword, so that
-  /// `text` and `maxGraphemes` give `textMaxGraphemes`.
+  /// `text` and `maxGraphemes` give `textMaxGraphemes`. A limit on the
+  /// elements has `Item` in between: `tagsItemMaxGraphemes`.
   func constantName(for field: String) -> String {
-    field + keyword.prefix(1).uppercased() + String(keyword.dropFirst())
+    field + (appliesToElements ? "Item" : "") + keyword.prefix(1).uppercased() + String(keyword.dropFirst())
+  }
+
+  /// The same limit, applied to each element of an array.
+  var forElements: Self {
+    var constraint = self
+    constraint.appliesToElements = true
+    return constraint
   }
 }
 
@@ -72,11 +83,23 @@ extension FieldTypeDefinition {
   /// The limits this field declares that the generated code checks.
   ///
   /// Strings with an `enum` are checked by their closed set of cases instead,
-  /// so their length limits are left out.
+  /// so their length limits are left out. An array's limits are followed by
+  /// those of its `items`, which apply to each element.
   var constraints: [LexiconConstraint] {
+    constraints(asElement: false)
+  }
+
+  /// The limits, for a value of this type held as a field (`asElement` false)
+  /// or as an element of an array (`asElement` true).
+  ///
+  /// The two differ only in how a string is wrapped, which decides whether the
+  /// guard measures `rawValue`: a field with `knownValues` gets a type of its
+  /// own, while an element with `knownValues` stays a `Swift.String`. A `format`
+  /// wraps both in `FormatString`.
+  private func constraints(asElement: Bool) -> [LexiconConstraint] {
     switch self {
     case .string(let def) where def.enum == nil:
-      let wrapped = def.knownValues != nil || def.format?.swiftFormatTypeName != nil
+      let wrapped = (!asElement && def.knownValues != nil) || def.format?.swiftFormatTypeName != nil
       return [
         def.maxLength.map {
           LexiconConstraint(keyword: "maxLength", value: $0, measure: .utf8Count(wrapped: wrapped), op: "<=", errorCase: "stringTooLong", argLabel: "limit")
@@ -108,7 +131,7 @@ extension FieldTypeDefinition {
         def.minLength.map {
           LexiconConstraint(keyword: "minLength", value: $0, measure: .count, op: ">=", errorCase: "arrayTooShort", argLabel: "minimum")
         },
-      ].compactMap { $0 }
+      ].compactMap { $0 } + def.items.constraints(asElement: true).map(\.forElements)
     case .bytes(let def):
       return [
         def.maxLength.map {
@@ -129,14 +152,21 @@ extension FieldTypeDefinition {
     }
   }
 
+  /// The names of the constants that ``constraintConstantDecls(for:)``
+  /// declares for this field, in the same order.
+  func constraintConstantNames(for key: String) -> [String] {
+    constraints.map { $0.constantName(for: key) }
+  }
+
   /// The `static let` declarations of this field's limits, for the
   /// `Constraints` enum of the type that holds the field.
   func constraintConstantDecls(for key: String) -> [VariableDeclSyntax] {
     constraints.map { constraint in
-      VariableDeclSyntax(
+      let subject = constraint.appliesToElements ? "each element of `\(key)`" : "`\(key)`"
+      return VariableDeclSyntax(
         leadingTrivia: [
           .newlines(1),
-          .docLineComment("/// The `\(constraint.keyword)` of `\(key)` in the Lexicon."),
+          .docLineComment("/// The `\(constraint.keyword)` of \(subject) in the Lexicon."),
           .newlines(1),
         ],
         modifiers: [
@@ -158,7 +188,16 @@ extension FieldTypeDefinition {
 
   func constraintGuardItems(for key: String, optional: Bool) -> CodeBlockItemListSyntax {
     let ref = key.escapedSwiftKeyword
-    let stmts = constraints.map { constraintGuardItem($0, ref: ref, field: key) }
+    let all = constraints
+    // The field's own limits first, then one loop over the elements, so an
+    // array that is too long is reported before any of its elements.
+    var stmts = all.filter { !$0.appliesToElements }.map {
+      constraintGuardItem($0, ref: ref, field: key, label: ExprSyntax(StringLiteralExprSyntax(content: key)))
+    }
+    let elementConstraints = all.filter(\.appliesToElements)
+    if !elementConstraints.isEmpty {
+      stmts.append(elementLoop(elementConstraints, ref: ref, field: key))
+    }
     guard !stmts.isEmpty else { return [] }
     if optional {
       return CodeBlockItemListSyntax([
@@ -184,6 +223,46 @@ extension FieldTypeDefinition {
     }
   }
 
+  /// `for (index, element) in field.enumerated() { … }` with a guard for each
+  /// limit on the elements. The error names the element as `field[index]`.
+  private func elementLoop(_ constraints: [LexiconConstraint], ref: String, field: String) -> CodeBlockItemSyntax {
+    // `field[\(index)]`, built as a string literal with an interpolation.
+    let label = StringLiteralExprSyntax(
+      openingQuote: .stringQuoteToken(),
+      segments: StringLiteralSegmentListSyntax([
+        .stringSegment(StringSegmentSyntax(content: .stringSegment("\(field)["))),
+        .expressionSegment(
+          ExpressionSegmentSyntax(
+            expressions: LabeledExprListSyntax([
+              LabeledExprSyntax(expression: DeclReferenceExprSyntax(baseName: .identifier("index")))
+            ]))),
+        .stringSegment(StringSegmentSyntax(content: .stringSegment("]"))),
+      ]),
+      closingQuote: .stringQuoteToken()
+    )
+    return CodeBlockItemSyntax(
+      item: .stmt(
+        StmtSyntax(
+          ForStmtSyntax(
+            pattern: TuplePatternSyntax(
+              elements: TuplePatternElementListSyntax([
+                TuplePatternElementSyntax(
+                  pattern: IdentifierPatternSyntax(identifier: .identifier("index")), trailingComma: .commaToken()),
+                TuplePatternElementSyntax(pattern: IdentifierPatternSyntax(identifier: .identifier("element"))),
+              ])),
+            sequence: FunctionCallExprSyntax(
+              callee: MemberAccessExprSyntax(
+                base: DeclReferenceExprSyntax(baseName: .lexIdentifier(ref)),
+                declName: DeclReferenceExprSyntax(baseName: .identifier("enumerated"))
+              ))
+          ) {
+            for constraint in constraints {
+              constraintGuardItem(constraint, ref: "element", field: field, label: ExprSyntax(label))
+            }
+          }
+        )))
+  }
+
   private func measuredExpr(_ measure: LexiconConstraint.Measure, ref: String) -> ExprSyntax {
     switch measure {
     case .utf8Count(let wrapped):
@@ -206,7 +285,9 @@ extension FieldTypeDefinition {
     }
   }
 
-  private func constraintGuardItem(_ constraint: LexiconConstraint, ref: String, field: String) -> CodeBlockItemSyntax {
+  /// A guard that `ref` keeps `constraint`, throwing the error with `label` as
+  /// the field it names. `field` is the Lexicon field, which names the constant.
+  private func constraintGuardItem(_ constraint: LexiconConstraint, ref: String, field: String, label: ExprSyntax) -> CodeBlockItemSyntax {
     // Both sides of the check and the limit in the error read the constant,
     // so the value lives in one place.
     let constant = {
@@ -235,7 +316,7 @@ extension FieldTypeDefinition {
                   declName: DeclReferenceExprSyntax(baseName: .identifier(constraint.errorCase))
                 )
               ) {
-                LabeledExprSyntax(expression: StringLiteralExprSyntax(content: field))
+                LabeledExprSyntax(expression: label)
                 LabeledExprSyntax(
                   label: .identifier(constraint.argLabel),
                   colon: .colonToken(),
