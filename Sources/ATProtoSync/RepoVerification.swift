@@ -7,15 +7,19 @@ import SwiftCbor
 /// Resource limits applied while decoding and verifying Permissioned Data repositories.
 public struct RepoVerificationLimits: Hashable, Sendable {
   /// The largest encoded commit accepted as STAR metadata.
+  ///
+  /// The `atproto-space-repo` profile limits metadata to 64 KiB, the default.
   public var maximumCommitBytes: Int
 
   /// The largest record path accepted as a STAR key.
+  ///
+  /// The `atproto-space-repo` profile limits keys to 4 KiB, the default.
   public var maximumRecordPathBytes: Int
 
   /// The largest DRISL encoding of a record accepted as a STAR value.
   ///
-  /// Repo hosts refuse to write a space record larger than 1 MiB, so a larger
-  /// value is malformed.
+  /// The `atproto-space-repo` profile limits values to 1 MiB, the default,
+  /// and repo hosts refuse to write a larger space record.
   public var maximumRecordBytes: Int
 
   /// The largest number of records accepted in one repository.
@@ -27,7 +31,7 @@ public struct RepoVerificationLimits: Hashable, Sendable {
   /// Creates verification limits suitable for client-side repository sync.
   public init(
     maximumCommitBytes: Int = 64 * 1024,
-    maximumRecordPathBytes: Int = 1024,
+    maximumRecordPathBytes: Int = 4 * 1024,
     maximumRecordBytes: Int = 1024 * 1024,
     maximumRecords: Int = 100_000,
     maximumNestingDepth: Int = 16
@@ -45,14 +49,22 @@ public enum RepoVerificationError: Error, Hashable, Sendable {
   /// An encoded input exceeded its configured byte or count limit.
   case inputTooLarge(limit: Int, actual: Int)
 
-  /// A STAR archive did not start with the STAR-lite v1 magic bytes.
+  /// A STAR archive did not start with the STAR magic bytes.
   case invalidSTARMagic
 
   /// A STAR frame length used an invalid or non-minimal unsigned varint.
   case malformedSTARVarint
 
-  /// A STAR archive ended inside a frame or between a key and its value.
+  /// A STAR archive ended before the `0x00` that terminates it: inside a
+  /// frame, between a key and its value, or where a control byte belongs.
   case truncatedSTAR
+
+  /// The byte after the STAR metadata or a pair was neither `0x01`, which
+  /// starts another pair, nor `0x00`, which ends the archive.
+  case invalidSTARControlByte(UInt8)
+
+  /// Bytes followed the `0x00` that terminates a STAR archive.
+  case trailingSTARBytes
 
   /// The STAR metadata was not a canonical DRISL commit of the
   /// `atproto-space-repo` profile.

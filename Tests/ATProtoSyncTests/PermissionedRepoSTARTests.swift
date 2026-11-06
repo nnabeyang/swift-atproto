@@ -59,9 +59,11 @@ struct PermissionedRepoSTARTests {
     #expect(try star.verifiedCheckpoint().repository == archive.repository)
   }
 
-  @Test("an empty repo has no pairs")
+  @Test("an empty repo is the metadata and the terminator")
   func readsAnEmptyRepo() async throws {
     let archive = try archive([])
+    #expect(archive.bytes.count == archive.metadataEnd + 1)
+    #expect(archive.bytes.last == 0x00)
     let star = try await PermissionedRepoSTAR.read(
       from: XRPCBody(archive.bytes), authentication: archive.authentication)
     var iterator = star.records.makeAsyncIterator()
@@ -140,8 +142,10 @@ struct PermissionedRepoSTARTests {
   func rejectsTruncation() async throws {
     let archive = try archive([("com.example.post/a", Self.record("hello"))])
     let metadataEnd = archive.metadataEnd
-    // Cut after the key, and inside the value.
-    for cut in [archive.bytes.count - (try Self.record("hello")).count - 1, archive.bytes.count - 1] {
+    // Cut after the key, and inside the value. The archive ends with the
+    // value and the terminator.
+    let valueCount = try Self.record("hello").count
+    for cut in [archive.bytes.count - 1 - valueCount - 1, archive.bytes.count - 2] {
       let star = try await PermissionedRepoSTAR.read(
         from: XRPCBody(archive.bytes.prefix(cut)), authentication: archive.authentication)
       var iterator = star.records.makeAsyncIterator()
@@ -166,7 +170,7 @@ struct PermissionedRepoSTARTests {
     }
 
     // A one-byte key written as two varint bytes.
-    let padded = archive.bytes + Data([0x81, 0x00, 0x61])
+    let padded = archive.bytes.prefix(archive.metadataEnd) + Data([0x01, 0x81, 0x00, 0x61])
     let star = try await PermissionedRepoSTAR.read(
       from: XRPCBody(padded), authentication: archive.authentication)
     var iterator = star.records.makeAsyncIterator()
@@ -256,6 +260,129 @@ struct PermissionedRepoSTARTests {
     }
   }
 
+  @Test("rejects an archive without its terminator, including one in the old format")
+  func rejectsAMissingTerminator() async throws {
+    for pairs in [[], [("com.example.post/a", try Self.record("hello"))]] {
+      let archive = try archive(pairs)
+      let star = try await PermissionedRepoSTAR.read(
+        from: XRPCBody(archive.bytes.dropLast()), authentication: archive.authentication)
+      var iterator = star.records.makeAsyncIterator()
+      for _ in pairs { _ = try await iterator.next() }
+      await #expect(throws: RepoVerificationError.truncatedSTAR) {
+        _ = try await iterator.next()
+      }
+      #expect(throws: RepoVerificationError.incompleteRepository) { try star.verifiedCheckpoint() }
+    }
+
+    // The format before control bytes: pairs follow the metadata directly and
+    // the archive ends at EOF.
+    let record = try Self.record("hello")
+    let archive = try archive([("com.example.post/a", record)])
+    let key = Data("com.example.post/a".utf8)
+    let old =
+      archive.bytes.prefix(archive.metadataEnd) + Self.varint(key.count) + key
+      + Self.varint(record.count) + record
+    let star = try await PermissionedRepoSTAR.read(
+      from: XRPCBody(old), authentication: archive.authentication)
+    var iterator = star.records.makeAsyncIterator()
+    await #expect(throws: RepoVerificationError.invalidSTARControlByte(UInt8(key.count))) {
+      _ = try await iterator.next()
+    }
+  }
+
+  @Test(
+    "rejects a control byte other than 0x00 and 0x01",
+    arguments: [0x02, 0x80, 0xff] as [UInt8])
+  func rejectsAnInvalidControlByte(_ byte: UInt8) async throws {
+    // After the metadata.
+    let empty = try archive([])
+    let afterMetadata = try await PermissionedRepoSTAR.read(
+      from: XRPCBody(empty.bytes.prefix(empty.metadataEnd) + Data([byte, 0x00])),
+      authentication: empty.authentication)
+    var first = afterMetadata.records.makeAsyncIterator()
+    await #expect(throws: RepoVerificationError.invalidSTARControlByte(byte)) {
+      _ = try await first.next()
+    }
+
+    // After a pair.
+    let archive = try archive(
+      [("com.example.post/a", try Self.record("hello"))], terminator: Data([byte, 0x00]))
+    let afterPair = try await PermissionedRepoSTAR.read(
+      from: XRPCBody(archive.bytes), authentication: archive.authentication)
+    var second = afterPair.records.makeAsyncIterator()
+    #expect(try await second.next() != nil)
+    await #expect(throws: RepoVerificationError.invalidSTARControlByte(byte)) {
+      _ = try await second.next()
+    }
+  }
+
+  @Test(
+    "rejects bytes after the terminator",
+    arguments: [[0x00, 0x00], [0x00, 0x01], [0x00, 0x00, 0x00]] as [[UInt8]])
+  func rejectsTrailingBytes(_ terminator: [UInt8]) async throws {
+    for pairs in [[], [("com.example.post/a", try Self.record("hello"))]] {
+      let archive = try archive(pairs, terminator: Data(terminator))
+      let star = try await PermissionedRepoSTAR.read(
+        from: XRPCBody(archive.bytes), authentication: archive.authentication)
+      var iterator = star.records.makeAsyncIterator()
+      for _ in pairs { _ = try await iterator.next() }
+      await #expect(throws: RepoVerificationError.trailingSTARBytes) {
+        _ = try await iterator.next()
+      }
+      #expect(throws: RepoVerificationError.incompleteRepository) { try star.verifiedCheckpoint() }
+    }
+  }
+
+  @Test("the default limits are those of the atproto-space-repo profile")
+  func defaultLimits() async throws {
+    let limits = RepoVerificationLimits()
+    #expect(limits.maximumCommitBytes == 64 * 1024)
+    #expect(limits.maximumRecordPathBytes == 4 * 1024)
+    #expect(limits.maximumRecordBytes == 1024 * 1024)
+
+    // Metadata one byte over 64 KiB is refused before it is read.
+    let empty = try archive([])
+    let metadataTooLarge = Data(PermissionedRepoSTAR.magic) + Self.varint(64 * 1024 + 1)
+    await #expect(throws: RepoVerificationError.inputTooLarge(limit: 64 * 1024, actual: 64 * 1024 + 1)) {
+      _ = try await PermissionedRepoSTAR.read(
+        from: XRPCBody(metadataTooLarge), authentication: empty.authentication)
+    }
+
+    // A key of exactly 4 KiB is read; one byte more is refused.
+    for (count, accepted) in [(4 * 1024, true), (4 * 1024 + 1, false)] {
+      let key = "com.example.post/" + String(repeating: "a", count: count - "com.example.post/".utf8.count)
+      let star = try await PermissionedRepoSTAR.read(
+        from: XRPCBody(
+          empty.bytes.prefix(empty.metadataEnd) + Data([0x01]) + Self.varint(count) + Data(key.utf8)),
+        authentication: empty.authentication)
+      var iterator = star.records.makeAsyncIterator()
+      if accepted {
+        // The key is read in full, then the value's length is missing.
+        await #expect(throws: RepoVerificationError.truncatedSTAR) {
+          _ = try await iterator.next()
+        }
+      } else {
+        await #expect(throws: RepoVerificationError.inputTooLarge(limit: 4 * 1024, actual: count)) {
+          _ = try await iterator.next()
+        }
+      }
+    }
+
+    // A value one byte over 1 MiB is refused before it is read.
+    let key = Data("com.example.post/a".utf8)
+    let valueTooLarge =
+      empty.bytes.prefix(empty.metadataEnd) + Data([0x01]) + Self.varint(key.count) + key
+      + Self.varint(1024 * 1024 + 1)
+    let star = try await PermissionedRepoSTAR.read(
+      from: XRPCBody(valueTooLarge), authentication: empty.authentication)
+    var iterator = star.records.makeAsyncIterator()
+    await #expect(
+      throws: RepoVerificationError.inputTooLarge(limit: 1024 * 1024, actual: 1024 * 1024 + 1)
+    ) {
+      _ = try await iterator.next()
+    }
+  }
+
   // MARK: - Fixtures
 
   private struct Archive {
@@ -267,26 +394,30 @@ struct PermissionedRepoSTARTests {
   }
 
   private func archive(
-    _ pairs: [(String, Data)], claiming claimed: [(String, Data)]? = nil
+    _ pairs: [(String, Data)], claiming claimed: [(String, Data)]? = nil,
+    terminator: Data = Data([0x00])
   ) throws -> Archive {
     let repository = try RepoCommit(
       records: (claimed ?? pairs).map { try RepoRecord(path: $0.0, cid: Self.cid($0.1)) })
     let commit = SyncTestCommit(repository: repository, space: space, repo: author, revision: revision)
     let metadata = try Self.metadata(type: "atproto-space-repo", commit: commit)
     return Archive(
-      bytes: try Self.star(metadata: metadata, pairs: pairs),
+      bytes: try Self.star(metadata: metadata, pairs: pairs, terminator: terminator),
       metadataEnd: PermissionedRepoSTAR.magic.count + Self.varint(metadata.count).count + metadata.count,
       commit: commit,
       repository: repository,
       authentication: try SyncTestResponse(commit: commit, space: space, repo: author).authentication)
   }
 
-  private static func star(metadata: Data, pairs: [(String, Data)]) throws -> Data {
+  /// A STAR archive: each pair follows a `0x01`, and `terminator` ends it.
+  private static func star(
+    metadata: Data, pairs: [(String, Data)], terminator: Data = Data([0x00])
+  ) throws -> Data {
     var bytes = Data(PermissionedRepoSTAR.magic) + varint(metadata.count) + metadata
     for (key, value) in pairs {
-      bytes += varint(key.utf8.count) + Data(key.utf8) + varint(value.count) + value
+      bytes += Data([0x01]) + varint(key.utf8.count) + Data(key.utf8) + varint(value.count) + value
     }
-    return bytes
+    return bytes + terminator
   }
 
   private static func metadata(type: String, commit: SyncTestCommit) throws -> Data {
