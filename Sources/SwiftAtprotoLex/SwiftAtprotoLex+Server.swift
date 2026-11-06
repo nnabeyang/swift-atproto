@@ -1108,7 +1108,7 @@ extension Lex {
             equal: .equalToken(),
             value: {
               let callee: ExprSyntax =
-                def.paramsHaveConstraints
+                def.paramsHaveConstraints(ts: schema, defMap: defMap)
                 ? ExprSyntax(
                   MemberAccessExprSyntax(
                     parts: prefix.lexIdentifierSegments + [
@@ -1132,7 +1132,7 @@ extension Lex {
                   )
                 }
               }
-              return def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+              return def.paramsHaveConstraints(ts: schema, defMap: defMap) ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
             }()
           )
         )

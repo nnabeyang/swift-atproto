@@ -43,9 +43,12 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
   }
 
   /// Whether the generated type has a `Constraints` enum, a `make` that checks
-  /// the limits, and a strict decoding path: some field declares a limit.
-  var emitsConstraintConstants: Bool {
-    sortedProperties.contains { $0.1.hasConstraints }
+  /// the limits, and a strict decoding path: some field declares a limit,
+  /// here or in a string definition it refers to.
+  ///
+  /// `ts` is the schema of this type, which resolves its references.
+  func emitsConstraintConstants(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
+    sortedProperties.contains { $0.1.hasConstraints(ts: ts, defMap: defMap) }
   }
 
   /// Whether the generated type has its own `validateConstraints()`: some
@@ -53,7 +56,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
   ///
   /// `ts` is the schema of this type, which resolves its local references.
   func emitsValidateConstraints(ts: TypeSchema, defMap: ExtDefMap) -> Bool {
-    emitsConstraintConstants || sortedProperties.contains { $0.1.holdsValidatableValues(ts: ts, defMap: defMap) }
+    emitsConstraintConstants(ts: ts, defMap: defMap) || sortedProperties.contains { $0.1.holdsValidatableValues(ts: ts, defMap: defMap) }
   }
 
   private var declModifierSyntax: DeclModifierSyntax {
@@ -74,7 +77,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     for key in nullable ?? [] {
       required[key] = false
     }
-    let hasConstraints = emitsConstraintConstants
+    let hasConstraints = emitsConstraintConstants(ts: ts, defMap: defMap)
     let nestedValidationItems = sortedProperties.flatMap { key, property in
       property.nestedValidationItems(for: key, optional: !(required[key] ?? false), ts: ts, defMap: defMap)
     }
@@ -173,7 +176,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           )
         ]
       )
-      if let constants = LexiconConstraint.constantsEnumDecl(properties: sortedProperties) {
+      if let constants = LexiconConstraint.constantsEnumDecl(properties: sortedProperties, ts: ts, defMap: defMap) {
         constants
       }
       memberwiseInitDecl(ts: ts, name: name, defMap: defMap, required: required)
@@ -191,7 +194,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
             item
           }
           for (key, property) in sortedProperties {
-            for item in property.constraintGuardItems(for: key, optional: !(required[key] ?? false)) {
+            for item in property.constraintGuardItems(for: key, optional: !(required[key] ?? false), ts: ts, defMap: defMap) {
               item
             }
           }
@@ -624,7 +627,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     ) {
       for (key, property) in sortedProperties {
         let isRequired = required[key] ?? false
-        for item in property.constraintGuardItems(for: key, optional: !isRequired) {
+        for item in property.constraintGuardItems(for: key, optional: !isRequired, ts: ts, defMap: defMap) {
           item
         }
       }

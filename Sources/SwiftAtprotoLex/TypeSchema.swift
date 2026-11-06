@@ -450,7 +450,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                         // Lexicon puts constraints on the parameters, so an
                         // out-of-range value fails before the request is sent.
                         let callee: ExprSyntax =
-                          def.paramsHaveConstraints
+                          def.paramsHaveConstraints(ts: self, defMap: defMap)
                           ? ExprSyntax(
                             MemberAccessExprSyntax(
                               parts: prefixIdentifiers + [
@@ -473,7 +473,7 @@ final class TypeSchema: Encodable, DecodableWithConfiguration, Sendable {
                             }
                           }
                         }
-                        return def.paramsHaveConstraints ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
+                        return def.paramsHaveConstraints(ts: self, defMap: defMap) ? ExprSyntax(TryExprSyntax(expression: call)) : ExprSyntax(call)
                       }()
                     )
                   }

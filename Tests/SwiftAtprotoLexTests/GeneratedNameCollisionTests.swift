@@ -132,6 +132,27 @@ struct GeneratedNameCollisionTests {
     #expect(output.writtenFiles.isEmpty)
   }
 
+  @Test("a referenced definition's limit takes part in the constant names")
+  func referencedConstantNames() async throws {
+    // The `maxLength` of `noteItem` and the referenced `maxLength` of each
+    // element of `note` would both be `noteItemMaxLength`.
+    let output = try await generate([
+      "r.json": """
+      {"lexicon": 1, "id": "com.example.r", "defs": {
+        "main": {"type": "object", "properties": {
+          "noteItem": {"type": "string", "maxLength": 3},
+          "note": {"type": "array", "items": {"type": "ref", "ref": "#note"}}
+        }},
+        "note": {"type": "string", "maxLength": 5}
+      }}
+      """
+    ])
+    #expect(
+      output.error as? GeneratedNameCollisionError
+        == .constantName(nsid: "com.example.r", typeName: "Com.Example.R", name: "noteItemMaxLength", fields: ["note", "noteItem"]))
+    #expect(output.writtenFiles.isEmpty)
+  }
+
   @Test("the module error names the module it hides")
   func moduleNameDescription() {
     #expect(
