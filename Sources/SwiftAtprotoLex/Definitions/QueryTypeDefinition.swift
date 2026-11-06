@@ -363,7 +363,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
               ) {
                 for (key, _) in parameters?.sortedProperties ?? [] {
                   LabeledExprSyntax(
-                    label: .lexIdentifier(key),
+                    label: .lexArgumentLabel(key),
                     colon: .colonToken(),
                     expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                   )

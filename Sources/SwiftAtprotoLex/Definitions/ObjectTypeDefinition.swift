@@ -628,7 +628,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
         ) {
           for (key, _) in sortedProperties {
             LabeledExprSyntax(
-              label: .lexIdentifier(key),
+              label: .lexArgumentLabel(key),
               colon: .colonToken(),
               expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
             )
@@ -863,7 +863,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           ) {
             for (key, _) in sortedProperties {
               LabeledExprSyntax(
-                label: .lexIdentifier(key),
+                label: .lexArgumentLabel(key),
                 colon: .colonToken(),
                 expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
               )
@@ -888,7 +888,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
               ) {
                 for (key, _) in sortedProperties {
                   LabeledExprSyntax(
-                    label: .lexIdentifier(key),
+                    label: .lexArgumentLabel(key),
                     colon: .colonToken(),
                     expression: DeclReferenceExprSyntax(baseName: .lexIdentifier(key))
                   )
