@@ -61,12 +61,19 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       required[key] = false
     }
     let hasConstraints = sortedProperties.contains { $0.1.hasConstraints }
+    let nestedValidationItems = sortedProperties.flatMap { key, property in
+      property.nestedValidationItems(for: key, optional: !(required[key] ?? false), ts: ts, defMap: defMap)
+    }
+    ValidationDecl.checkNoCollision(
+      fieldNames: sortedKeys, ts: ts,
+      emitsConstants: hasConstraints,
+      emitsValidate: hasConstraints || !nestedValidationItems.isEmpty)
     let repoWriteActions = Self.repoWriteActions(nsid: ts.id, inputName: name)
     let isRepoApplyWritesInput =
       ts.id == "com.atproto.repo.applyWrites" && name.hasSuffix("_Input")
     let inheritedNames: [String] = {
       if ts.isRecord { return ["ATProtoRecord"] }
-      var names = ["Codable", "Hashable", "Sendable"]
+      var names = ["Codable", "Hashable", "Sendable", ValidationDecl.protocolName]
       if repoWriteActions != nil || isRepoApplyWritesInput {
         names.append("RepoWriteOperationDescribing")
       }
@@ -156,11 +163,29 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           )
         ]
       )
+      if let constants = LexiconConstraint.constantsEnumDecl(properties: sortedProperties) {
+        constants
+      }
       memberwiseInitDecl(ts: ts, name: name, defMap: defMap, required: required)
         .with(\.leadingTrivia, .newlines(2))
       if hasConstraints {
         staticMakeDecl(ts: ts, name: name, defMap: defMap, required: required)
           .with(\.leadingTrivia, .newlines(2))
+      }
+      if hasConstraints || !nestedValidationItems.isEmpty {
+        // Strict decoding checks the nested values while it decodes the fields
+        // and the type's own fields afterwards in `make`. Checking in the same
+        // order reports the same violation when a value has several.
+        ValidationDecl.validateDecl {
+          for item in nestedValidationItems {
+            item
+          }
+          for (key, property) in sortedProperties {
+            for item in property.constraintGuardItems(for: key, optional: !(required[key] ?? false)) {
+              item
+            }
+          }
+        }
       }
       if let actionRaws = repoWriteActions {
         Self.repoWriteRequirementsAccessor(actionRaws: actionRaws)

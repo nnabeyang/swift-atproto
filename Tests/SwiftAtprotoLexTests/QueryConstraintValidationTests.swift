@@ -87,8 +87,13 @@ struct QueryConstraintValidationTests {
       source.contains(
         "input: try Com.Example.ConstrainedQuery.Input.Query.make(actor: actor, limit: limit)"
       ))
-    #expect(source.contains("throw LexiconConstraintError.integerBelowMinimum(\"limit\", minimum: 1)"))
-    #expect(source.contains("throw LexiconConstraintError.integerAboveMaximum(\"limit\", maximum: 100)"))
+    #expect(source.contains("public static let limitMinimum: Swift.Int = 1"))
+    #expect(source.contains("public static let limitMaximum: Swift.Int = 100"))
+    #expect(source.contains("guard limit >= Constraints.limitMinimum else {"))
+    #expect(
+      source.contains("throw LexiconConstraintError.integerBelowMinimum(\"limit\", minimum: Constraints.limitMinimum)"))
+    #expect(
+      source.contains("throw LexiconConstraintError.integerAboveMaximum(\"limit\", maximum: Constraints.limitMaximum)"))
   }
 
   @Test("unconstrained query clients keep the plain initializer")
