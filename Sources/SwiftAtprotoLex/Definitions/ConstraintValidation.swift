@@ -5,9 +5,28 @@ import SwiftSyntaxBuilder
 /// constant in `Constraints` and the guard that checks it.
 ///
 /// The constant and the guard are built from the same value so that the
-/// number a client reads and the number the generated code enforces cannot
+/// value a client reads and the value the generated code enforces cannot
 /// drift apart.
 struct LexiconConstraint {
+  /// A value that `const` fixes a field to.
+  enum Literal {
+    case string(String)
+    case integer(Int)
+    case boolean(Bool)
+  }
+
+  /// What the guard checks.
+  enum Check {
+    /// A bound on a measure of the value: `maxLength`, `minimum`, `maxSize`
+    /// and the like. `argLabel` labels the limit in the error.
+    case bound(measure: Measure, op: String, limit: Int, argLabel: String)
+    /// `const`: the value equals `literal`, compared through `rawValue` when
+    /// the string is `wrapped` in a type of its own.
+    case equals(Literal, wrapped: Bool)
+    /// A blob's `accept`: its MIME type is one of these.
+    case accept([String])
+  }
+
   /// What the guard measures on the field's value.
   enum Measure {
     /// `value.utf8.count`, or `value.rawValue.utf8.count` for wrapped strings.
@@ -25,17 +44,23 @@ struct LexiconConstraint {
   /// The Lexicon keyword, such as `maxLength`. Used in the constant's
   /// documentation.
   let keyword: String
-  let value: Int
-  let measure: Measure
-  /// `<=` for an upper bound, `>=` for a lower bound.
-  let op: String
+  let check: Check
   /// The `LexiconConstraintError` case thrown on a violation.
   let errorCase: String
-  /// The label of the error case's limit argument.
-  let argLabel: String
   /// Whether the limit applies to each element of an array field (from its
   /// `items`) rather than to the field's value itself.
   var appliesToElements = false
+
+  init(keyword: String, check: Check, errorCase: String) {
+    self.keyword = keyword
+    self.check = check
+    self.errorCase = errorCase
+  }
+
+  /// A bound: `op` is `<=` for an upper bound and `>=` for a lower one.
+  init(keyword: String, value: Int, measure: Measure, op: String, errorCase: String, argLabel: String) {
+    self.init(keyword: keyword, check: .bound(measure: measure, op: op, limit: value, argLabel: argLabel), errorCase: errorCase)
+  }
 
   /// The constant's name: the field's name followed by the keyword, so that
   /// `text` and `maxGraphemes` give `textMaxGraphemes`. A limit on the
@@ -121,6 +146,9 @@ extension FieldTypeDefinition {
         def.minGraphemes.map {
           LexiconConstraint(keyword: "minGraphemes", value: $0, measure: .graphemeCount(wrapped: wrapped), op: ">=", errorCase: "tooFewGraphemes", argLabel: "minimum")
         },
+        def.const.map {
+          LexiconConstraint(keyword: "const", check: .equals(.string($0), wrapped: wrapped), errorCase: "notConstant")
+        },
       ].compactMap { $0 }
     case .integer(let def):
       return [
@@ -130,6 +158,15 @@ extension FieldTypeDefinition {
         def.maximum.map {
           LexiconConstraint(keyword: "maximum", value: $0, measure: .value, op: "<=", errorCase: "integerAboveMaximum", argLabel: "maximum")
         },
+        def.const.map {
+          LexiconConstraint(keyword: "const", check: .equals(.integer($0), wrapped: false), errorCase: "notConstant")
+        },
+      ].compactMap { $0 }
+    case .boolean(let def):
+      return [
+        def.const.map {
+          LexiconConstraint(keyword: "const", check: .equals(.boolean($0), wrapped: false), errorCase: "notConstant")
+        }
       ].compactMap { $0 }
     case .array(let def):
       return [
@@ -153,7 +190,12 @@ extension FieldTypeDefinition {
       return [
         def.maxSize.map {
           LexiconConstraint(keyword: "maxSize", value: $0, measure: .blobSize, op: "<=", errorCase: "blobTooLarge", argLabel: "limit")
-        }
+        },
+        // An empty list, which the specification leaves undefined, restricts
+        // nothing, as `LexBlob.isAccepted(mimeType:by:)` treats it.
+        def.accept.flatMap { $0.isEmpty ? nil : $0 }.map {
+          LexiconConstraint(keyword: "accept", check: .accept($0), errorCase: "blobTypeNotAccepted")
+        },
       ].compactMap { $0 }
     case .ref(let def):
       // A referenced string definition has the type it is generated with
@@ -196,10 +238,8 @@ extension FieldTypeDefinition {
       ) {
         PatternBindingSyntax(
           pattern: IdentifierPatternSyntax(identifier: .lexIdentifier(constraint.constantName(for: key))),
-          typeAnnotation: TypeAnnotationSyntax(type: Lex.typeSyntax("Swift.Int")),
-          initializer: InitializerClauseSyntax(
-            value: IntegerLiteralExprSyntax(literal: .integerLiteral("\(constraint.value)"))
-          )
+          typeAnnotation: TypeAnnotationSyntax(type: Lex.typeSyntax(constraint.constantTypeName)),
+          initializer: InitializerClauseSyntax(value: constraint.constantValue)
         )
       }
     }
@@ -307,25 +347,61 @@ extension FieldTypeDefinition {
   /// A guard that `ref` keeps `constraint`, throwing the error with `label` as
   /// the field it names. `field` is the Lexicon field, which names the constant.
   private func constraintGuardItem(_ constraint: LexiconConstraint, ref: String, field: String, label: ExprSyntax) -> CodeBlockItemSyntax {
-    // Both sides of the check and the limit in the error read the constant,
+    // Both sides of the check and the value in the error read the constant,
     // so the value lives in one place.
     let constant = {
-      MemberAccessExprSyntax(
-        base: DeclReferenceExprSyntax(baseName: .identifier(ValidationDecl.constantsEnumName)),
-        declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(constraint.constantName(for: field)))
+      ExprSyntax(
+        MemberAccessExprSyntax(
+          base: DeclReferenceExprSyntax(baseName: .identifier(ValidationDecl.constantsEnumName)),
+          declName: DeclReferenceExprSyntax(baseName: .lexIdentifier(constraint.constantName(for: field)))
+        ))
+    }
+    let condition: ExprSyntax
+    let argument: LabeledExprSyntax
+    switch constraint.check {
+    case .bound(let measure, let op, _, let argLabel):
+      condition = ExprSyntax(
+        SequenceExprSyntax {
+          measuredExpr(measure, ref: ref)
+          BinaryOperatorExprSyntax(operator: .binaryOperator(op))
+          constant()
+        })
+      argument = LabeledExprSyntax(label: .identifier(argLabel), colon: .colonToken(), expression: constant())
+    case .equals(_, let wrapped):
+      let value: ExprSyntax =
+        wrapped
+        ? ExprSyntax(MemberAccessExprSyntax(parts: [.lexIdentifier(ref), .identifier("rawValue")]))
+        : ExprSyntax(DeclReferenceExprSyntax(baseName: .lexIdentifier(ref)))
+      condition = ExprSyntax(
+        SequenceExprSyntax {
+          value
+          BinaryOperatorExprSyntax(operator: .binaryOperator("=="))
+          constant()
+        })
+      // The expected value as text: `"\(Constraints.notFoundConst)"`.
+      let expected = StringLiteralExprSyntax(
+        openingQuote: .stringQuoteToken(),
+        segments: StringLiteralSegmentListSyntax([
+          .expressionSegment(ExpressionSegmentSyntax(expressions: LabeledExprListSyntax([LabeledExprSyntax(expression: constant())])))
+        ]),
+        closingQuote: .stringQuoteToken()
       )
+      argument = LabeledExprSyntax(label: .identifier("expected"), colon: .colonToken(), expression: expected)
+    case .accept:
+      condition = ExprSyntax(
+        FunctionCallExprSyntax(callee: Lex.refExpr(Lex.runtime("LexBlob.isAccepted"))) {
+          LabeledExprSyntax(
+            label: .identifier("mimeType"), colon: .colonToken(),
+            expression: MemberAccessExprSyntax(parts: [.lexIdentifier(ref), .identifier("mimeType")]))
+          LabeledExprSyntax(label: .identifier("by"), colon: .colonToken(), expression: constant())
+        })
+      argument = LabeledExprSyntax(label: .identifier("accepted"), colon: .colonToken(), expression: constant())
     }
     return CodeBlockItemSyntax(
       item: .stmt(
         StmtSyntax(
           GuardStmtSyntax(
-            conditions: ConditionElementListSyntax {
-              SequenceExprSyntax {
-                measuredExpr(constraint.measure, ref: ref)
-                BinaryOperatorExprSyntax(operator: .binaryOperator(constraint.op))
-                constant()
-              }
-            }
+            conditions: ConditionElementListSyntax { condition }
           ) {
             ThrowStmtSyntax(
               expression: FunctionCallExprSyntax(
@@ -336,16 +412,46 @@ extension FieldTypeDefinition {
                 )
               ) {
                 LabeledExprSyntax(expression: label)
-                LabeledExprSyntax(
-                  label: .identifier(constraint.argLabel),
-                  colon: .colonToken(),
-                  expression: constant()
-                )
+                argument
               }
             )
           }
         )
       )
     )
+  }
+}
+
+extension LexiconConstraint {
+  /// The type of this limit's constant in `Constraints`.
+  var constantTypeName: String {
+    switch check {
+    case .bound: "Swift.Int"
+    case .equals(.string, _): "Swift.String"
+    case .equals(.integer, _): "Swift.Int"
+    case .equals(.boolean, _): "Swift.Bool"
+    case .accept: "[Swift.String]"
+    }
+  }
+
+  /// The literal that this limit's constant is initialized with.
+  var constantValue: ExprSyntax {
+    switch check {
+    case .bound(_, _, let limit, _):
+      ExprSyntax(IntegerLiteralExprSyntax(literal: .integerLiteral("\(limit)")))
+    case .equals(.string(let value), _):
+      ExprSyntax(StringLiteralExprSyntax(content: value))
+    case .equals(.integer(let value), _):
+      ExprSyntax(IntegerLiteralExprSyntax(literal: .integerLiteral("\(value)")))
+    case .equals(.boolean(let value), _):
+      ExprSyntax(BooleanLiteralExprSyntax(value))
+    case .accept(let types):
+      ExprSyntax(
+        ArrayExprSyntax {
+          for type in types {
+            ArrayElementSyntax(expression: StringLiteralExprSyntax(content: type))
+          }
+        })
+    }
   }
 }
