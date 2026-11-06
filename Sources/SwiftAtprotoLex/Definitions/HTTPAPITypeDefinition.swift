@@ -27,7 +27,7 @@ extension HTTPAPITypeDefinition {
         DeclModifierSyntax(name: .keyword(.indirect)),
       ],
       name: .init(stringLiteral: "Error"),
-      inheritanceClause: InheritanceClauseSyntax(typeNames: ["XRPCError"])
+      inheritanceClause: InheritanceClauseSyntax(typeNames: [Lex.runtime("XRPCError")])
     ) {
       for error in errors.sorted() {
         let docTrivia: Trivia? = error.description.map {
@@ -72,7 +72,7 @@ extension HTTPAPITypeDefinition {
         ],
         signature: FunctionSignatureSyntax(
           parameterClause: FunctionParameterClauseSyntax {
-            FunctionParameterSyntax(firstName: .identifier("error"), type: TypeSyntax(stringLiteral: "UnExpectedError"))
+            FunctionParameterSyntax(firstName: .identifier("error"), type: Lex.typeSyntax(Lex.runtime("UnExpectedError")))
           }
         )
       ) {

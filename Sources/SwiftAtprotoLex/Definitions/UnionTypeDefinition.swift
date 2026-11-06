@@ -65,7 +65,7 @@ struct UnionTypeDefinition: Codable, SwiftCodeGeneratable {
           parameterClause: EnumCaseParameterClauseSyntax(
             leftParen: .leftParenToken(),
             parameters: EnumCaseParameterListSyntax([
-              EnumCaseParameterSyntax(stringLiteral: "UnknownRecord")
+              EnumCaseParameterSyntax(type: Lex.typeSyntax(Lex.runtime("UnknownRecord")))
             ]),
             rightParen: .rightParenToken()
           )

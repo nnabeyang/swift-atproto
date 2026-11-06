@@ -190,7 +190,7 @@ struct ConstraintValidationGenerationTests {
     let generated = try await generate()
     let post = lines(try declaration("Post", in: generated.client))
     #expect(post.contains("guard text.count <= Constraints.textMaxGraphemes else {"))
-    #expect(post.contains(#"throw LexiconConstraintError.tooManyGraphemes("text", limit: Constraints.textMaxGraphemes)"#))
+    #expect(post.contains(#"throw SwiftAtproto.LexiconConstraintError.tooManyGraphemes("text", limit: Constraints.textMaxGraphemes)"#))
     #expect(post.contains("guard `default` >= Constraints.defaultMinimum else {"))
     #expect(!post.contains { $0.contains("<= 300 else") })
 
@@ -204,7 +204,7 @@ struct ConstraintValidationGenerationTests {
     let generated = try await generate()
     let post = lines(try declaration("Post", in: generated.client))
 
-    #expect(post.contains("public func validateConstraints() throws(LexiconConstraintError) {"))
+    #expect(post.contains("public func validateConstraints() throws(SwiftAtproto.LexiconConstraintError) {"))
     let nested = [
       "try attachment?.validateConstraints()",
       "try embed?.validateConstraints()",
@@ -216,7 +216,7 @@ struct ConstraintValidationGenerationTests {
       #expect(post.contains(line), "missing \(line)")
     }
     // The own fields come after the nested values, as in strict decoding.
-    let validateStart = try #require(post.firstIndex(of: "public func validateConstraints() throws(LexiconConstraintError) {"))
+    let validateStart = try #require(post.firstIndex(of: "public func validateConstraints() throws(SwiftAtproto.LexiconConstraintError) {"))
     let validateBody = post[validateStart...]
     let lastNested = try #require(validateBody.firstIndex(of: "try reply.validateConstraints()"))
     let firstOwn = try #require(validateBody.firstIndex(of: "guard text.utf8.count <= Constraints.textMaxLength else {"))
@@ -234,16 +234,16 @@ struct ConstraintValidationGenerationTests {
     let generated = try await generate()
     let mention = lines(try declaration("Post_Mention", in: generated.client))
     #expect(!mention.contains { $0.contains("func validateConstraints()") })
-    #expect(generated.client.contains("public struct Post_Mention: Codable, Hashable, Sendable, LexiconValidatable {"))
+    #expect(generated.client.contains("public struct Post_Mention: Codable, Hashable, Sendable, SwiftAtproto.LexiconValidatable {"))
   }
 
   @Test("unions validate the value of each case and skip unknown types")
   func unionValidatesCases() async throws {
     let generated = try await generate()
-    #expect(generated.client.contains("public indirect enum Post_Embed: Codable, Hashable, Sendable, LexiconValidatable {"))
+    #expect(generated.client.contains("public indirect enum Post_Embed: Codable, Hashable, Sendable, SwiftAtproto.LexiconValidatable {"))
 
     let embed = lines(try declaration("Post_Embed", in: generated.client))
-    #expect(embed.contains("public func validateConstraints() throws(LexiconConstraintError) {"))
+    #expect(embed.contains("public func validateConstraints() throws(SwiftAtproto.LexiconConstraintError) {"))
     #expect(embed.contains("case .video(let value):"))
     #expect(embed.contains("case .postMention(let value):"))
     #expect(embed.contains("try value.validateConstraints()"))
@@ -254,10 +254,10 @@ struct ConstraintValidationGenerationTests {
   @Test("UnknownATPValue validates the record it holds")
   func unknownValueValidatesRecord() async throws {
     let generated = try await generate()
-    #expect(generated.unknown.contains("public nonisolated enum UnknownATPValue: UnknownATPValueProtocol, LexiconValidatable {"))
+    #expect(generated.unknown.contains("public nonisolated enum UnknownATPValue: SwiftAtproto.UnknownATPValueProtocol, SwiftAtproto.LexiconValidatable {"))
 
     let unknown = lines(try declaration("UnknownATPValue", in: generated.unknown))
-    #expect(unknown.contains("public func validateConstraints() throws(LexiconConstraintError) {"))
+    #expect(unknown.contains("public func validateConstraints() throws(SwiftAtproto.LexiconConstraintError) {"))
     #expect(unknown.contains("case .record(let record):"))
     #expect(unknown.contains("try record.validateConstraints()"))
     #expect(unknown.contains("case .any:"))

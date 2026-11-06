@@ -12,17 +12,25 @@ enum GeneratedNameCollisionError: Error, Equatable, CustomStringConvertible {
   /// `field` of the generated type `typeName`, from the schema `nsid`, has the
   /// name of the declaration `generatedName` that the generator adds to it.
   case field(nsid: String, typeName: String, field: String, generatedName: String)
+  /// The schema `nsid` generates the type or namespace `typeName`, whose last
+  /// component is the name of a module the generated code qualifies its
+  /// references with (`Lex.qualifyingModules`), so it would hide that module.
+  case moduleName(nsid: String, typeName: String)
 
   var description: String {
     switch self {
     case .field(let nsid, let typeName, let field, let generatedName):
       "field \(field) of \(typeName) (\(nsid)) collides with the generated \(generatedName); rename the field in the Lexicon"
+    case .moduleName(let nsid, let typeName):
+      "\(nsid) generates \(typeName), which hides the \(typeName.split(separator: ".").last.map(String.init) ?? typeName) module that the generated code refers to; rename it in the Lexicon"
     }
   }
 }
 
-/// Throws the first field, in a stable order, that would collide with a
-/// declaration the generator adds to its type.
+/// Throws the first name, in a stable order, that the generated code can't
+/// use: a field that would collide with a declaration the generator adds to
+/// its type, or a generated type or namespace that would hide a module the
+/// generated code refers to.
 ///
 /// It walks the same types as code generation (`TypeSchema.allTypes(prefix:)`)
 /// and asks the definitions the same questions the generator does, so that it
@@ -30,9 +38,20 @@ enum GeneratedNameCollisionError: Error, Equatable, CustomStringConvertible {
 func checkGeneratedNameCollisions(schemasMap: [String: [Schema]], defMap: ExtDefMap) throws {
   let schemas = schemasMap.values.flatMap { $0 }.sorted { $0.id < $1.id }
   for schema in schemas {
+    // The generated code is written inside extensions of these namespaces, so
+    // each segment, like each generated type, is found before a module of the
+    // same name when `Swift.String` or `SwiftAtproto.AnyCodable` is resolved.
+    let namespaceSegments = Lex.structNameFor(prefix: schema.prefix).split(separator: ".").map(String.init)
+    for (index, segment) in namespaceSegments.enumerated() where Lex.qualifyingModules.contains(segment) {
+      throw GeneratedNameCollisionError.moduleName(
+        nsid: schema.id, typeName: namespaceSegments[...index].joined(separator: "."))
+    }
     let types = schema.allTypes(prefix: schema.prefix).sorted { $0.key < $1.key }
     for (name, ts) in types {
       let namespace = Lex.structNameFor(prefix: ts.prefix)
+      if Lex.qualifyingModules.contains(name) {
+        throw GeneratedNameCollisionError.moduleName(nsid: ts.id, typeName: "\(namespace).\(name)")
+      }
       switch ts.type {
       case .object(let def):
         try checkObject(def, ts: ts, typeName: "\(namespace).\(name)", defMap: defMap)

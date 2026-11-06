@@ -32,7 +32,7 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
       modifiers: [DeclModifierSyntax(name: .keyword(.public))],
       name: .lexIdentifier(name),
       inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("LexPermissionSet")))
+        InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("LexPermissionSet")))
       }
     ) {
       staticLetDecl(leadingTrivia: .newline, ident: "id", value: StringLiteralExprSyntax(content: typeName))
@@ -92,7 +92,7 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
       PatternBindingSyntax(
         pattern: IdentifierPatternSyntax(identifier: .identifier("permissions")),
         typeAnnotation: TypeAnnotationSyntax(
-          type: ArrayTypeSyntax(element: IdentifierTypeSyntax(name: .identifier("LexPermission")))
+          type: ArrayTypeSyntax(element: Lex.typeSyntax(Lex.runtime("LexPermission")))
         ),
         initializer: InitializerClauseSyntax(value: arrayExpr)
       )
@@ -125,7 +125,7 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
     }
     return ExprSyntax(
       FunctionCallExprSyntax(
-        calledExpression: DeclReferenceExprSyntax(baseName: .identifier("LexPermission")),
+        calledExpression: Lex.refExpr(Lex.runtime("LexPermission")),
         leftParen: .leftParenToken(),
         arguments: LabeledExprListSyntax(args),
         rightParen: .rightParenToken(leadingTrivia: .newline)
@@ -184,7 +184,7 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
     default:
       ExprSyntax(
         FunctionCallExprSyntax(
-          calledExpression: DeclReferenceExprSyntax(baseName: .identifier("LexPermissionResource")),
+          calledExpression: Lex.refExpr(Lex.runtime("LexPermissionResource")),
           leftParen: .leftParenToken(),
           arguments: LabeledExprListSyntax([
             LabeledExprSyntax(
@@ -210,7 +210,7 @@ extension PermissionSetTypeDefinition: SwiftCodeGeneratable {
     default:
       ExprSyntax(
         FunctionCallExprSyntax(
-          calledExpression: DeclReferenceExprSyntax(baseName: .identifier("LexPermissionAction")),
+          calledExpression: Lex.refExpr(Lex.runtime("LexPermissionAction")),
           leftParen: .leftParenToken(),
           arguments: LabeledExprListSyntax([
             LabeledExprSyntax(

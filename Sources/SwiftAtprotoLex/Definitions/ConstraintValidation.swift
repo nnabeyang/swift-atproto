@@ -230,7 +230,7 @@ extension FieldTypeDefinition {
             ThrowStmtSyntax(
               expression: FunctionCallExprSyntax(
                 callee: MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .identifier("LexiconConstraintError")),
+                  base: Lex.refExpr(Lex.runtime("LexiconConstraintError")),
                   period: .periodToken(),
                   declName: DeclReferenceExprSyntax(baseName: .identifier(constraint.errorCase))
                 )

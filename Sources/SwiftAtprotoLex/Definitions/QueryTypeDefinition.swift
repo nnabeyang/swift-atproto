@@ -126,7 +126,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       switch output.encoding {
       case .json, .jsonl:
         guard let schema = output.schema else {
-          return Lex.typeSyntax("EmptyResponse")
+          return Lex.typeSyntax(Lex.runtime("EmptyResponse"))
         }
         let outname: String
         if case .ref(let def) = schema.type {
@@ -141,7 +141,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         return Lex.typeSyntax("Foundation.Data")
       }
     }
-    return Lex.typeSyntax("EmptyResponse")
+    return Lex.typeSyntax(Lex.runtime("EmptyResponse"))
   }
 
   func rpcArguments(ts: TypeSchema, fname: String, defMap: ExtDefMap, prefix: String, protocolRequirement: Bool) -> [FunctionParameterSyntax] {
@@ -229,7 +229,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       ],
       name: .lexIdentifier(ts.typeName),
       inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQuery")))
+        InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCQuery")))
       }
     ) {
       VariableDeclSyntax(
@@ -279,7 +279,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
       ],
       name: .identifier("Input"),
       inheritanceClause: InheritanceClauseSyntax {
-        InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCQueryInput")))
+        InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCQueryInput")))
       }
     ) {
       StructDeclSyntax(
@@ -289,7 +289,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
         ],
         name: .identifier("Query"),
         inheritanceClause: InheritanceClauseSyntax {
-          InheritedTypeSyntax(type: IdentifierTypeSyntax(name: .identifier("XRPCInputQuery")))
+          InheritedTypeSyntax(type: Lex.typeSyntax(Lex.runtime("XRPCInputQuery")))
         }
       ) {
         for query in queries(ts: ts, fname: name, defMap: defMap, prefix: prefix) {
@@ -384,7 +384,7 @@ struct QueryTypeDefinition: HTTPAPITypeDefinition, SwiftCodeGeneratable {
                 colon: .colonToken(),
                 type: TypeSyntax(
                   OptionalTypeSyntax(
-                    wrappedType: TypeSyntax(IdentifierTypeSyntax(name: .identifier("Parameters"))),
+                    wrappedType: Lex.typeSyntax(Lex.runtime("Parameters")),
                     questionMark: .postfixQuestionMarkToken()
                   ))
               ),

@@ -82,10 +82,10 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
     let isRepoApplyWritesInput =
       ts.id == "com.atproto.repo.applyWrites" && name.hasSuffix("_Input")
     let inheritedNames: [String] = {
-      if ts.isRecord { return ["ATProtoRecord"] }
+      if ts.isRecord { return [Lex.runtime("ATProtoRecord")] }
       var names = ["Codable", "Hashable", "Sendable", ValidationDecl.protocolName]
       if repoWriteActions != nil || isRepoApplyWritesInput {
-        names.append("RepoWriteOperationDescribing")
+        names.append(Lex.runtime("RepoWriteOperationDescribing"))
       }
       return names
     }()
@@ -166,7 +166,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 leftSquare: .leftSquareToken(),
                 key: Lex.typeSyntax("Swift.String"),
                 colon: .colonToken(),
-                value: TypeSyntax(IdentifierTypeSyntax(name: .identifier("AnyCodable"))),
+                value: Lex.typeSyntax(Lex.runtime("AnyCodable")),
                 rightSquare: .rightSquareToken()
               )
             )
@@ -330,7 +330,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                         colon: .colonToken(),
                         expression: ExprSyntax(
                           MemberAccessExprSyntax(
-                            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
+                            base: Lex.refExpr(Lex.runtime("AnyCodingKeys")),
                             period: .periodToken(),
                             declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                           ))
@@ -356,7 +356,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                           DictionaryElementSyntax(
                             key: Lex.refExpr("Swift.String"),
                             colon: .colonToken(),
-                            value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                            value: Lex.refExpr(Lex.runtime("AnyCodable"))
                           )
                         ])),
                       rightSquare: .rightSquareToken()
@@ -416,7 +416,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 ) {
                   LabeledExprSyntax(
                     expression: MemberAccessExprSyntax(
-                      base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
+                      base: Lex.refExpr(Lex.runtime("AnyCodable")),
                       period: .periodToken(),
                       declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                     )
@@ -578,7 +578,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       firstName: .identifier("_unknownValues"),
       type: DictionaryTypeSyntax(
         key: Lex.typeSyntax("Swift.String"),
-        value: TypeSyntax(IdentifierTypeSyntax(name: .identifier("AnyCodable")))
+        value: Lex.typeSyntax(Lex.runtime("AnyCodable"))
       ),
       defaultValue: InitializerClauseSyntax(
         value: DictionaryExprSyntax(content: .colon(.colonToken()))
@@ -743,7 +743,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                     colon: .colonToken(),
                     expression: ExprSyntax(
                       MemberAccessExprSyntax(
-                        base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodingKeys"))),
+                        base: Lex.refExpr(Lex.runtime("AnyCodingKeys")),
                         period: .periodToken(),
                         declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                       ))
@@ -769,7 +769,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                       DictionaryElementSyntax(
                         key: Lex.refExpr("Swift.String"),
                         colon: .colonToken(),
-                        value: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")))
+                        value: Lex.refExpr(Lex.runtime("AnyCodable"))
                       )
                     ])),
                   rightSquare: .rightSquareToken()
@@ -827,7 +827,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
             ) {
               LabeledExprSyntax(
                 expression: MemberAccessExprSyntax(
-                  base: DeclReferenceExprSyntax(baseName: .identifier("AnyCodable")),
+                  base: Lex.refExpr(Lex.runtime("AnyCodable")),
                   period: .periodToken(),
                   declName: DeclReferenceExprSyntax(baseName: .keyword(.self))
                 )
@@ -847,7 +847,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
             operator: .prefixOperator("!"),
             expression: FunctionCallExprSyntax(
               callee: MemberAccessExprSyntax(
-                base: DeclReferenceExprSyntax(baseName: .identifier("LexiconDecodingMode")),
+                base: Lex.refExpr(Lex.runtime("LexiconDecodingMode")),
                 period: .periodToken(),
                 declName: DeclReferenceExprSyntax(baseName: .identifier("shouldValidateConstraints"))
               )
@@ -922,7 +922,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                             pattern: IdentifierPatternSyntax(identifier: .identifier("error"))
                           )
                           UnresolvedAsExprSyntax()
-                          TypeExprSyntax(type: IdentifierTypeSyntax(name: .identifier("LexiconConstraintError")))
+                          TypeExprSyntax(type: Lex.typeSyntax(Lex.runtime("LexiconConstraintError")))
                         }
                       )
                     )
@@ -1037,7 +1037,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 ])
               )
             ) {
-              FunctionCallExprSyntax(callee: DeclReferenceExprSyntax(baseName: .identifier("RepoWriteRequirement"))) {
+              FunctionCallExprSyntax(callee: Lex.refExpr(Lex.runtime("RepoWriteRequirement"))) {
                 LabeledExprSyntax(
                   label: .identifier("collection"), colon: .colonToken(),
                   expression: StringLiteralExprSyntax(content: "unsupported"),
@@ -1045,7 +1045,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
                 LabeledExprSyntax(
                   label: .identifier("action"), colon: .colonToken(),
                   expression: FunctionCallExprSyntax(
-                    callee: DeclReferenceExprSyntax(baseName: .identifier("LexPermissionAction"))
+                    callee: Lex.refExpr(Lex.runtime("LexPermissionAction"))
                   ) {
                     LabeledExprSyntax(
                       label: .identifier("rawValue"), colon: .colonToken(),
@@ -1099,7 +1099,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
       name: .identifier("rawValue")
     )
     return FunctionCallExprSyntax(
-      callee: DeclReferenceExprSyntax(baseName: .identifier("RepoWriteRequirement"))
+      callee: Lex.refExpr(Lex.runtime("RepoWriteRequirement"))
     ) {
       LabeledExprSyntax(
         label: .identifier("collection"), colon: .colonToken(),
@@ -1121,7 +1121,7 @@ struct ObjectTypeDefinition: Encodable, DecodableWithConfiguration, SwiftCodeGen
           pattern: IdentifierPatternSyntax(identifier: .identifier("repoWriteRequirements")),
           typeAnnotation: TypeAnnotationSyntax(
             type: ArrayTypeSyntax(
-              element: IdentifierTypeSyntax(name: .identifier("RepoWriteRequirement")))),
+              element: Lex.typeSyntax(Lex.runtime("RepoWriteRequirement")))),
           accessorBlock: AccessorBlockSyntax(
             accessors: .getter(
               CodeBlockItemListSyntax {
