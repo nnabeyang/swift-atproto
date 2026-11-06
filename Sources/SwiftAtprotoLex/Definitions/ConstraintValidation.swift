@@ -37,7 +37,7 @@ struct LexiconConstraint {
   /// The constant's name: the field's name followed by the keyword, so that
   /// `text` and `maxGraphemes` give `textMaxGraphemes`.
   func constantName(for field: String) -> String {
-    field + keyword.prefix(1).uppercased() + keyword.dropFirst()
+    field + keyword.prefix(1).uppercased() + String(keyword.dropFirst())
   }
 }
 
