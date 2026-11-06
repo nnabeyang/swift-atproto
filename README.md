@@ -16,7 +16,7 @@ let package = Package(
     // name, platforms, products, etc.
     dependencies: [
         // other dependencies
-        .package(url: "https://github.com/nnabeyang/swift-atproto", from: "0.45.0"),
+        .package(url: "https://github.com/nnabeyang/swift-atproto", from: "0.46.0"),
     ],
     targets: [
         .executableTarget(name: "<executable-target-name>", dependencies: [
