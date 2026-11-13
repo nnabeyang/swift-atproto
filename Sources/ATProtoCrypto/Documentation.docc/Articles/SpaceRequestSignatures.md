@@ -14,8 +14,8 @@ own repo could replay it against every other host in the space. So the
 credential names a key of its holder's in `cnf.kid`, as a P-256 `did:key`, and
 every request that presents it carries an HTTP message signature
 ([RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html)) made with that key and
-covering the host the request is addressed to. A credential replayed elsewhere
-either lacks a signature or carries one for the wrong host.
+covering the audience the request is addressed to. A credential replayed
+elsewhere either lacks a signature or carries one for the wrong audience.
 
 ``SpaceRequestSignature`` produces that signature. It uses the label `sig`,
 the parameter `tag="atproto-space-credential"`, and the algorithm
@@ -24,21 +24,23 @@ DER, in padded base64. A host finds the signature by its tag, not its label.
 
 ## Obtaining a credential
 
-`com.atproto.space.getSpaceCredential` carries no signature. The key to bind
+`com.atproto.space.authorizeSpaceSync` carries no signature. The key to bind
 the credential to is sent as a `did:key` in the request body's
-`credentialKid`, beside the delegation token and client attestation the space
+`credentialKey`, beside the delegation token and client attestation the space
 requires. Generate a fresh P-256 key for each new credential and keep it for
 the credential's lifetime.
 
 ## Presenting a credential
 
 Every request that presents the credential signs `authorization` and then
-`atproto-space-audience`, the DID of the host it is addressed to. It names no
-key, because the credential's `cnf.kid` already does:
+`atproto-space-audience`. When syncing a repo, the audience is the DID of the
+account the repo belongs to; for a request to the space host, it is the space
+authority's DID. The signature names no key, because the credential's
+`cnf.kid` already does:
 
 ```swift
 let signed = try SpaceRequestSignature.use(
-  credential: credential, audience: repoHostDID, key: key)
+  credential: credential, audience: repoOwnerDID, key: key)
 for field in signed.headerFields {
   request.headers[field.name] = field.value
 }
@@ -53,8 +55,8 @@ because the credential is not parsed; `SwiftAtproto` reads `cnf.kid` as
 `UnverifiedSpaceCredential.boundKeyID`, which a holder can compare against
 ``PublicKey/did``.
 
-Which host a request is addressed to, and so which audience it names, is the
-caller's to decide, as is how the key is stored between requests.
+Which audience a request names, and how the key is stored between requests,
+are the caller's to decide.
 
 ## Authenticating what a repo host returns
 

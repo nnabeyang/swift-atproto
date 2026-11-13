@@ -47,8 +47,9 @@ public struct SpaceRequestSignature: Sendable, Hashable {
   /// The `authorization` field value, `Atproto-Space-Credential <credential>`.
   public let authorization: String
 
-  /// The `atproto-space-audience` field value: the DID of the host the request
-  /// is addressed to.
+  /// The `atproto-space-audience` field value: the DID of the account whose
+  /// repo is synced, or of the space authority for a request to the space
+  /// host.
   public let audience: String
 
   /// The `signature-input` field value, labelled `sig`.
@@ -68,7 +69,7 @@ public struct SpaceRequestSignature: Sendable, Hashable {
     ]
   }
 
-  /// Signs a request that presents `credential` to the host `audience` names.
+  /// Signs a request that presents `credential` to `audience`.
   ///
   /// Covers `authorization` and then `atproto-space-audience`. `key` has to be
   /// the key the credential is bound to; nothing here can check that, because
