@@ -59,22 +59,40 @@ caller's to decide, as is how the key is stored between requests.
 ## Authenticating what a repo host returns
 
 A space repo commit carries no signature either. A syncer reading a repo with a
-credential establishes a secret with the repo host for each request and checks
-the MAC the response carries:
+credential shares a secret with the repo host for each request, asks for a MAC
+in `Accept-Signature`, and checks the MAC the response carries. The MAC is an
+HTTP message signature with the `hmac-sha256` algorithm, keyed by that secret,
+over a field that describes the commit or record:
 
 ```swift
 let encapsulation = try SpaceKeyEncapsulation.encapsulate(
   authorKEMKey: authorDocument.spaceKEMKey.publicKeyMultibase)
-request.headers[.init(SpaceMAC.wantMACHeaderName)!] = SpaceMAC.wantMACHeader(
-  type: .repo, keyShare: encapsulation.keyShare)
+request.headers[.init(SpaceMAC.acceptSignatureFieldName)!] = SpaceMAC.acceptSignature(
+  profile: .commit, keyShare: encapsulation.keyShare)
+// accept-signature: mac=("atproto-space-commit";sf);keyid="did:key:zDna…";tag="atproto-space-commit"
 // … send the request …
-let mac = try SpaceMAC.mac(
-  fromMACHeader: response.headers[.init(SpaceMAC.macHeaderName)!], type: .repo)
+let mac = SpaceMACResponse(profile: .commit) { response.headers[.init($0)!] }
 ```
+
+The response carries `Atproto-Space-Commit`, which repeats the commit's
+fields, and a `Signature-Input` and `Signature` covering exactly that field.
+``SpaceMAC/verifyCommit(_:commit:encapsulation:)`` finds the signature by its
+`tag`, checks it, and checks that the field describes the commit in the
+response body; `ATProtoSync` does this for you. For `getRecord`, request the
+``SpaceMACProfile/record`` profile and check the response with
+``SpaceMAC/verifyRecord(_:record:encapsulation:)``, passing the URI that was
+requested and the CID computed from the returned record.
 
 Use a new ``SpaceKeyEncapsulation`` for every request, including retries and
 each page of a paginated response; it is unrelated to the key the credential is
-bound to. `ATProtoSync` verifies a commit with the secret and the MAC.
+bound to. If a MAC does not verify, refresh the author's DID document before
+retrying with a new encapsulation.
+
+A repo host reads the request with
+``SpaceMAC/request(fromAcceptSignature:profile:)``, derives the secret with
+``SpaceKeyEncapsulation/decapsulate(keyShare:authorKEMKey:)``, and answers with
+``SpaceMAC/responseFields(commit:request:sharedSecret:)`` or
+``SpaceMAC/responseFields(record:request:sharedSecret:)``.
 
 ## Keeping credentials out of logs
 
