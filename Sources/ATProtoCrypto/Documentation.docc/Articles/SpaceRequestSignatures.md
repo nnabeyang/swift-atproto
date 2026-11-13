@@ -17,10 +17,10 @@ every request that presents it carries an HTTP message signature
 covering the host the request is addressed to. A credential replayed elsewhere
 either lacks a signature or carries one for the wrong host.
 
-``SpaceRequestSignature`` produces that signature. It uses the label
-`atproto-space-credential`, the parameter `tag="atproto-space-credential"`, and
-the algorithm `ecdsa-p256-sha256`, and writes the signature as the 64-byte `r`
-and `s`, not DER, in padded base64.
+``SpaceRequestSignature`` produces that signature. It uses the label `sig`,
+the parameter `tag="atproto-space-credential"`, and the algorithm
+`ecdsa-p256-sha256`, and writes the signature as the 64-byte `r` and `s`, not
+DER, in padded base64. A host finds the signature by its tag, not its label.
 
 ## Obtaining a credential
 
@@ -44,8 +44,8 @@ for field in signed.headerFields {
 }
 // authorization:          Atproto-Space-Credential <credential>
 // atproto-space-audience: did:plc:…
-// signature-input:        atproto-space-credential=("authorization" "atproto-space-audience");tag="atproto-space-credential"
-// signature:              atproto-space-credential=:<base64>:
+// signature-input:        sig=("authorization" "atproto-space-audience");tag="atproto-space-credential"
+// signature:              sig=:<base64>:
 ```
 
 The key has to be the one the credential is bound to. Nothing here checks that,
