@@ -72,13 +72,20 @@ struct RepoSyncTests {
     let checkpoint = try restoredCheckpoint(records: [first])
     let update = RepoIncrementalSync(checkpoint: checkpoint)
     let (commit, authentication) = try headCommit(checkpoint.repository)
-    var mac = authentication.mac
-    mac[0] ^= 0xff
+    var response = authentication.response
+    // Another MAC of the same length, so that only its value is wrong.
+    response.signature = "mac=:" + Data(count: 32).base64EncodedString() + ":"
 
-    #expect(throws: RepoVerificationError.macMismatch) {
-      try update.finish(commit, authentication: authentication.replacing(mac: mac))
+    #expect(throws: RepoVerificationError.invalidMAC(.macMismatch)) {
+      try update.finish(commit, authentication: authentication.replacing(response: response))
     }
-    #expect(throws: RepoVerificationError.macMismatch) {
+    #expect(throws: RepoVerificationError.invalidMAC(.missingHeader)) {
+      try update.finish(
+        commit,
+        authentication: authentication.replacing(
+          response: SpaceMACResponse(coveredField: nil, signatureInput: nil, signature: nil)))
+    }
+    #expect(throws: RepoVerificationError.invalidMAC(.macMismatch)) {
       try update.finish(
         commit, authentication: authentication.replacing(sharedSecret: SymmetricKey(size: .bits256)))
     }
@@ -92,7 +99,7 @@ struct RepoSyncTests {
     // A response whose data was replaced to match the candidate still fails.
     commit.data = checkpoint.repository.setHash.digest
 
-    #expect(throws: RepoVerificationError.macMismatch) {
+    #expect(throws: RepoVerificationError.invalidMAC(.fieldMismatch)) {
       try update.finish(commit, authentication: authentication)
     }
   }

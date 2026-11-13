@@ -39,7 +39,11 @@ key.publicKey.did                                                   // "did:key:
 - ``SpaceRequestSignature``
 - ``SpaceKeyEncapsulation``
 - ``SpaceMAC``
-- ``SpaceMACType``
+- ``SpaceMACProfile``
+- ``SpaceMACResponse``
+- ``SpaceMACCommitField``
+- ``SpaceMACRecordField``
+- ``SpaceMACRequest``
 
 ### Identifiers
 

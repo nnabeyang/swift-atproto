@@ -11,13 +11,15 @@ complete records or incremental operations. It also reads the STAR archive
 records and stores checkpoints.
 
 A commit carries no signature. For each request, the syncer shares a secret
-with the repo host through `ATProtoCrypto.SpaceKeyEncapsulation`, sends the key
-share in `Atproto-Space-Want-Mac`, and reads the MAC from `Atproto-Space-Mac`.
-``RepoCommitAuthentication`` carries what was requested, the secret, and that
-MAC. Generated `com.atproto.space.defs#commit` and
-`com.atproto.space.listRepoOps#opEntry` values expose the fields this module
-needs, so a consumer can pass generated values directly to ``RepoCommit`` and
-``RepoCommitVerifier``.
+with the repo host through `ATProtoCrypto.SpaceKeyEncapsulation` and asks for a
+MAC in `Accept-Signature`. The host answers with an `Atproto-Space-Commit`
+field that repeats the commit, and an HTTP message signature over that field
+keyed by the secret. ``RepoCommitAuthentication`` carries what was requested,
+the encapsulation, and those response fields; ``RepoCommitVerifier`` checks the
+MAC and that the field describes the commit it was given. Generated
+`com.atproto.space.defs#commit` and `com.atproto.space.listRepoOps#opEntry`
+values expose the fields this module needs, so a consumer can pass generated
+values directly to ``RepoCommit`` and ``RepoCommitVerifier``.
 
 ```swift
 let checkpoint = try RepoSyncCheckpoint(revision: persistedRevision, state: persistedState)
@@ -28,7 +30,7 @@ if let commit = response.commit {
   let result = try update.finish(
     commit,
     authentication: RepoCommitAuthentication(
-      space: space, repo: author, sharedSecret: encapsulation.sharedSecret, mac: mac)
+      space: space, repo: author, encapsulation: encapsulation, response: mac)
   )
   switch result {
   case .synchronized(let replacement):
@@ -48,7 +50,7 @@ pull-driven and are folded into a set hash as they are consumed.
 let star = try await PermissionedRepoSTAR.read(
   from: response.body,
   authentication: RepoCommitAuthentication(
-    space: space, repo: author, sharedSecret: encapsulation.sharedSecret, mac: mac))
+    space: space, repo: author, encapsulation: encapsulation, response: mac))
 
 for try await record in star.records {
   // Stage the path-ordered, CID-computed record in consumer-owned storage.
