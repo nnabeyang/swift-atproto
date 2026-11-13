@@ -73,22 +73,40 @@ struct SpaceMACTests {
     }
   }
 
-  // RFC 9180 §A.3.1, DHKEM(P-256, HKDF-SHA256): the syncer's key share is `pkEm`
-  // and the author's KEM key is `skRm`. The upstream implementation checks the
-  // same vector.
-  @Test func matchesTheRFC9180Vector() throws {
-    let pkEm = Self.hex(
-      "04a92719c6195d5085104f469a8b9814d5838ff72b60501e2c4466e5e67b325ac98536d7b61a1af4b78e5b7f951c0900be863c403ce65c9bfcb9382657222d18c4"
-    )
-    let skRm = Self.hex("f3ce7fdae57e1a310d87f1ebbde6f328be0a99cdbcadf4d6589cf29de4b8ffd2")
-    let expected = Self.hex("c0d26aeab536609a572b07695d933b589dcf363ff9d93c93adea537aeabb8cb8")
+  // The base-mode, export-only DHKEM(P-256, HKDF-SHA256) entry of the HPKE test
+  // vectors (github.com/cfrg/draft-irtf-cfrg-hpke, test-vectors.json at
+  // b1f7cb0): mode 0, kem_id 16, kdf_id 1, aead_id 65535.
+  private static let vectorEnc = hex(
+    "04d804370b7e24b94749eb1dc8df6d4d4a5d75f9effad01739ebcad5c54a40d57aaa8b4190fc124dbde2e4f1e1d1b012a3bc4038157dc29b55533a932306d8d38d"
+  )
+  private static let vectorSkRm = hex("62c3868357a464f8461d03aa0182c7cebcde841036aea7230ddc7339f1088346")
 
+  @Test(arguments: [
+    ("", "8cf837d5bf1994f0fac3ee1faa671d07e9a38b7f6153bdbb8a66b90159ef7d13"),
+    ("00", "3c7708f8ae1f510f4439fa514deb1c7ece7a29085a2e8270a84b6ad6481cc0b4"),
+    ("54657374436f6e74657874", "f53fb127f67dabf35b14fae14b53e6ce5c49e572f95eb4ef7a3b3cb9cd85f12b"),
+  ])
+  func matchesTheHPKEExportVectors(context: String, exported: String) throws {
+    let author = try PrivateKey(type: .p256, rawValue: Self.vectorSkRm)
+    let secret = try SpaceKeyEncapsulation.export(
+      enc: Self.vectorEnc, authorKEMKey: author,
+      info: Self.hex("4f6465206f6e2061204772656369616e2055726e"), context: Self.hex(context))
+    #expect(secret.withUnsafeBytes { Data($0) } == Self.hex(exported))
+  }
+
+  // The same keys under `info` "atproto-mac" with an empty exporter context,
+  // computed independently by following the proposal's "Shared secret without
+  // HPKE" appendix in Python with hmac and hashlib, which reproduces the vectors
+  // above under their `info`.
+  @Test func matchesTheAppendixUnderTheAtprotoInfo() throws {
     let keyShare = PublicKey(
-      type: .p256, raw: .p256(try P256.Signing.PublicKey(x963Representation: pkEm))
+      type: .p256, raw: .p256(try P256.Signing.PublicKey(x963Representation: Self.vectorEnc))
     ).did
-    let author = try PrivateKey(type: .p256, rawValue: skRm)
+    let author = try PrivateKey(type: .p256, rawValue: Self.vectorSkRm)
     let secret = try SpaceKeyEncapsulation.decapsulate(keyShare: keyShare, authorKEMKey: author)
-    #expect(secret.withUnsafeBytes { Data($0) } == expected)
+    #expect(
+      secret.withUnsafeBytes { Data($0) }
+        == Self.hex("2060e0558d1b34c10086bc137f849bb79ba59fcdc30544418e35c9cd301f0d0d"))
   }
 
   // MARK: - MACs

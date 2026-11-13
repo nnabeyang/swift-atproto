@@ -41,17 +41,21 @@ public enum SpaceMACType: String, Hashable, Sendable, CaseIterable {
 
 /// The shared secret a syncer establishes with a repo host for one request.
 ///
-/// The syncer encapsulates against the author's `#atproto_kem` key with a new
-/// ephemeral P-256 key, sends ``keyShare`` in `Atproto-Space-Want-Mac`, and
-/// keeps ``sharedSecret`` to verify the MAC the response carries. The secret is
-/// derived as DHKEM(P-256, HKDF-SHA256) does in RFC 9180 §4.1, with the
-/// ephemeral public key as `enc`.
+/// The syncer encapsulates against the author's `#atproto_kem` key, sends
+/// ``keyShare`` with its MAC request, and keeps ``sharedSecret`` to verify the
+/// MAC the response carries. The secret is an HPKE secret export
+/// ([RFC 9180 §6.2](https://www.rfc-editor.org/rfc/rfc9180#section-6.2)) in
+/// base mode, with DHKEM(P-256, HKDF-SHA256), HKDF-SHA256, the Export-only
+/// AEAD, the `info` `atproto-mac`, and an empty exporter context, so nothing
+/// is encrypted.
 ///
 /// Use a new encapsulation for every request, including retries and each page
 /// of a paginated response. It is unrelated to the key a space credential is
 /// bound to.
 public struct SpaceKeyEncapsulation: Sendable {
-  /// The ephemeral public key as a `did:key`, sent as `key_share`.
+  /// HPKE's `enc`, the syncer's ephemeral P-256 public key, as a `did:key`.
+  /// HPKE encodes `enc` as an uncompressed point, but a `did:key` carries the
+  /// compressed one.
   public let keyShare: String
 
   /// The 32-byte secret that keys the response MAC.
@@ -63,12 +67,15 @@ public struct SpaceKeyEncapsulation: Sendable {
   /// - Throws: ``SpaceMACError/invalidKey`` when the key is not P-256.
   public static func encapsulate(authorKEMKey: String) throws -> Self {
     let author = try Self.agreementKey(authorKEMKey)
-    let ephemeral = P256.KeyAgreement.PrivateKey()
-    let shared = try ephemeral.sharedSecretFromKeyAgreement(with: author)
-    return Self(
-      keyShare: try Self.didKey(ephemeral.publicKey),
-      sharedSecret: derive(
-        shared, syncer: ephemeral.publicKey, author: author))
+    do {
+      let sender = try HPKE.Sender(recipientKey: author, ciphersuite: ciphersuite, info: info)
+      let enc = try P256.Signing.PublicKey(x963Representation: sender.encapsulatedKey)
+      return Self(
+        keyShare: PublicKey(type: .p256, raw: .p256(enc)).did,
+        sharedSecret: try sender.exportSecret(context: Data(), outputByteCount: 32))
+    } catch {
+      throw SpaceMACError.invalidKey
+    }
   }
 
   /// The repo host's side: derives the secret for `keyShare` with the
@@ -78,32 +85,33 @@ public struct SpaceKeyEncapsulation: Sendable {
   ///   is not P-256.
   public static func decapsulate(keyShare: String, authorKEMKey: PrivateKey) throws -> SymmetricKey {
     guard authorKEMKey.type == .p256 else { throw SpaceMACError.invalidKey }
-    let syncer = try agreementKey(keyShare)
-    let author = try P256.KeyAgreement.PrivateKey(
-      rawRepresentation: authorKEMKey.rawRepresentation)
-    let shared = try author.sharedSecretFromKeyAgreement(with: syncer)
-    return derive(shared, syncer: syncer, author: author.publicKey)
+    return try export(
+      enc: try agreementKey(keyShare).x963Representation,
+      authorKEMKey: authorKEMKey, info: info, context: Data())
   }
 
-  // Fixed labels from RFC 9180. 0x0010 identifies DHKEM(P-256, HKDF-SHA256).
-  private static let prefix = Data("HPKE-v1".utf8) + Data("KEM".utf8) + Data([0x00, 0x10])
-
-  private static func derive(
-    _ shared: SharedSecret,
-    syncer: P256.KeyAgreement.PublicKey,
-    author: P256.KeyAgreement.PublicKey
-  ) -> SymmetricKey {
-    let dh = shared.withUnsafeBytes { Data($0) }
-    var info = Data([0x00, 0x20]) + prefix + Data("shared_secret".utf8)
-    // Uncompressed points, although did:key and multikey use the compressed form.
-    info += syncer.x963Representation + author.x963Representation
-    // An empty salt is a hash-length run of zeros (RFC 5869 §2.2).
-    return HKDF<SHA256>.deriveKey(
-      inputKeyMaterial: SymmetricKey(data: prefix + Data("eae_prk".utf8) + dh),
-      salt: Data(),
-      info: info,
-      outputByteCount: 32)
+  /// The secret HPKE exports for `enc` under `info` and `context`, as the
+  /// repo host derives it. Separate from ``decapsulate(keyShare:authorKEMKey:)``
+  /// so that the published test vectors, which use another `info`, can be
+  /// checked.
+  static func export(enc: Data, authorKEMKey: PrivateKey, info: Data, context: Data) throws -> SymmetricKey {
+    do {
+      let author = try P256.KeyAgreement.PrivateKey(
+        rawRepresentation: authorKEMKey.rawRepresentation)
+      let recipient = try HPKE.Recipient(
+        privateKey: author, ciphersuite: ciphersuite, info: info, encapsulatedKey: enc)
+      return try recipient.exportSecret(context: context, outputByteCount: 32)
+    } catch {
+      throw SpaceMACError.invalidKey
+    }
   }
+
+  /// KEM `0x0010`, KDF `0x0001`, and AEAD `0xFFFF`.
+  private static let ciphersuite = HPKE.Ciphersuite(
+    kem: .P256_HKDF_SHA256, kdf: .HKDF_SHA256, aead: .exportOnly)
+
+  /// A fixed label that ties the secret to this protocol.
+  private static let info = Data("atproto-mac".utf8)
 
   // The multicodec prefix of a P-256 public key, 0x1200 as an unsigned varint.
   private static let p256Multicodec: [UInt8] = [0x80, 0x24]
@@ -123,11 +131,6 @@ public struct SpaceKeyEncapsulation: Sendable {
     } catch {
       throw SpaceMACError.invalidKey
     }
-  }
-
-  private static func didKey(_ key: P256.KeyAgreement.PublicKey) throws -> String {
-    let signing = try P256.Signing.PublicKey(x963Representation: key.x963Representation)
-    return PublicKey(type: .p256, raw: .p256(signing)).did
   }
 }
 
