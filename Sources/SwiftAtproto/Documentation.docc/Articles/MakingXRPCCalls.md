@@ -129,7 +129,7 @@ signed fields as they are rather than spelling that field itself.
 Proofs and signatures cross this boundary as strings. They may come from
 `ATProtoCrypto`, an OAuth package, or another producer; `SwiftAtproto` does not
 depend on a cryptography implementation. A client attestation is also a
-distinct credential case, but it belongs in the `getSpaceCredential` request
+distinct credential case, but it belongs in the `authorizeSpaceSync` request
 body rather than an authorization header.
 
 ## Retry a DPoP nonce challenge
