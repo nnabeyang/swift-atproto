@@ -4,8 +4,8 @@ import Foundation
 ///
 /// The lexicon generator adds this conformance to `com.atproto.space.defs#commit`
 /// when that definition is present and has the expected shape. A commit carries
-/// no signature: the repo host authenticates it to a syncer with a MAC in the
-/// `Atproto-Space-Mac` response header. Verification is provided by the
+/// no signature: the repo host authenticates it to a syncer with a MAC over
+/// the `Atproto-Space-Commit` response header. Verification is provided by the
 /// `ATProtoSync` product.
 public protocol PermissionedRepoCommitDescribing: Sendable {
   /// The commit format version.

@@ -10,8 +10,6 @@ struct SpaceMACTests {
   private static let rev = "3kbcq3p7ad400"
   private static let data = Data(repeating: 1, count: 32)
   private static let uri = "at://did:example:alice/space/app.bsky.group/test/app.bsky.feed.post/1"
-  // The CIDs of `{ text: 'hello' }` and `{ text: 'world' }` in the upstream tests.
-  private static let cidA = hex("017112206428f02304b8db8cb107c89336481f0fead728bf374ca80168d2c71938cefae7")
   private static let secret = SymmetricKey(data: Data(0..<32))
 
   // MARK: - KEM
@@ -107,130 +105,6 @@ struct SpaceMACTests {
     #expect(
       secret.withUnsafeBytes { Data($0) }
         == Self.hex("2060e0558d1b34c10086bc137f849bb79ba59fcdc30544418e35c9cd301f0d0d"))
-  }
-
-  // MARK: - MACs
-
-  // Computed independently from the formula in the proposal with Python's hmac.
-  @Test func commitMACMatchesTheFormula() throws {
-    let mac = try SpaceMAC.commitMAC(
-      sharedSecret: Self.secret, space: Self.space, repo: Self.repo, rev: Self.rev, data: Self.data)
-    #expect(mac == Self.hex("3b38727ea60248c55e0c549faa9a6738a14342eb57d779e6b300784f8b8d6acc"))
-    #expect(
-      SpaceMAC.isValidCommitMAC(
-        mac, sharedSecret: Self.secret, space: Self.space, repo: Self.repo, rev: Self.rev,
-        data: Self.data))
-  }
-
-  @Test func commitMACCoversEveryField() throws {
-    let mac = try SpaceMAC.commitMAC(
-      sharedSecret: Self.secret, space: Self.space, repo: Self.repo, rev: Self.rev, data: Self.data)
-    let changes: [(SymmetricKey, String, String, String, Data)] = [
-      (SymmetricKey(size: .bits256), Self.space, Self.repo, Self.rev, Self.data),
-      (Self.secret, Self.space + "2", Self.repo, Self.rev, Self.data),
-      (Self.secret, Self.space, "did:example:bob", Self.rev, Self.data),
-      (Self.secret, Self.space, Self.repo, "3kbcq3p7ad401", Self.data),
-      (Self.secret, Self.space, Self.repo, Self.rev, Data(repeating: 2, count: 32)),
-    ]
-    for (secret, space, repo, rev, data) in changes {
-      #expect(
-        !SpaceMAC.isValidCommitMAC(
-          mac, sharedSecret: secret, space: space, repo: repo, rev: rev, data: data))
-    }
-  }
-
-  @Test func commitMACIsUnambiguousAcrossFieldBoundaries() throws {
-    // Without length prefixes these two would MAC identically.
-    let a = try SpaceMAC.commitMAC(
-      sharedSecret: Self.secret, space: Self.space, repo: "did:example:alice", rev: "3kbc",
-      data: Self.data)
-    let b = try SpaceMAC.commitMAC(
-      sharedSecret: Self.secret, space: Self.space, repo: "did:example:alice3", rev: "kbc",
-      data: Self.data)
-    #expect(a != b)
-  }
-
-  @Test func recordMACMatchesTheFormula() throws {
-    let mac = try SpaceMAC.recordMAC(sharedSecret: Self.secret, uri: Self.uri, cid: Self.cidA)
-    #expect(mac == Self.hex("b1000cbab95db1e15987c90d63eb3bdc76dbd64b921ca0ef5af842ad588da4c9"))
-    #expect(SpaceMAC.isValidRecordMAC(mac, sharedSecret: Self.secret, uri: Self.uri, cid: Self.cidA))
-    #expect(!SpaceMAC.isValidRecordMAC(mac, sharedSecret: Self.secret, uri: Self.uri + "2", cid: Self.cidA))
-    var otherCID = Self.cidA
-    otherCID[otherCID.count - 1] ^= 1
-    #expect(!SpaceMAC.isValidRecordMAC(mac, sharedSecret: Self.secret, uri: Self.uri, cid: otherCID))
-  }
-
-  @Test func rejectsFieldsLongerThanTheLengthPrefix() {
-    let long = String(repeating: "a", count: Int(UInt16.max) + 1)
-    #expect(throws: SpaceMACError.fieldTooLong) {
-      try SpaceMAC.commitMAC(
-        sharedSecret: Self.secret, space: long, repo: Self.repo, rev: Self.rev, data: Self.data)
-    }
-    #expect(
-      !SpaceMAC.isValidCommitMAC(
-        Data(count: 32), sharedSecret: Self.secret, space: long, repo: Self.repo, rev: Self.rev,
-        data: Self.data))
-  }
-
-  // MARK: - Headers
-
-  @Test func formatsBothHeadersAsUpstreamDoes() {
-    #expect(
-      SpaceMAC.wantMACHeader(type: .repo, keyShare: "did:key:zDnaExample")
-        == "type=\"atproto-space-repo\", ver=1, key_share=\"did:key:zDnaExample\"")
-    #expect(
-      SpaceMAC.macHeader(type: .repo, mac: Data(0..<32))
-        == "type=\"atproto-space-repo\", ver=1, mac=:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=:")
-  }
-
-  @Test func roundTripsBothHeaders() throws {
-    let want = SpaceMAC.wantMACHeader(type: .record, keyShare: "did:key:zDnaX")
-    #expect(try SpaceMAC.keyShare(fromWantMACHeader: want, type: .record) == "did:key:zDnaX")
-    let mac = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
-    #expect(try SpaceMAC.mac(fromMACHeader: SpaceMAC.macHeader(type: .record, mac: mac), type: .record) == mac)
-  }
-
-  @Test func toleratesWhitespaceParametersAndMissingPadding() throws {
-    let header = "ver=1 ,type=\"atproto-space-repo\";a=1,   mac=:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8:;b"
-    #expect(try SpaceMAC.mac(fromMACHeader: header, type: .repo) == Data(0..<32))
-  }
-
-  @Test func rejectsAMissingOrMalformedHeader() {
-    #expect(throws: SpaceMACError.missingHeader) {
-      try SpaceMAC.keyShare(fromWantMACHeader: nil, type: .repo)
-    }
-    for value in ["???", "type=\"atproto-space-repo\",", "Type=\"atproto-space-repo\"", "type=\"unterminated"] {
-      #expect(throws: SpaceMACError.malformedHeader) {
-        try SpaceMAC.keyShare(fromWantMACHeader: value, type: .repo)
-      }
-    }
-    #expect(throws: SpaceMACError.malformedHeader) {
-      try SpaceMAC.keyShare(fromWantMACHeader: "type=\"atproto-space-repo\", ver=1", type: .repo)
-    }
-    #expect(throws: SpaceMACError.malformedHeader) {
-      try SpaceMAC.mac(fromMACHeader: "type=\"atproto-space-repo\", ver=1, mac=\"abc\"", type: .repo)
-    }
-    #expect(throws: SpaceMACError.malformedHeader) {
-      try SpaceMAC.mac(fromMACHeader: "type=\"atproto-space-repo\", ver=1, mac=(:AA==:)", type: .repo)
-    }
-  }
-
-  @Test func rejectsAnotherTypeOrVersion() {
-    let want = SpaceMAC.wantMACHeader(type: .repo, keyShare: "did:key:zDnaX")
-    #expect(throws: SpaceMACError.unsupportedType) {
-      try SpaceMAC.keyShare(fromWantMACHeader: want, type: .record)
-    }
-    #expect(throws: SpaceMACError.unsupportedType) {
-      try SpaceMAC.mac(fromMACHeader: "type=atproto-space-repo, ver=1, mac=:AA==:", type: .repo)
-    }
-    #expect(throws: SpaceMACError.unsupportedVersion) {
-      try SpaceMAC.keyShare(
-        fromWantMACHeader: "type=\"atproto-space-repo\", ver=2, key_share=\"did:key:zDnaX\"", type: .repo)
-    }
-    #expect(throws: SpaceMACError.unsupportedVersion) {
-      try SpaceMAC.keyShare(
-        fromWantMACHeader: "type=\"atproto-space-repo\", ver=\"1\", key_share=\"did:key:zDnaX\"", type: .repo)
-    }
   }
 
   // MARK: - HTTP message signatures

@@ -9,8 +9,8 @@ import Multibase
 
 /// Why a space MAC could not be established, read, or computed.
 ///
-/// No case carries a secret, so an error is safe to log. A repo host reports
-/// every one of these to a syncer as `BadSpaceMac`.
+/// No case carries a secret, so an error is safe to log. A repo host answers
+/// a MAC request it cannot fulfill with the XRPC error `InvalidSpaceMac`.
 public enum SpaceMACError: Error, Hashable, Sendable {
   /// A KEM key or key share is not a P-256 `did:key` or multikey.
   case invalidKey
@@ -19,12 +19,6 @@ public enum SpaceMACError: Error, Hashable, Sendable {
   /// The header is not a Structured Field Dictionary, or a member has the
   /// wrong kind of value.
   case malformedHeader
-  /// The header names another MAC type than the method uses.
-  case unsupportedType
-  /// The header names another version than the MAC type is on.
-  case unsupportedVersion
-  /// A string bound into a MAC is longer than its uint16 length prefix allows.
-  case fieldTooLong
   /// No signature carries the profile's `tag`, or its `Signature` member is
   /// absent or not a byte sequence without parameters.
   case missingSignature
@@ -146,18 +140,6 @@ public struct SpaceMACRequest: Hashable, Sendable {
   public let signatureParameters: String
 }
 
-/// What a space MAC authenticates, as named in the `type` of its headers.
-public enum SpaceMACType: String, Hashable, Sendable, CaseIterable {
-  /// A repo commit: `getLatestCommit`, `getRepo`, and `listRepoOps`.
-  case repo = "atproto-space-repo"
-  /// A record's URI and CID: `getRecord`.
-  case record = "atproto-space-record"
-
-  /// The version the type is on, sent as `ver`. A commit MAC shares its
-  /// version with the commit format.
-  public var version: Int { 1 }
-}
-
 /// The shared secret a syncer establishes with a repo host for one request.
 ///
 /// The syncer encapsulates against the author's `#atproto_kem` key, sends
@@ -253,147 +235,18 @@ public struct SpaceKeyEncapsulation: Sendable {
   }
 }
 
-/// The MACs that authenticate space commits and records to a syncer, and the
-/// headers that carry them.
+/// The MACs that authenticate space commits and records to a syncer.
 ///
 /// A space repo commit carries no signature. The syncer and the repo host
 /// share a secret for each request (``SpaceKeyEncapsulation``), and the host
-/// returns an HMAC-SHA256 in `Atproto-Space-Mac`. A leaked response therefore
-/// proves nothing about authorship to a third party.
-public enum SpaceMAC {
-  /// The request header that asks for a MAC and carries the key share.
-  public static let wantMACHeaderName = "atproto-space-want-mac"
-
-  /// The response header that carries the MAC.
-  public static let macHeaderName = "atproto-space-mac"
-
-  /// The `Atproto-Space-Want-Mac` value for `type`, for example
-  /// `type="atproto-space-repo", ver=1, key_share="did:key:zDna…"`.
-  public static func wantMACHeader(type: SpaceMACType, keyShare: String) -> String {
-    "type=\"\(type.rawValue)\", ver=\(type.version), key_share=\"\(keyShare)\""
-  }
-
-  /// The `Atproto-Space-Mac` value for `type` and `mac`, with the MAC as a
-  /// padded base64 byte sequence.
-  public static func macHeader(type: SpaceMACType, mac: Data) -> String {
-    "type=\"\(type.rawValue)\", ver=\(type.version), mac=:\(mac.base64EncodedString()):"
-  }
-
-  /// The `key_share` of an `Atproto-Space-Want-Mac` value, after checking its
-  /// `type` and `ver`.
-  public static func keyShare(fromWantMACHeader value: String?, type: SpaceMACType) throws -> String {
-    guard case .string(let keyShare) = try members(of: value, type: type)["key_share"] else {
-      throw SpaceMACError.malformedHeader
-    }
-    return keyShare
-  }
-
-  /// The MAC of an `Atproto-Space-Mac` value, after checking its `type` and
-  /// `ver`.
-  public static func mac(fromMACHeader value: String?, type: SpaceMACType) throws -> Data {
-    guard case .bytes(let mac) = try members(of: value, type: type)["mac"] else {
-      throw SpaceMACError.malformedHeader
-    }
-    return mac
-  }
-
-  /// The commit MAC:
-  ///
-  /// ```
-  /// context = "atproto-space-repo-v1"
-  ///    || uint16be(len(space)) || space
-  ///    || uint16be(len(repo))  || repo
-  ///    || uint16be(len(rev))   || rev
-  /// mac = HMAC-SHA256(shared_secret, context || data)
-  /// ```
-  public static func commitMAC(
-    sharedSecret: SymmetricKey, space: String, repo: String, rev: String, data: Data
-  ) throws -> Data {
-    Data(
-      HMAC<SHA256>.authenticationCode(
-        for: try commitMessage(space: space, repo: repo, rev: rev, data: data),
-        using: sharedSecret))
-  }
-
-  /// Whether `mac` authenticates the commit, compared in constant time.
-  public static func isValidCommitMAC(
-    _ mac: Data, sharedSecret: SymmetricKey, space: String, repo: String, rev: String, data: Data
-  ) -> Bool {
-    guard let message = try? commitMessage(space: space, repo: repo, rev: rev, data: data) else {
-      return false
-    }
-    return HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: message, using: sharedSecret)
-  }
-
-  /// The record MAC over the full space record URI and the binary CID:
-  ///
-  /// ```
-  /// context = "atproto-space-record-v1" || uint16be(len(uri)) || uri
-  /// mac = HMAC-SHA256(shared_secret, context || record_cid_bytes)
-  /// ```
-  public static func recordMAC(sharedSecret: SymmetricKey, uri: String, cid: Data) throws -> Data {
-    Data(
-      HMAC<SHA256>.authenticationCode(
-        for: try recordMessage(uri: uri, cid: cid), using: sharedSecret))
-  }
-
-  /// Whether `mac` authenticates the record's URI and CID, compared in
-  /// constant time.
-  public static func isValidRecordMAC(
-    _ mac: Data, sharedSecret: SymmetricKey, uri: String, cid: Data
-  ) -> Bool {
-    guard let message = try? recordMessage(uri: uri, cid: cid) else { return false }
-    return HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: message, using: sharedSecret)
-  }
-
-  private static func commitMessage(space: String, repo: String, rev: String, data: Data) throws -> Data {
-    var message = Data("\(SpaceMACType.repo.rawValue)-v\(SpaceMACType.repo.version)".utf8)
-    for field in [space, repo, rev] {
-      message += try lengthPrefixed(field)
-    }
-    return message + data
-  }
-
-  private static func recordMessage(uri: String, cid: Data) throws -> Data {
-    Data("\(SpaceMACType.record.rawValue)-v\(SpaceMACType.record.version)".utf8)
-      + (try lengthPrefixed(uri)) + cid
-  }
-
-  private static func lengthPrefixed(_ value: String) throws -> Data {
-    let bytes = Data(value.utf8)
-    guard bytes.count <= Int(UInt16.max) else { throw SpaceMACError.fieldTooLong }
-    return Data([UInt8(bytes.count >> 8), UInt8(bytes.count & 0xff)]) + bytes
-  }
-
-  private static func members(of value: String?, type: SpaceMACType) throws -> [String: StructuredBareItem] {
-    guard let value else { throw SpaceMACError.missingHeader }
-    guard let dictionary = StructuredDictionary.parse(value) else {
-      throw SpaceMACError.malformedHeader
-    }
-    var members: [String: StructuredBareItem] = [:]
-    for (key, member) in dictionary.members.entries {
-      // An inner list is kept out, so that a caller expecting a bare item
-      // treats it as malformed.
-      if case .item(let item) = member { members[key] = item.bareItem }
-    }
-    guard case .string(type.rawValue) = members["type"] else {
-      throw SpaceMACError.unsupportedType
-    }
-    guard case .integer(Int64(type.version)) = members["ver"] else {
-      throw SpaceMACError.unsupportedVersion
-    }
-    return members
-  }
-}
-
-// MARK: - HTTP message signatures
-
-/// A space MAC is an HTTP message signature
+/// answers with an HTTP message signature
 /// ([RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html)) with the
-/// `hmac-sha256` algorithm, keyed by the secret of a ``SpaceKeyEncapsulation``.
-/// The syncer asks for it in `Accept-Signature`; the repo host answers with
-/// the profile's field and a signature that covers exactly that field.
-extension SpaceMAC {
+/// `hmac-sha256` algorithm, keyed by that secret. The syncer asks for it in
+/// `Accept-Signature`; the host returns the profile's field and a signature
+/// that covers exactly that field. Since the syncer could have computed the
+/// same MAC, a leaked response proves nothing about authorship to a third
+/// party.
+public enum SpaceMAC {
   /// The request field that asks for a MAC.
   public static let acceptSignatureFieldName = "accept-signature"
 
