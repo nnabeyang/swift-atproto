@@ -1,8 +1,9 @@
-import ATProtoCrypto
 import Crypto
 import Foundation
 import SwiftAtproto
+import Testing
 
+@testable import ATProtoCrypto
 @testable import ATProtoSync
 
 /// A commit as generated code exposes `com.atproto.space.defs#commit`.
@@ -28,35 +29,48 @@ struct SyncTestCommit: Codable, Hashable, PermissionedRepoCommitDescribing {
   }
 }
 
-/// What a repo host returns for one request: the shared secret it derived and
-/// the MAC it put in `Atproto-Space-Mac`.
+/// What a repo host returns for one request, and what the syncer verifies it
+/// with: the encapsulation the MAC was requested with and the
+/// `Atproto-Space-Commit`, `Signature-Input`, and `Signature` fields.
 struct SyncTestResponse {
   let authentication: RepoCommitAuthentication
 
-  /// MACs `commit` with a fresh secret, as a repo host does for the request
-  /// that asked for `space` and `repo`.
+  /// Requests a MAC for `space` and `repo` with a fresh encapsulation, and
+  /// answers it for `commit` as a repo host does.
   init(
     commit: any PermissionedRepoCommitDescribing, space: SpaceRef, repo: SwiftAtproto.DID
   ) throws {
-    let secret = SymmetricKey(size: .bits256)
-    authentication = RepoCommitAuthentication(
-      space: space, repo: repo, sharedSecret: secret,
-      mac: try SpaceMAC.commitMAC(
-        sharedSecret: secret,
-        space: commit.permissionedRepoCommitSpace.rawValue,
+    let author = try PrivateKey(type: .p256)
+    let encapsulation = try SpaceKeyEncapsulation.encapsulate(authorKEMKey: author.publicKey.did)
+    let request = try #require(
+      try SpaceMAC.request(
+        fromAcceptSignature: SpaceMAC.acceptSignature(profile: .commit, keyShare: encapsulation.keyShare),
+        profile: .commit))
+    let fields = try SpaceMAC.responseFields(
+      commit: SpaceMACCommitField(
+        ver: commit.permissionedRepoCommitVersion,
         repo: commit.permissionedRepoCommitRepo.rawValue,
+        space: commit.permissionedRepoCommitSpace.rawValue,
         rev: commit.permissionedRepoCommitRevision.rawValue,
-        data: commit.permissionedRepoCommitData))
+        data: commit.permissionedRepoCommitData),
+      request: request,
+      sharedSecret: try SpaceKeyEncapsulation.decapsulate(keyShare: request.keyShare, authorKEMKey: author))
+    let values = Dictionary(uniqueKeysWithValues: fields.map { ($0.name, $0.value) })
+    authentication = RepoCommitAuthentication(
+      space: space, repo: repo, encapsulation: encapsulation,
+      response: SpaceMACResponse(profile: .commit) { values[$0] })
   }
 }
 
 extension RepoCommitAuthentication {
   func replacing(
     space: SpaceRef? = nil, repo: SwiftAtproto.DID? = nil, sharedSecret: SymmetricKey? = nil,
-    mac: Data? = nil
+    response: SpaceMACResponse? = nil
   ) -> Self {
     Self(
       space: space ?? self.space, repo: repo ?? self.repo,
-      sharedSecret: sharedSecret ?? self.sharedSecret, mac: mac ?? self.mac)
+      encapsulation: SpaceKeyEncapsulation(
+        keyShare: encapsulation.keyShare, sharedSecret: sharedSecret ?? encapsulation.sharedSecret),
+      response: response ?? self.response)
   }
 }

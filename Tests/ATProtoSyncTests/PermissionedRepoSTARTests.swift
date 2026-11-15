@@ -74,7 +74,7 @@ struct PermissionedRepoSTARTests {
   @Test("rejects a MAC that does not authenticate the metadata")
   func rejectsAWrongMAC() async throws {
     let archive = try archive([("com.example.post/a", Self.record("hello"))])
-    await #expect(throws: RepoVerificationError.macMismatch) {
+    await #expect(throws: RepoVerificationError.invalidMAC(.macMismatch)) {
       _ = try await PermissionedRepoSTAR.read(
         from: XRPCBody(archive.bytes),
         authentication: archive.authentication.replacing(sharedSecret: SymmetricKey(size: .bits256)))

@@ -296,8 +296,8 @@ extension _XRPCCallable {
   /// request headers, and returns the response headers with the decoded body.
   ///
   /// Use this when a protocol carries part of a request or response in
-  /// headers, such as the space MAC of `Atproto-Space-Want-Mac` and
-  /// `Atproto-Space-Mac`. `requestHeaders` are set before ``authorize(_:)``
+  /// headers, such as a space MAC, requested in `Accept-Signature` and returned
+  /// in `Signature-Input` and `Signature`. `requestHeaders` are set before ``authorize(_:)``
   /// runs, so an authorizer can still replace them. A DPoP nonce retry resends
   /// the same headers.
   public func callWithHeaders<X: XRPCQuery>(

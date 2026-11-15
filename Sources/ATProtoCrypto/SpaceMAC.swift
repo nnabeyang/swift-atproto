@@ -9,8 +9,8 @@ import Multibase
 
 /// Why a space MAC could not be established, read, or computed.
 ///
-/// No case carries a secret, so an error is safe to log. A repo host reports
-/// every one of these to a syncer as `BadSpaceMac`.
+/// No case carries a secret, so an error is safe to log. A repo host answers
+/// a MAC request it cannot fulfill with the XRPC error `InvalidSpaceMac`.
 public enum SpaceMACError: Error, Hashable, Sendable {
   /// A KEM key or key share is not a P-256 `did:key` or multikey.
   case invalidKey
@@ -19,24 +19,125 @@ public enum SpaceMACError: Error, Hashable, Sendable {
   /// The header is not a Structured Field Dictionary, or a member has the
   /// wrong kind of value.
   case malformedHeader
-  /// The header names another MAC type than the method uses.
-  case unsupportedType
-  /// The header names another version than the MAC type is on.
-  case unsupportedVersion
-  /// A string bound into a MAC is longer than its uint16 length prefix allows.
-  case fieldTooLong
+  /// No signature carries the profile's `tag`, or its `Signature` member is
+  /// absent or not a byte sequence without parameters.
+  case missingSignature
+  /// More than one signature or MAC request carries the profile's `tag`.
+  case duplicateSignature
+  /// The signature or MAC request covers something other than exactly the
+  /// profile's field, flagged `sf`.
+  case unexpectedComponents
+  /// The `alg` parameter names another algorithm than `hmac-sha256`.
+  case unsupportedAlgorithm
+  /// A MAC request carries a parameter other than `keyid`, `tag`, and `alg`.
+  case unsupportedParameter
+  /// The signature's `keyid` is not the key share the MAC was requested with.
+  case keyIDMismatch
+  /// A MAC request was answered with the other profile's field.
+  case profileMismatch
+  /// The MAC does not authenticate the covered field.
+  case macMismatch
+  /// The covered field is authentic but describes another commit or record
+  /// than the response carries.
+  case fieldMismatch
 }
 
-/// What a space MAC authenticates, as named in the `type` of its headers.
-public enum SpaceMACType: String, Hashable, Sendable, CaseIterable {
-  /// A repo commit: `getLatestCommit`, `getRepo`, and `listRepoOps`.
-  case repo = "atproto-space-repo"
-  /// A record's URI and CID: `getRecord`.
+/// What a space MAC authenticates, named by the `tag` of its MAC request and
+/// signature.
+public enum SpaceMACProfile: String, Hashable, Sendable, CaseIterable {
+  /// A repo commit: `getLatestCommit`, `getRepo`, and `listRepoOps`. The MAC
+  /// covers `Atproto-Space-Commit`.
+  case commit = "atproto-space-commit"
+  /// A record's URI and CID: `getRecord`. The MAC covers
+  /// `Atproto-Space-Record`.
   case record = "atproto-space-record"
 
-  /// The version the type is on, sent as `ver`. A commit MAC shares its
-  /// version with the commit format.
-  public var version: Int { 1 }
+  /// The lowercased name of the field the MAC covers, which is also the
+  /// profile's `tag`.
+  public var coveredFieldName: String { rawValue }
+}
+
+/// The commit an `Atproto-Space-Commit` field describes: the fields of
+/// `com.atproto.space.defs#commit`.
+public struct SpaceMACCommitField: Hashable, Sendable {
+  /// The commit format version.
+  public var ver: Int
+  /// The DID of the repo's author.
+  public var repo: String
+  /// The space URI.
+  public var space: String
+  /// The commit revision.
+  public var rev: String
+  /// The 32-byte SHA-256 digest of the repo's LtHash state.
+  public var data: Data
+
+  /// Creates the description of a commit.
+  public init(ver: Int, repo: String, space: String, rev: String, data: Data) {
+    self.ver = ver
+    self.repo = repo
+    self.space = space
+    self.rev = rev
+    self.data = data
+  }
+}
+
+/// The record an `Atproto-Space-Record` field names.
+public struct SpaceMACRecordField: Hashable, Sendable {
+  /// The record's full space URI.
+  public var uri: String
+  /// The record's CID as a string.
+  public var cid: String
+
+  /// Creates the description of a record.
+  public init(uri: String, cid: String) {
+    self.uri = uri
+    self.cid = cid
+  }
+}
+
+/// The fields of a response that a syncer checks its MAC with.
+///
+/// Each is the field value as received, or `nil` when the response lacks the
+/// field. A field sent on several lines is passed with its values joined by
+/// commas, as `HTTPFields` returns it.
+public struct SpaceMACResponse: Hashable, Sendable {
+  /// The field the profile covers: `Atproto-Space-Commit` or
+  /// `Atproto-Space-Record`.
+  public var coveredField: String?
+  /// The `Signature-Input` field.
+  public var signatureInput: String?
+  /// The `Signature` field.
+  public var signature: String?
+
+  /// Creates the fields from their values.
+  public init(coveredField: String?, signatureInput: String?, signature: String?) {
+    self.coveredField = coveredField
+    self.signatureInput = signatureInput
+    self.signature = signature
+  }
+
+  /// Reads the fields for `profile` with `field`, which is given each
+  /// lowercased field name and returns its value.
+  public init(profile: SpaceMACProfile, field: (String) throws -> String?) rethrows {
+    self.init(
+      coveredField: try field(profile.coveredFieldName),
+      signatureInput: try field(SpaceMAC.signatureInputFieldName),
+      signature: try field(SpaceMAC.signatureFieldName))
+  }
+}
+
+/// A MAC request, as a repo host reads it from `Accept-Signature`.
+public struct SpaceMACRequest: Hashable, Sendable {
+  /// The profile the request is for.
+  public let profile: SpaceMACProfile
+  /// The label the MAC is requested under, which the response uses.
+  public let label: String
+  /// The syncer's key share, to decapsulate with
+  /// ``SpaceKeyEncapsulation/decapsulate(keyShare:authorKEMKey:)``.
+  public let keyShare: String
+  /// The requested covered components and parameters, serialized as the
+  /// response's `Signature-Input` member uses them.
+  public let signatureParameters: String
 }
 
 /// The shared secret a syncer establishes with a repo host for one request.
@@ -134,338 +235,270 @@ public struct SpaceKeyEncapsulation: Sendable {
   }
 }
 
-/// The MACs that authenticate space commits and records to a syncer, and the
-/// headers that carry them.
+/// The MACs that authenticate space commits and records to a syncer.
 ///
 /// A space repo commit carries no signature. The syncer and the repo host
 /// share a secret for each request (``SpaceKeyEncapsulation``), and the host
-/// returns an HMAC-SHA256 in `Atproto-Space-Mac`. A leaked response therefore
-/// proves nothing about authorship to a third party.
+/// answers with an HTTP message signature
+/// ([RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html)) with the
+/// `hmac-sha256` algorithm, keyed by that secret. The syncer asks for it in
+/// `Accept-Signature`; the host returns the profile's field and a signature
+/// that covers exactly that field. Since the syncer could have computed the
+/// same MAC, a leaked response proves nothing about authorship to a third
+/// party.
 public enum SpaceMAC {
-  /// The request header that asks for a MAC and carries the key share.
-  public static let wantMACHeaderName = "atproto-space-want-mac"
+  /// The request field that asks for a MAC.
+  public static let acceptSignatureFieldName = "accept-signature"
 
-  /// The response header that carries the MAC.
-  public static let macHeaderName = "atproto-space-mac"
+  /// The response field that carries the signature's covered components and
+  /// parameters.
+  public static let signatureInputFieldName = "signature-input"
 
-  /// The `Atproto-Space-Want-Mac` value for `type`, for example
-  /// `type="atproto-space-repo", ver=1, key_share="did:key:zDna…"`.
-  public static func wantMACHeader(type: SpaceMACType, keyShare: String) -> String {
-    "type=\"\(type.rawValue)\", ver=\(type.version), key_share=\"\(keyShare)\""
+  /// The response field that carries the MAC.
+  public static let signatureFieldName = "signature"
+
+  /// The signature algorithm of every space MAC.
+  public static let algorithm = "hmac-sha256"
+
+  /// The label ``acceptSignature(profile:keyShare:)`` requests a MAC under.
+  /// A host answers under the requested label, but the MAC is found by its
+  /// `tag`, because labels carry no meaning (RFC 9421 §7.2.5).
+  public static let label = "mac"
+
+  // MARK: Syncer
+
+  /// The `Accept-Signature` value that requests a MAC for `profile`, keyed
+  /// by the secret `keyShare` was encapsulated with, for example
+  /// `mac=("atproto-space-commit";sf);keyid="did:key:zDna…";tag="atproto-space-commit"`.
+  public static func acceptSignature(profile: SpaceMACProfile, keyShare: String) -> String {
+    label + "="
+      + StructuredFieldSerializer.innerList(
+        StructuredInnerList(
+          components(profile),
+          parameters: .init([("keyid", .string(keyShare)), ("tag", .string(profile.rawValue))])))
   }
 
-  /// The `Atproto-Space-Mac` value for `type` and `mac`, with the MAC as a
-  /// padded base64 byte sequence.
-  public static func macHeader(type: SpaceMACType, mac: Data) -> String {
-    "type=\"\(type.rawValue)\", ver=\(type.version), mac=:\(mac.base64EncodedString()):"
-  }
-
-  /// The `key_share` of an `Atproto-Space-Want-Mac` value, after checking its
-  /// `type` and `ver`.
-  public static func keyShare(fromWantMACHeader value: String?, type: SpaceMACType) throws -> String {
-    guard case .string(let keyShare) = try members(of: value, type: type)["key_share"] else {
-      throw SpaceMACError.malformedHeader
-    }
-    return keyShare
-  }
-
-  /// The MAC of an `Atproto-Space-Mac` value, after checking its `type` and
-  /// `ver`.
-  public static func mac(fromMACHeader value: String?, type: SpaceMACType) throws -> Data {
-    guard case .bytes(let mac) = try members(of: value, type: type)["mac"] else {
-      throw SpaceMACError.malformedHeader
-    }
-    return mac
-  }
-
-  /// The commit MAC:
+  /// Checks the MAC of a response to an `atproto-space-commit` request, then
+  /// that the `Atproto-Space-Commit` field it covers describes `commit`, the
+  /// commit in the response body or the metadata of the STAR archive.
   ///
-  /// ```
-  /// context = "atproto-space-repo-v1"
-  ///    || uint16be(len(space)) || space
-  ///    || uint16be(len(repo))  || repo
-  ///    || uint16be(len(rev))   || rev
-  /// mac = HMAC-SHA256(shared_secret, context || data)
-  /// ```
-  public static func commitMAC(
-    sharedSecret: SymmetricKey, space: String, repo: String, rev: String, data: Data
-  ) throws -> Data {
-    Data(
-      HMAC<SHA256>.authenticationCode(
-        for: try commitMessage(space: space, repo: repo, rev: rev, data: data),
-        using: sharedSecret))
-  }
-
-  /// Whether `mac` authenticates the commit, compared in constant time.
-  public static func isValidCommitMAC(
-    _ mac: Data, sharedSecret: SymmetricKey, space: String, repo: String, rev: String, data: Data
-  ) -> Bool {
-    guard let message = try? commitMessage(space: space, repo: repo, rev: rev, data: data) else {
-      return false
-    }
-    return HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: message, using: sharedSecret)
-  }
-
-  /// The record MAC over the full space record URI and the binary CID:
+  /// Comparing `commit` with the repo and space that were requested is the
+  /// caller's to do.
   ///
-  /// ```
-  /// context = "atproto-space-record-v1" || uint16be(len(uri)) || uri
-  /// mac = HMAC-SHA256(shared_secret, context || record_cid_bytes)
-  /// ```
-  public static func recordMAC(sharedSecret: SymmetricKey, uri: String, cid: Data) throws -> Data {
-    Data(
-      HMAC<SHA256>.authenticationCode(
-        for: try recordMessage(uri: uri, cid: cid), using: sharedSecret))
+  /// - Throws: ``SpaceMACError/fieldMismatch`` when the field describes
+  ///   another commit, or another ``SpaceMACError`` when the MAC does not
+  ///   verify, as ``verifyRecord(_:record:encapsulation:)`` describes.
+  public static func verifyCommit(
+    _ response: SpaceMACResponse, commit: SpaceMACCommitField, encapsulation: SpaceKeyEncapsulation
+  ) throws {
+    let field = try verify(response, profile: .commit, encapsulation: encapsulation)
+    guard case .integer(let ver)? = field.bareItem("ver"),
+      case .string(let repo)? = field.bareItem("repo"),
+      case .string(let space)? = field.bareItem("space"),
+      case .string(let rev)? = field.bareItem("rev"),
+      case .bytes(let data)? = field.bareItem("data"), let ver = Int(exactly: ver)
+    else { throw SpaceMACError.malformedHeader }
+    guard SpaceMACCommitField(ver: ver, repo: repo, space: space, rev: rev, data: data) == commit
+    else { throw SpaceMACError.fieldMismatch }
   }
 
-  /// Whether `mac` authenticates the record's URI and CID, compared in
-  /// constant time.
-  public static func isValidRecordMAC(
-    _ mac: Data, sharedSecret: SymmetricKey, uri: String, cid: Data
-  ) -> Bool {
-    guard let message = try? recordMessage(uri: uri, cid: cid) else { return false }
-    return HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: message, using: sharedSecret)
-  }
-
-  private static func commitMessage(space: String, repo: String, rev: String, data: Data) throws -> Data {
-    var message = Data("\(SpaceMACType.repo.rawValue)-v\(SpaceMACType.repo.version)".utf8)
-    for field in [space, repo, rev] {
-      message += try lengthPrefixed(field)
+  /// Checks the MAC of a response to an `atproto-space-record` request, then
+  /// that the `Atproto-Space-Record` field it covers names `record`: the URI
+  /// that was requested and the CID computed from the returned record.
+  ///
+  /// - Throws: ``SpaceMACError/missingHeader`` when a field is absent;
+  ///   ``SpaceMACError/malformedHeader`` when one is not a Structured Field
+  ///   Dictionary of the expected shape; ``SpaceMACError/missingSignature`` or
+  ///   ``SpaceMACError/duplicateSignature`` when not exactly one signature
+  ///   carries the profile's `tag`; ``SpaceMACError/unexpectedComponents``,
+  ///   ``SpaceMACError/unsupportedAlgorithm``, or
+  ///   ``SpaceMACError/keyIDMismatch`` when that signature covers something
+  ///   else, names another algorithm, or names another key share;
+  ///   ``SpaceMACError/macMismatch`` when the MAC does not verify; and
+  ///   ``SpaceMACError/fieldMismatch`` when the field names another record.
+  public static func verifyRecord(
+    _ response: SpaceMACResponse, record: SpaceMACRecordField, encapsulation: SpaceKeyEncapsulation
+  ) throws {
+    let field = try verify(response, profile: .record, encapsulation: encapsulation)
+    guard case .string(let uri)? = field.bareItem("uri"),
+      case .string(let cid)? = field.bareItem("cid")
+    else { throw SpaceMACError.malformedHeader }
+    guard SpaceMACRecordField(uri: uri, cid: cid) == record else {
+      throw SpaceMACError.fieldMismatch
     }
-    return message + data
   }
 
-  private static func recordMessage(uri: String, cid: Data) throws -> Data {
-    Data("\(SpaceMACType.record.rawValue)-v\(SpaceMACType.record.version)".utf8)
-      + (try lengthPrefixed(uri)) + cid
-  }
+  // MARK: Repo host
 
-  private static func lengthPrefixed(_ value: String) throws -> Data {
-    let bytes = Data(value.utf8)
-    guard bytes.count <= Int(UInt16.max) else { throw SpaceMACError.fieldTooLong }
-    return Data([UInt8(bytes.count >> 8), UInt8(bytes.count & 0xff)]) + bytes
-  }
-
-  private static func members(of value: String?, type: SpaceMACType) throws -> [String: StructuredItem] {
-    guard let value else { throw SpaceMACError.missingHeader }
-    guard let members = StructuredDictionary.parse(value) else {
+  /// The MAC requested for `profile` in an `Accept-Signature` value, or `nil`
+  /// when the value is absent or requests none for `profile`. Requests with
+  /// other tags are ignored.
+  ///
+  /// - Throws: ``SpaceMACError/malformedHeader`` when the value is not a
+  ///   Structured Field Dictionary; ``SpaceMACError/duplicateSignature`` when
+  ///   it requests more than one MAC with the profile's `tag`;
+  ///   ``SpaceMACError/unexpectedComponents`` when the request covers
+  ///   something other than the profile's field;
+  ///   ``SpaceMACError/unsupportedParameter`` or
+  ///   ``SpaceMACError/unsupportedAlgorithm`` when it asks for parameters the
+  ///   host cannot fulfill; and ``SpaceMACError/invalidKey`` when `keyid` is
+  ///   not a P-256 `did:key`.
+  public static func request(
+    fromAcceptSignature value: String?, profile: SpaceMACProfile
+  ) throws -> SpaceMACRequest? {
+    guard let value else { return nil }
+    guard let requests = StructuredDictionary.parse(value) else {
       throw SpaceMACError.malformedHeader
     }
-    guard case .string(type.rawValue) = members["type"] else {
-      throw SpaceMACError.unsupportedType
+    let tagged = tagged(requests, profile: profile)
+    guard tagged.count <= 1 else { throw SpaceMACError.duplicateSignature }
+    guard let (label, list) = tagged.first else { return nil }
+    guard list.items == components(profile) else { throw SpaceMACError.unexpectedComponents }
+    for key in list.parameters.keys where !["keyid", "tag", "alg"].contains(key) {
+      throw SpaceMACError.unsupportedParameter
     }
-    guard case .integer(Int64(type.version)) = members["ver"] else {
-      throw SpaceMACError.unsupportedVersion
-    }
-    return members
-  }
-}
-
-/// A bare item of an RFC 9651 Structured Field.
-enum StructuredItem: Hashable, Sendable {
-  case integer(Int64)
-  case decimal(String)
-  case string(String)
-  case token(String)
-  case bytes(Data)
-  case boolean(Bool)
-  /// An inner list. Its items are not kept, because no header read here uses
-  /// one; a caller expecting a bare item treats it as malformed.
-  case innerList
-}
-
-/// A parser for RFC 9651 §4.2.2 Dictionaries, keeping each member's bare item
-/// and discarding parameters. A later duplicate key overrides an earlier one,
-/// as the RFC requires.
-enum StructuredDictionary {
-  static func parse(_ input: String) -> [String: StructuredItem]? {
-    var parser = Parser(Array(input.utf8))
-    return parser.dictionary()
+    try checkAlgorithm(list.parameters)
+    guard case .string(let keyShare)? = list.parameters["keyid"], keyShare.hasPrefix("did:key:")
+    else { throw SpaceMACError.invalidKey }
+    _ = try SpaceKeyEncapsulation.agreementKey(keyShare)
+    return SpaceMACRequest(
+      profile: profile, label: label, keyShare: keyShare,
+      signatureParameters: StructuredFieldSerializer.innerList(list))
   }
 
-  private struct Parser {
-    var bytes: [UInt8]
-    var index = 0
+  /// The fields that answer `request` for `commit`: `Atproto-Space-Commit`,
+  /// `Signature-Input`, `Signature`, and `Vary`, keyed by `sharedSecret`, the
+  /// secret decapsulated from the request's key share.
+  ///
+  /// - Throws: ``SpaceMACError/profileMismatch`` when `request` is not for
+  ///   ``SpaceMACProfile/commit``, and ``SpaceMACError/malformedHeader`` when
+  ///   a string is not printable ASCII, which a Structured Field String
+  ///   cannot carry.
+  public static func responseFields(
+    commit: SpaceMACCommitField, request: SpaceMACRequest, sharedSecret: SymmetricKey
+  ) throws -> [(name: String, value: String)] {
+    try responseFields(
+      [
+        ("ver", .integer(Int64(commit.ver))), ("repo", .string(commit.repo)),
+        ("space", .string(commit.space)), ("rev", .string(commit.rev)), ("data", .bytes(commit.data)),
+      ],
+      profile: .commit, request: request, sharedSecret: sharedSecret)
+  }
 
-    init(_ bytes: [UInt8]) { self.bytes = bytes }
+  /// The fields that answer `request` for `record`: `Atproto-Space-Record`,
+  /// `Signature-Input`, `Signature`, and `Vary`, keyed by `sharedSecret`.
+  ///
+  /// - Throws: As ``responseFields(commit:request:sharedSecret:)`` does, with
+  ///   ``SpaceMACError/profileMismatch`` when `request` is not for
+  ///   ``SpaceMACProfile/record``.
+  public static func responseFields(
+    record: SpaceMACRecordField, request: SpaceMACRequest, sharedSecret: SymmetricKey
+  ) throws -> [(name: String, value: String)] {
+    try responseFields(
+      [("uri", .string(record.uri)), ("cid", .string(record.cid))],
+      profile: .record, request: request, sharedSecret: sharedSecret)
+  }
 
-    var current: UInt8? { index < bytes.count ? bytes[index] : nil }
+  // MARK: Shared
 
-    mutating func skip(_ predicate: (UInt8) -> Bool) {
-      while let byte = current, predicate(byte) { index += 1 }
-    }
+  /// The covered component list of a profile's MAC: its field, flagged `sf`.
+  private static func components(_ profile: SpaceMACProfile) -> [StructuredItem] {
+    [StructuredItem(.string(profile.coveredFieldName), parameters: .init([("sf", .boolean(true))]))]
+  }
 
-    mutating func dictionary() -> [String: StructuredItem]? {
-      skip { $0 == 0x20 }
-      var members: [String: StructuredItem] = [:]
-      while current != nil {
-        guard let key = key() else { return nil }
-        let item: StructuredItem
-        if current == UInt8(ascii: "=") {
-          index += 1
-          if current == UInt8(ascii: "(") {
-            guard innerList() else { return nil }
-            item = .innerList
-          } else {
-            guard let bare = bareItem() else { return nil }
-            item = bare
-          }
-        } else {
-          item = .boolean(true)
-        }
-        guard parameters() else { return nil }
-        members[key] = item
-        skip { $0 == 0x20 || $0 == 0x09 }
-        guard let byte = current else { return members }
-        guard byte == UInt8(ascii: ",") else { return nil }
-        index += 1
-        skip { $0 == 0x20 || $0 == 0x09 }
-        // A trailing comma is not allowed.
-        guard current != nil else { return nil }
-      }
-      return members
-    }
-
-    mutating func key() -> String? {
-      guard let first = current, Self.isLowerAlpha(first) || first == UInt8(ascii: "*") else {
-        return nil
-      }
-      let start = index
-      skip {
-        Self.isLowerAlpha($0) || Self.isDigit($0) || $0 == UInt8(ascii: "_")
-          || $0 == UInt8(ascii: "-") || $0 == UInt8(ascii: ".") || $0 == UInt8(ascii: "*")
-      }
-      return String(decoding: bytes[start..<index], as: UTF8.self)
-    }
-
-    mutating func parameters() -> Bool {
-      while current == UInt8(ascii: ";") {
-        index += 1
-        skip { $0 == 0x20 }
-        guard key() != nil else { return false }
-        if current == UInt8(ascii: "=") {
-          index += 1
-          guard bareItem() != nil else { return false }
-        }
-      }
-      return true
-    }
-
-    mutating func innerList() -> Bool {
-      index += 1
-      while true {
-        skip { $0 == 0x20 }
-        guard let byte = current else { return false }
-        if byte == UInt8(ascii: ")") {
-          index += 1
-          return parameters()
-        }
-        guard bareItem() != nil, parameters() else { return false }
-        guard current == 0x20 || current == UInt8(ascii: ")") else { return false }
-      }
-    }
-
-    mutating func bareItem() -> StructuredItem? {
-      guard let byte = current else { return nil }
-      switch byte {
-      case UInt8(ascii: "-"), UInt8(ascii: "0")...UInt8(ascii: "9"): return number()
-      case UInt8(ascii: "\""): return string()
-      case UInt8(ascii: ":"): return byteSequence()
-      case UInt8(ascii: "?"): return boolean()
-      case UInt8(ascii: "*"), UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "a")...UInt8(ascii: "z"):
-        return token()
-      default: return nil
-      }
-    }
-
-    mutating func number() -> StructuredItem? {
-      let start = index
-      if current == UInt8(ascii: "-") { index += 1 }
-      let digitsStart = index
-      skip(Self.isDigit)
-      let integerDigits = index - digitsStart
-      guard integerDigits > 0 else { return nil }
-      if current == UInt8(ascii: ".") {
-        guard integerDigits <= 12 else { return nil }
-        index += 1
-        let fractionStart = index
-        skip(Self.isDigit)
-        let fractionDigits = index - fractionStart
-        guard (1...3).contains(fractionDigits) else { return nil }
-        return .decimal(String(decoding: bytes[start..<index], as: UTF8.self))
-      }
-      guard integerDigits <= 15,
-        let value = Int64(String(decoding: bytes[start..<index], as: UTF8.self))
+  /// The inner lists in a `Signature-Input` or `Accept-Signature` value whose
+  /// `tag` is the profile's, with their labels.
+  private static func tagged(
+    _ members: StructuredDictionary, profile: SpaceMACProfile
+  ) -> [(label: String, list: StructuredInnerList)] {
+    members.members.entries.compactMap { label, member in
+      guard case .innerList(let list) = member,
+        list.parameters["tag"] == .string(profile.rawValue)
       else { return nil }
-      return .integer(value)
+      return (label, list)
+    }
+  }
+
+  private static func checkAlgorithm(_ parameters: StructuredParameters) throws {
+    if let alg = parameters["alg"], alg != .string(algorithm) {
+      throw SpaceMACError.unsupportedAlgorithm
+    }
+  }
+
+  /// The signature base of RFC 9421 §2.5 for a MAC over one `sf` field: the
+  /// component line, then the parameters, joined by single line feeds with no
+  /// trailing one.
+  private static func signatureBase(
+    profile: SpaceMACProfile, field: StructuredDictionary, signatureParameters: String
+  ) -> Data {
+    let component = StructuredFieldSerializer.item(components(profile)[0])
+    return Data(
+      "\(component): \(field.serialized)\n\"@signature-params\": \(signatureParameters)".utf8)
+  }
+
+  /// Checks the signature tagged with `profile` and returns the field it
+  /// covers.
+  private static func verify(
+    _ response: SpaceMACResponse, profile: SpaceMACProfile, encapsulation: SpaceKeyEncapsulation
+  ) throws -> StructuredDictionary {
+    guard let inputValue = response.signatureInput, let signatureValue = response.signature,
+      let fieldValue = response.coveredField
+    else { throw SpaceMACError.missingHeader }
+    guard let inputs = StructuredDictionary.parse(inputValue),
+      let signatures = StructuredDictionary.parse(signatureValue),
+      let field = StructuredDictionary.parse(fieldValue)
+    else { throw SpaceMACError.malformedHeader }
+
+    let tagged = tagged(inputs, profile: profile)
+    guard tagged.count <= 1 else { throw SpaceMACError.duplicateSignature }
+    guard let (label, list) = tagged.first,
+      case .item(let signature)? = signatures[label],
+      case .bytes(let mac) = signature.bareItem, signature.parameters.isEmpty
+    else { throw SpaceMACError.missingSignature }
+    guard list.items == components(profile) else { throw SpaceMACError.unexpectedComponents }
+    try checkAlgorithm(list.parameters)
+    if let keyID = list.parameters["keyid"], keyID != .string(encapsulation.keyShare) {
+      throw SpaceMACError.keyIDMismatch
     }
 
-    mutating func string() -> StructuredItem? {
-      index += 1
-      var output: [UInt8] = []
-      while let byte = current {
-        index += 1
-        switch byte {
-        case UInt8(ascii: "\\"):
-          guard let escaped = current, escaped == UInt8(ascii: "\\") || escaped == UInt8(ascii: "\"")
-          else { return nil }
-          index += 1
-          output.append(escaped)
-        case UInt8(ascii: "\""):
-          return .string(String(decoding: output, as: UTF8.self))
-        case 0x20...0x7e:
-          output.append(byte)
-        default:
-          return nil
-        }
-      }
-      return nil
-    }
+    // The `sf` flag signs the field as re-serialized from its parsed form.
+    let base = signatureBase(
+      profile: profile, field: field,
+      signatureParameters: StructuredFieldSerializer.innerList(list))
+    guard HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: base, using: encapsulation.sharedSecret)
+    else { throw SpaceMACError.macMismatch }
+    return field
+  }
 
-    mutating func byteSequence() -> StructuredItem? {
-      index += 1
-      let start = index
-      skip {
-        Self.isLowerAlpha($0) || ($0 >= UInt8(ascii: "A") && $0 <= UInt8(ascii: "Z"))
-          || Self.isDigit($0) || $0 == UInt8(ascii: "+") || $0 == UInt8(ascii: "/")
-          || $0 == UInt8(ascii: "=")
-      }
-      guard current == UInt8(ascii: ":") else { return nil }
-      var encoded = String(decoding: bytes[start..<index], as: UTF8.self)
-      index += 1
-      // Parsers tolerate missing padding, as the reference implementation does.
-      encoded += String(repeating: "=", count: (4 - encoded.count % 4) % 4)
-      guard let data = Data(base64Encoded: encoded) else { return nil }
-      return .bytes(data)
+  private static func responseFields(
+    _ members: [(key: String, value: StructuredBareItem)], profile: SpaceMACProfile,
+    request: SpaceMACRequest, sharedSecret: SymmetricKey
+  ) throws -> [(name: String, value: String)] {
+    guard request.profile == profile else { throw SpaceMACError.profileMismatch }
+    for case (_, .string(let value)) in members
+    where !value.utf8.allSatisfy({ (0x20...0x7e).contains($0) }) {
+      throw SpaceMACError.malformedHeader
     }
+    let field = StructuredDictionary(
+      .init(members.map { (key: $0.key, value: StructuredMember.item(StructuredItem($0.value))) }))
+    let mac = HMAC<SHA256>.authenticationCode(
+      for: signatureBase(
+        profile: profile, field: field, signatureParameters: request.signatureParameters),
+      using: sharedSecret)
+    return [
+      (name: profile.coveredFieldName, value: field.serialized),
+      (name: signatureInputFieldName, value: "\(request.label)=\(request.signatureParameters)"),
+      (name: signatureFieldName, value: "\(request.label)=:\(Data(mac).base64EncodedString()):"),
+      (name: "vary", value: acceptSignatureFieldName),
+    ]
+  }
+}
 
-    mutating func boolean() -> StructuredItem? {
-      index += 1
-      guard let byte = current else { return nil }
-      index += 1
-      switch byte {
-      case UInt8(ascii: "1"): return .boolean(true)
-      case UInt8(ascii: "0"): return .boolean(false)
-      default: return nil
-      }
-    }
-
-    mutating func token() -> StructuredItem? {
-      let start = index
-      index += 1
-      skip {
-        (0x21...0x7e).contains($0)
-          && !"\"(),;<=>?@[\\]{}".utf8.contains($0)
-      }
-      return .token(String(decoding: bytes[start..<index], as: UTF8.self))
-    }
-
-    static func isLowerAlpha(_ byte: UInt8) -> Bool {
-      byte >= UInt8(ascii: "a") && byte <= UInt8(ascii: "z")
-    }
-
-    static func isDigit(_ byte: UInt8) -> Bool {
-      byte >= UInt8(ascii: "0") && byte <= UInt8(ascii: "9")
-    }
+extension StructuredDictionary {
+  /// The bare item of the member `key`, or `nil` when it is absent or an
+  /// inner list.
+  fileprivate func bareItem(_ key: String) -> StructuredBareItem? {
+    guard case .item(let item)? = self[key] else { return nil }
+    return item.bareItem
   }
 }

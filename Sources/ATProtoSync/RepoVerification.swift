@@ -101,8 +101,10 @@ public enum RepoVerificationError: Error, Hashable, Sendable {
   /// The commit's `repo` or `space` is not the one that was requested.
   case commitIdentityMismatch
 
-  /// The response MAC did not authenticate the commit.
-  case macMismatch
+  /// The response MAC did not authenticate the commit: it is missing,
+  /// malformed, does not verify, or covers an `Atproto-Space-Commit` field
+  /// that describes another commit (`fieldMismatch`).
+  case invalidMAC(SpaceMACError)
 
   /// The local LtHash digest did not match the authenticated commit data.
   case setHashMismatch
@@ -112,11 +114,13 @@ public enum RepoVerificationError: Error, Hashable, Sendable {
 }
 
 /// What authenticates the commit in one response: the repo and space that were
-/// requested, the secret shared for that request, and the MAC its
-/// `Atproto-Space-Mac` header carried.
+/// requested, the encapsulation the MAC was requested with, and the response
+/// fields that carry the MAC.
 ///
-/// Create the secret with `ATProtoCrypto.SpaceKeyEncapsulation` for each
-/// request, and read the MAC with `ATProtoCrypto.SpaceMAC.mac(fromMACHeader:type:)`.
+/// Create a new `ATProtoCrypto.SpaceKeyEncapsulation` for each request, send
+/// `ATProtoCrypto.SpaceMAC.acceptSignature(profile:keyShare:)` with the
+/// `atproto-space-commit` profile in `Accept-Signature`, and read the response
+/// with `ATProtoCrypto.SpaceMACResponse`.
 public struct RepoCommitAuthentication: Sendable {
   /// The space that was requested.
   public let space: SpaceRef
@@ -124,24 +128,29 @@ public struct RepoCommitAuthentication: Sendable {
   /// The DID of the repo that was requested.
   public let repo: SwiftAtproto.DID
 
-  /// The secret established for the request.
-  public let sharedSecret: SymmetricKey
+  /// The key share and secret the MAC was requested with.
+  public let encapsulation: SpaceKeyEncapsulation
 
-  /// The MAC from the response header.
-  public let mac: Data
+  /// The `Atproto-Space-Commit`, `Signature-Input`, and `Signature` fields of
+  /// the response.
+  public let response: SpaceMACResponse
 
   /// Creates the authentication for one response.
-  public init(space: SpaceRef, repo: SwiftAtproto.DID, sharedSecret: SymmetricKey, mac: Data) {
+  public init(
+    space: SpaceRef, repo: SwiftAtproto.DID, encapsulation: SpaceKeyEncapsulation,
+    response: SpaceMACResponse
+  ) {
     self.space = space
     self.repo = repo
-    self.sharedSecret = sharedSecret
-    self.mac = mac
+    self.encapsulation = encapsulation
+    self.response = response
   }
 }
 
 /// Decodes and authenticates Permissioned Data repository commits.
 public enum RepoCommitVerifier {
-  /// Checks the commit's version, fields, and identity, then its MAC, and
+  /// Checks the commit's version, fields, and identity, then its MAC and that
+  /// the `Atproto-Space-Commit` field the MAC covers describes it, and
   /// returns its revision. Only after this succeeds is `data` the author's
   /// claim about the repo.
   ///
@@ -166,16 +175,18 @@ public enum RepoCommitVerifier {
     else {
       throw RepoVerificationError.commitIdentityMismatch
     }
-    guard
-      SpaceMAC.isValidCommitMAC(
-        authentication.mac,
-        sharedSecret: authentication.sharedSecret,
-        space: commit.permissionedRepoCommitSpace.rawValue,
-        repo: commit.permissionedRepoCommitRepo.rawValue,
-        rev: commit.permissionedRepoCommitRevision.rawValue,
-        data: commit.permissionedRepoCommitData)
-    else {
-      throw RepoVerificationError.macMismatch
+    do {
+      try SpaceMAC.verifyCommit(
+        authentication.response,
+        commit: SpaceMACCommitField(
+          ver: commit.permissionedRepoCommitVersion,
+          repo: commit.permissionedRepoCommitRepo.rawValue,
+          space: commit.permissionedRepoCommitSpace.rawValue,
+          rev: commit.permissionedRepoCommitRevision.rawValue,
+          data: commit.permissionedRepoCommitData),
+        encapsulation: authentication.encapsulation)
+    } catch let error as SpaceMACError {
+      throw RepoVerificationError.invalidMAC(error)
     }
     return revision
   }
