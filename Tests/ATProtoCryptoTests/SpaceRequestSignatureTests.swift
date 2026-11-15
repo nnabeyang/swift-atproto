@@ -20,7 +20,7 @@ struct SpaceRequestSignatureTests {
     #expect(signed.audience == Self.audience)
     #expect(
       signed.signatureInput
-        == "atproto-space-credential=(\"authorization\" \"atproto-space-audience\");tag=\"atproto-space-credential\"")
+        == "sig=(\"authorization\" \"atproto-space-audience\");tag=\"atproto-space-credential\"")
     #expect(
       signed.headerFields.map(\.name) == ["authorization", "atproto-space-audience", "signature-input", "signature"])
 
@@ -123,7 +123,7 @@ struct SpaceRequestSignatureTests {
     for _ in 0..<8 {
       let signed = try SpaceRequestSignature.use(
         credential: Self.credential, audience: Self.audience, key: PrivateKey(type: .p256))
-      let encoded = signed.signature.dropFirst("atproto-space-credential=:".count).dropLast()
+      let encoded = signed.signature.dropFirst("sig=:".count).dropLast()
       #expect(encoded.count % 4 == 0)
     }
   }
@@ -137,9 +137,9 @@ struct SpaceRequestSignatureTests {
 }
 
 extension SpaceRequestSignatureTests {
-  /// The bytes of a `signature` field value, `atproto-space-credential=:<base64>:`.
+  /// The bytes of a `signature` field value, `sig=:<base64>:`.
   fileprivate static func signatureBytes(_ signed: SpaceRequestSignature) throws -> Data {
-    let prefix = "atproto-space-credential=:"
+    let prefix = "sig=:"
     #expect(signed.signature.hasPrefix(prefix) && signed.signature.hasSuffix(":"))
     let encoded = signed.signature.dropFirst(prefix.count).dropLast()
     return try #require(Data(base64Encoded: String(encoded)))

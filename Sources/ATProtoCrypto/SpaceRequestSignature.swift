@@ -24,10 +24,11 @@ public enum SpaceRequestSignatureError: Error, Hashable, Sendable {
 /// See [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html).
 ///
 /// The signature covers `authorization` and `atproto-space-audience`, in that
-/// order, under the label `atproto-space-credential` with the parameter
-/// `tag="atproto-space-credential"`. It names no key: the credential's
-/// `cnf.kid` already does. A space credential is requested with the key in the
-/// request body instead, so that request carries no signature.
+/// order, under the label `sig` with the parameter
+/// `tag="atproto-space-credential"`. A host finds the signature by its tag,
+/// because intermediaries may relabel signatures. It names no key: the
+/// credential's `cnf.kid` already does. A space credential is requested with
+/// the key in the request body instead, so that request carries no signature.
 ///
 /// Attach every pair in ``headerFields`` to the request. Where the request goes,
 /// which audience it names, and how the key is stored are the caller's to
@@ -36,23 +37,26 @@ public struct SpaceRequestSignature: Sendable, Hashable {
   /// The authorization scheme that presents a space credential.
   public static let authorizationScheme = "Atproto-Space-Credential"
 
-  /// The label of the signature in `signature-input` and `signature`, and
-  /// the value of its `tag` parameter.
-  public static let label = "atproto-space-credential"
+  /// The label of the signature in `signature-input` and `signature`.
+  public static let label = "sig"
+
+  /// The value of the signature's `tag` parameter, which identifies it to a
+  /// host whatever its label.
+  public static let tag = "atproto-space-credential"
 
   /// The `authorization` field value, `Atproto-Space-Credential <credential>`.
   public let authorization: String
 
-  /// The `atproto-space-audience` field value: the DID of the host the request
-  /// is addressed to.
+  /// The `atproto-space-audience` field value: the DID of the account whose
+  /// repo is synced, or of the space authority for a request to the space
+  /// host.
   public let audience: String
 
-  /// The `signature-input` field value, labelled `atproto-space-credential`.
+  /// The `signature-input` field value, labelled `sig`.
   public let signatureInput: String
 
   /// The `signature` field value: the 64-byte `r` and `s` of the ECDSA
-  /// signature, not DER, as a padded base64 byte sequence labelled
-  /// `atproto-space-credential`.
+  /// signature, not DER, as a padded base64 byte sequence labelled `sig`.
   public let signature: String
 
   /// The fields to attach to the request, in the order they are signed.
@@ -65,7 +69,7 @@ public struct SpaceRequestSignature: Sendable, Hashable {
     ]
   }
 
-  /// Signs a request that presents `credential` to the host `audience` names.
+  /// Signs a request that presents `credential` to `audience`.
   ///
   /// Covers `authorization` and then `atproto-space-audience`. `key` has to be
   /// the key the credential is bound to; nothing here can check that, because
@@ -83,7 +87,7 @@ public struct SpaceRequestSignature: Sendable, Hashable {
   }
 
   private init(authorization: String, audience: String, key: PrivateKey) throws {
-    let parameters = "(\"authorization\" \"atproto-space-audience\");tag=\"\(Self.label)\""
+    let parameters = "(\"authorization\" \"atproto-space-audience\");tag=\"\(Self.tag)\""
     // The signature base of RFC 9421 §2.5: one line per covered component, then
     // the parameters, joined by single line feeds with no trailing one.
     let lines = [
