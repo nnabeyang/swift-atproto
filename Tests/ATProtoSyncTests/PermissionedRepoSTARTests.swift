@@ -10,7 +10,7 @@ import Testing
 @Suite("Permissioned repository STAR archives")
 struct PermissionedRepoSTARTests {
   private let space = try! SpaceRef(
-    string: "at://did:plc:spaceauthority/space/com.example.project/demo")
+    string: "at:space/did:plc:spaceauthority/com.example.project/demo")
   private let author = try! SwiftAtproto.DID(string: "did:plc:alice")
   private let revision = try! TID(string: "3kbgyjzqfeq2f")
 

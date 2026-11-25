@@ -8,50 +8,61 @@ import Testing
 // interop fixture files carry no space entries, so `ATURIInteropTests` stays as it is and these
 // live on their own.
 struct ATURISpaceTests {
-  static let spaceRefURI = "at://did:plc:asdf123/space/com.example.group/default"
+  static let spaceRefURI = "at:space/did:plc:asdf123/com.example.group/default"
   static let recordURI =
-    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc123"
+    "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc123"
   static let publicURI = "at://did:plc:asdf123/com.atproto.feed.post/abc123"
 
   static let validSpaceURIs = [
-    // a space reference: authority / marker / type / skey
+    // a space reference: authority / type / skey
     spaceRefURI,
     // a record within a space
     recordURI,
     // skey carries the same syntax as a record key
-    "at://did:plc:asdf123/space/com.example.group/self",
-    "at://did:plc:asdf123/space/com.example.group/3jui7kd54zh2y",
-    "at://did:plc:asdf123/space/com.example.group/a.b-c_d~e:f",
+    "at:space/did:plc:asdf123/com.example.group/self",
+    "at:space/did:plc:asdf123/com.example.group/3jui7kd54zh2y",
+    "at:space/did:plc:asdf123/com.example.group/a.b-c_d~e:f",
+    // did:web authorities with an underscore or an encoded port
+    "at:space/did:web:foo_bar.example.com/com.example.group/default",
+    "at:space/did:web:localhost%3A1234/com.example.group/default/did:web:foo_bar.example.com/com.atproto.feed.post/abc123",
     // fragments attach to either form
-    "at://did:plc:asdf123/space/com.example.group/default#/frag",
-    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc#/frag",
+    "at:space/did:plc:asdf123/com.example.group/default#/frag",
+    "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc#/frag",
   ]
 
   static let invalidSpaceURIs = [
     // the space type must be an NSID
-    "at://did:plc:asdf123/space/short/default",
+    "at:space/did:plc:asdf123/short/default",
     // a space is keyed on DIDs, so a handle is not allowed in either DID position
-    "at://user.bsky.social/space/com.example.group/default",
-    "at://did:plc:asdf123/space/com.example.group/default/user.bsky.social/com.atproto.feed.post/abc123",
+    "at:space/user.bsky.social/com.example.group/default",
+    "at:space/did:plc:asdf123/com.example.group/default/user.bsky.social/com.atproto.feed.post/abc123",
     // the record collection must be an NSID
-    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/short/abc123",
+    "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1/short/abc123",
     // too few segments: the space type and the space key are both mandatory
-    "at://did:plc:asdf123/space",
-    "at://did:plc:asdf123/space/com.example.group",
-    "at://did:plc:asdf123/space/com.example.group/",
+    "at:space/did:plc:asdf123",
+    "at:space/did:plc:asdf123/",
+    "at:space/",
+    "at:space",
+    "at:space/did:plc:asdf123/com.example.group",
+    "at:space/did:plc:asdf123/com.example.group/",
     // the record triple is all-or-nothing
-    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1",
-    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/com.atproto.feed.post",
+    "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1",
+    "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1/com.atproto.feed.post",
     // too many segments
-    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc/x",
+    "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc/x",
     // record-key rules apply to the space key
-    "at://did:plc:asdf123/space/com.example.group/.",
-    "at://did:plc:asdf123/space/com.example.group/..",
+    "at:space/did:plc:asdf123/com.example.group/.",
+    "at:space/did:plc:asdf123/com.example.group/..",
     // a space character is rejected before any component validator runs
-    "at://not a did/space/com.example.group/default",
+    "at:space/not a did/com.example.group/default",
+    // an empty authority
+    "at:space//com.example.group/default",
+    // the legacy form is rejected in strict mode
+    "at://did:plc:asdf123/space/com.example.group/default",
+    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc123",
     // fragments follow the same JSON Pointer rules as on a public URI
-    "at://did:plc:asdf123/space/com.example.group/default#",
-    "at://did:plc:asdf123/space/com.example.group/default#/a#/b",
+    "at:space/did:plc:asdf123/com.example.group/default#",
+    "at:space/did:plc:asdf123/com.example.group/default#/a#/b",
   ]
 
   @Test(arguments: validSpaceURIs)
@@ -67,19 +78,22 @@ struct ATURISpaceTests {
   }
 
   @Test func overlongSpaceKeyIsRejected() {
-    let uri = "at://did:plc:asdf123/space/com.example.group/\(String(repeating: "x", count: 513))"
+    let uri = "at:space/did:plc:asdf123/com.example.group/\(String(repeating: "x", count: 513))"
     #expect(throws: (any Error).self) { try ATURI(string: uri) }
   }
 
   // MARK: discriminating space from public
 
-  // The marker has to match exactly. A collection NSID always carries at least two dots, so the
-  // two forms can never be confused — but a near miss is read as a public URI and then fails the
-  // collection validator rather than being treated as a malformed space URI.
-  @Test func markerMatchesExactly() throws {
-    #expect(throws: (any Error).self) { try ATURI(string: "at://did:plc:asdf123/spacey/x/y") }
+  // The `at:space/` prefix discriminates the forms. Anything else after `at:` is not an AT URI,
+  // and a `space` segment on a public URI is read as a collection, which then fails its validator.
+  @Test func thePrefixDiscriminatesTheForms() throws {
+    #expect(try ATURI(string: Self.spaceRefURI).isSpace)
     #expect(try !ATURI(string: Self.publicURI).isSpace)
     #expect(try !ATURI(string: "at://did:plc:asdf123").isSpace)
+    #expect(throws: (any Error).self) { try ATURI(string: "at:spaces/did:plc:asdf123/x.y.z/k") }
+    #expect(throws: (any Error).self) { try ATURI(string: "at:did:plc:asdf123/x.y.z/k") }
+    #expect(throws: (any Error).self) { try ATURI(string: "at://did:plc:asdf123/spacey/x/y") }
+    #expect(throws: (any Error).self) { try ATURI(string: "at://did:plc:asdf123/space") }
   }
 
   @Test func spaceAccessorsAreNilOnAPublicURI() throws {
@@ -95,7 +109,7 @@ struct ATURISpaceTests {
   // collection / rkey / authorDid name the record, so they read the same way for both forms.
   @Test func readsARecordFromASpaceURI() throws {
     let uri = try ATURI(string: Self.recordURI)
-    // the record's collection, not the `space` marker
+    // the record's collection, not the space type
     #expect(uri.collection?.rawValue == "com.atproto.feed.post")
     #expect(uri.rkey?.rawValue == "abc123")
     // the record's author, not the space's authority
@@ -193,16 +207,16 @@ struct ATURISpaceTests {
   @Test func composingRejectsALenientSpaceKey() throws {
     let lenientKey = try RecordKey(string: String(repeating: "x", count: 513), strict: false)
     let ref = try SpaceRef(
-      string: "at://did:plc:asdf123/space/com.example.group/\(lenientKey.rawValue)", strict: false)
+      string: "at:space/did:plc:asdf123/com.example.group/\(lenientKey.rawValue)", strict: false)
     #expect(throws: LexiconStringFormatError.self) { try ATURI(spaceRef: ref) }
   }
 
   // MARK: lenient parsing
 
   @Test(arguments: [
-    "at://did:plc:asdf123/space/com.example.group/default/",
-    "at://did:plc:asdf123/space/com.example.group/default?foo=bar",
-    "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/com.atproto.feed.post/%%%",
+    "at:space/did:plc:asdf123/com.example.group/default/",
+    "at:space/did:plc:asdf123/com.example.group/default?foo=bar",
+    "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1/com.atproto.feed.post/%%%",
   ])
   func strictRejectsAndLenientAccepts(_ wire: String) throws {
     #expect(throws: (any Error).self) { try ATURI(string: wire, strict: true) }
@@ -212,7 +226,7 @@ struct ATURISpaceTests {
   }
 
   @Test func lenientRelaxesTheSpaceKeyTheSameWayItRelaxesARecordKey() throws {
-    let wire = "at://did:plc:asdf123/space/com.example.group/\(String(repeating: "x", count: 513))"
+    let wire = "at:space/did:plc:asdf123/com.example.group/\(String(repeating: "x", count: 513))"
     #expect(throws: (any Error).self) { try ATURI(string: wire, strict: true) }
     let uri = try ATURI(string: wire, strict: false)
     #expect(uri.skey?.rawValue == String(repeating: "x", count: 513))
@@ -221,10 +235,45 @@ struct ATURISpaceTests {
   // The authority and the space type are validated in both modes, matching where the space URI
   // grammar places each check.
   @Test(arguments: [
-    "at://user.bsky.social/space/com.example.group/default",
-    "at://did:plc:asdf123/space/short/default",
+    "at:space/user.bsky.social/com.example.group/default",
+    "at:space/did:plc:asdf123/short/default",
   ])
   func lenientDoesNotRelaxTheAuthorityOrTheSpaceType(_ wire: String) {
     #expect(throws: (any Error).self) { try ATURI(string: wire, strict: false) }
+  }
+
+  // MARK: the legacy form
+
+  // Record values written during the alpha may embed the legacy form. Lenient parsing reads it and
+  // spells it in the current form, so a stored value compares equal to what hosts now send.
+  @Test(arguments: [
+    (
+      "at://did:plc:asdf123/space/com.example.group/default",
+      "at:space/did:plc:asdf123/com.example.group/default"
+    ),
+    (
+      "at://did:plc:asdf123/space/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc123",
+      "at:space/did:plc:asdf123/com.example.group/default/did:plc:user1/com.atproto.feed.post/abc123"
+    ),
+    (
+      "at://did:plc:asdf123/space/com.example.group/default#/frag",
+      "at:space/did:plc:asdf123/com.example.group/default#/frag"
+    ),
+  ])
+  func lenientReadsTheLegacyFormAsTheCurrentOne(_ legacy: String, _ current: String) throws {
+    #expect(throws: (any Error).self) { try ATURI(string: legacy, strict: true) }
+    let uri = try ATURI(string: legacy, strict: false)
+    #expect(uri.rawValue == current)
+    #expect(uri.isSpace)
+    #expect(uri.spaceDid?.rawValue == "did:plc:asdf123")
+    #expect(uri.spaceRef?.rawValue == "at:space/did:plc:asdf123/com.example.group/default")
+    #expect(uri == (try ATURI(string: current, strict: false)))
+  }
+
+  // Only a `space` segment directly after the authority marks the legacy form.
+  @Test func aPublicURIIsNotReadAsLegacy() throws {
+    let uri = try ATURI(string: Self.publicURI, strict: false)
+    #expect(uri.rawValue == Self.publicURI)
+    #expect(!uri.isSpace)
   }
 }

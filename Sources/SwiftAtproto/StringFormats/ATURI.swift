@@ -11,17 +11,23 @@ import Foundation
 ///   COLLECTION = NSID
 ///   RKEY       = RECORD-KEY
 ///
-/// plus the permissioned-data form, which carries a fixed `space` marker below the authority:
+/// plus the permissioned-data form, which replaces the `//` authority with a `space/` prefix:
 ///
-///   SPACE-URI  = "at://" DID "/space/" SPACE-TYPE "/" SKEY [ "/" DID "/" COLLECTION "/" RKEY ]
+///   SPACE-URI  = "at:space/" DID "/" SPACE-TYPE "/" SKEY [ "/" DID "/" COLLECTION "/" RKEY ]
 ///                [ "#" FRAGMENT ]
 ///   SPACE-TYPE = NSID
 ///   SKEY       = RECORD-KEY
 ///
 /// The record triple is all-or-nothing: a space URI either names a space or a record within one.
-/// ``isSpace`` discriminates the two forms, and ``collection`` / ``rkey`` / ``authorDid`` name the
-/// record either way, so a caller reading a record out of an `at-uri` field does not need to know
-/// which form it holds.
+/// ``isSpace`` discriminates the two forms by the `at:space/` prefix, and ``collection`` /
+/// ``rkey`` / ``authorDid`` name the record either way, so a caller reading a record out of an
+/// `at-uri` field does not need to know which form it holds.
+///
+/// Before the November 24, 2026 Spaces alpha, a space URI was written
+/// `at://{spaceDid}/space/{spaceType}/{skey}[...]`. Strict parsing rejects that legacy form. Lenient
+/// parsing (`strict: false`) accepts it, for record values written during the alpha, and rewrites
+/// it to the current form, which becomes ``rawValue``. That support is temporary and goes away
+/// before the beta, as it does upstream.
 ///
 /// The general AT URI syntax (arbitrary multi-segment paths, query strings) is still NOT supported.
 /// A parse mode for the lenient variant (relaxed record key, trailing slash, query) is available
@@ -31,13 +37,14 @@ import Foundation
 /// DID / Handle / NSID / RecordKey / AtIdentifier component validators live in their dedicated
 /// identifier-type files. Only the JSON Pointer fragment validator remains here.
 public struct ATURI: LexiconStringFormat {
-  /// The original wire string, kept verbatim (no normalization).
+  /// The wire string, kept verbatim, except that a legacy space URI read leniently is rewritten to
+  /// the current `at:space/` form.
   public let rawValue: String
   /// Required authority: a DID or a handle, dispatched via `AtIdentifier`. Always a DID on a
   /// space URI.
   public let authority: AtIdentifier
-  /// Optional collection NSID. On a space URI this is the record's collection, not the `space`
-  /// marker, and it is nil when the URI names the space itself.
+  /// Optional collection NSID. On a space URI this is the record's collection, and it is nil when
+  /// the URI names the space itself.
   public let collection: NSID?
   /// Optional record key (trailing path segment). Nil when the URI names no record.
   public let rkey: RecordKey?
@@ -64,10 +71,12 @@ public struct ATURI: LexiconStringFormat {
   }
 
   public init(string: String, strict: Bool) throws {
-    guard let parts = ATURI.parse(string, strict: strict) else {
+    guard let normalized = SpaceRef.currentForm(of: string, strict: strict),
+      let parts = ATURI.parse(normalized, strict: strict)
+    else {
       throw LexiconStringFormatError.invalid(format: "at-uri", value: string)
     }
-    rawValue = string
+    rawValue = normalized
     // `ATURI.parse` runs each component through its identifier-type validator
     // (`AtIdentifier.isValid` / `DID.isValid` / `NSID.isValid` / `RecordKey.isValid`) before
     // returning, so the typed inits below cannot throw in practice — the force-tries document
@@ -92,7 +101,7 @@ public struct ATURI: LexiconStringFormat {
     // leniently read space key does not become a strict `SpaceRef`.
     if parts.isSpace, let spaceType = parts.spaceType, let skey = parts.skey {
       spaceRef = try! SpaceRef(
-        string: "at://\(parts.authority)/\(SpaceRef.marker)/\(spaceType)/\(skey)", strict: strict)
+        string: "\(SpaceRef.uriPrefix)\(parts.authority)/\(spaceType)/\(skey)", strict: strict)
     } else {
       spaceRef = nil
     }
@@ -136,10 +145,17 @@ extension ATURI {
   private static func parse(_ input: String, strict: Bool = true) -> Parts? {
     guard input.utf8.count <= 8192 else { return nil }
     for byte in input.utf8 where !isAllowedURIByte(byte) { return nil }
-    guard input.hasPrefix("at://") else { return nil }
+    let isSpace: Bool
+    if input.hasPrefix(SpaceRef.uriPrefix) {
+      isSpace = true
+    } else if input.hasPrefix("at://") {
+      isSpace = false
+    } else {
+      return nil
+    }
 
     let end = input.endIndex
-    var i = input.index(input.startIndex, offsetBy: 5)
+    var i = input.index(input.startIndex, offsetBy: isSpace ? SpaceRef.uriPrefix.count : 5)
 
     func isPathDelimiter(_ c: Character) -> Bool { c == "/" || c == "?" || c == "#" }
     func scanSegment() -> Substring {
@@ -158,59 +174,56 @@ extension ATURI {
     let authority = scanSegment()
     if authority.isEmpty { return nil }
 
-    var parts = Parts(authority: authority)
+    var parts = Parts(authority: authority, isSpace: isSpace)
     var trailingSlash = false
 
-    if i < end, input[i] == "/" {
+    if isSpace {
+      // The space type and the space key are both mandatory, so a URI that stops at the
+      // authority or the space type is rejected in either mode rather than read as a trailing
+      // slash.
+      guard consumeSlash() else { return nil }
+      parts.spaceType = scanSegment()
+      guard consumeSlash() else { return nil }
+      parts.skey = scanSegment()
+      if i < end, input[i] == "/" {
+        i = input.index(after: i)
+        if atSegmentBoundary() {
+          trailingSlash = true
+        } else {
+          // The record triple is all-or-nothing: a partial tail is not a shorter URI.
+          parts.author = scanSegment()
+          guard consumeSlash() else { return nil }
+          parts.collection = scanSegment()
+          guard consumeSlash() else { return nil }
+          parts.rkey = scanSegment()
+          if i < end, input[i] == "/" {
+            i = input.index(after: i)
+            if atSegmentBoundary() {
+              trailingSlash = true
+            } else {
+              return nil  // more than five path segments after the space DID
+            }
+          }
+        }
+      }
+    } else if i < end, input[i] == "/" {
       i = input.index(after: i)
       if atSegmentBoundary() {
         trailingSlash = true
       } else {
-        let first = scanSegment()
-        if first == SpaceRef.marker {
-          parts.isSpace = true
-          // The space type and the space key are both mandatory, so a URI that stops at the
-          // marker is rejected in either mode rather than read as a trailing slash.
-          guard consumeSlash() else { return nil }
-          parts.spaceType = scanSegment()
-          guard consumeSlash() else { return nil }
-          parts.skey = scanSegment()
-          if i < end, input[i] == "/" {
-            i = input.index(after: i)
-            if atSegmentBoundary() {
-              trailingSlash = true
-            } else {
-              // The record triple is all-or-nothing: a partial tail is not a shorter URI.
-              parts.author = scanSegment()
-              guard consumeSlash() else { return nil }
-              parts.collection = scanSegment()
-              guard consumeSlash() else { return nil }
-              parts.rkey = scanSegment()
-              if i < end, input[i] == "/" {
-                i = input.index(after: i)
-                if atSegmentBoundary() {
-                  trailingSlash = true
-                } else {
-                  return nil  // more than six path segments
-                }
-              }
-            }
-          }
-        } else {
-          parts.collection = first
-          if i < end, input[i] == "/" {
-            i = input.index(after: i)
-            if atSegmentBoundary() {
-              trailingSlash = true
-            } else {
-              parts.rkey = scanSegment()
-              if i < end, input[i] == "/" {
-                i = input.index(after: i)
-                if atSegmentBoundary() {
-                  trailingSlash = true
-                } else {
-                  return nil  // more than two path segments
-                }
+        parts.collection = scanSegment()
+        if i < end, input[i] == "/" {
+          i = input.index(after: i)
+          if atSegmentBoundary() {
+            trailingSlash = true
+          } else {
+            parts.rkey = scanSegment()
+            if i < end, input[i] == "/" {
+              i = input.index(after: i)
+              if atSegmentBoundary() {
+                trailingSlash = true
+              } else {
+                return nil  // more than two path segments
               }
             }
           }

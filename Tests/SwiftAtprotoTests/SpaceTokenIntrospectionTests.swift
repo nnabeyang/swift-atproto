@@ -10,8 +10,8 @@ struct SpaceTokenIntrospectionTests {
   // The proposal writes this space type as `com.example.space_type`, which is not an NSID — a name
   // segment admits no underscore — so the fixture uses the space ref the other tests in this
   // target share.
-  static let spaceRef = "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/space/com.example.forum/self"
-  static let otherSpaceRef = "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/space/com.example.forum/other"
+  static let spaceRef = "at:space/did:plc:ewvi7nxzyoun6zhxrhs64oiz/com.example.forum/self"
+  static let otherSpaceRef = "at:space/did:plc:ewvi7nxzyoun6zhxrhs64oiz/com.example.forum/other"
   // The P-256 `did:key` example from https://atproto.com/specs/cryptography.
   static let boundKeyID = "did:key:zDnaembgSGUhZULN2Caob4HLJPaxBh92N7rtH21TErzqf8HQo"
   static let clientID = "https://app.example.com/client-metadata.json"
@@ -226,6 +226,17 @@ struct SpaceTokenIntrospectionTests {
     // A record URI within a space is not the space itself.
     let payload = Self.credentialPayload(
       replacing: "sub", with: "at://\(Self.spaceDID)/app.bsky.feed.post/3jui7kd54zh2y")
+    #expect(throws: LexiconStringFormatError.self) {
+      try UnverifiedSpaceCredential(
+        introspecting: Self.token(header: Self.credentialHeader, payload: payload))
+    }
+  }
+
+  @Test func rejectsASubjectInTheLegacyForm() {
+    // Hosts compare token subjects exactly and mint only the current form, so a token naming the
+    // space in the pre-November 24 form is not read leniently.
+    let payload = Self.credentialPayload(
+      replacing: "sub", with: "at://\(Self.spaceDID)/space/com.example.forum/self")
     #expect(throws: LexiconStringFormatError.self) {
       try UnverifiedSpaceCredential(
         introspecting: Self.token(header: Self.credentialHeader, payload: payload))
