@@ -5,11 +5,12 @@ import Testing
 @testable import ATProtoCrypto
 
 struct SpaceMACTests {
-  private static let space = "at://did:example:space/space/app.bsky.group/test"
+  private static let space = "at:space/did:example:space/app.bsky.group/test"
   private static let repo = "did:example:alice"
   private static let rev = "3kbcq3p7ad400"
   private static let data = Data(repeating: 1, count: 32)
-  private static let uri = "at://did:example:alice/space/app.bsky.group/test/app.bsky.feed.post/1"
+  private static let uri =
+    "at:space/did:example:space/app.bsky.group/test/did:example:alice/app.bsky.feed.post/1"
   private static let secret = SymmetricKey(data: Data(0..<32))
 
   // MARK: - KEM
@@ -181,12 +182,12 @@ struct SpaceMACTests {
     let fields = try Self.responseFields(commit: Self.commit, secret: Self.secret)
     #expect(
       fields["atproto-space-commit"]
-        == "ver=1, repo=\"did:example:alice\", space=\"at://did:example:space/space/app.bsky.group/test\", rev=\"3kbcq3p7ad400\", data=:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=:"
+        == "ver=1, repo=\"did:example:alice\", space=\"at:space/did:example:space/app.bsky.group/test\", rev=\"3kbcq3p7ad400\", data=:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=:"
     )
     #expect(
       fields["signature-input"]
         == "mac=(\"atproto-space-commit\";sf);keyid=\"\(Self.keyShare)\";tag=\"atproto-space-commit\"")
-    #expect(fields["signature"] == "mac=:1Uw9HH7OVxRdJVejRkW/UNwi0eUeNhYuELc4MjWzAMg=:")
+    #expect(fields["signature"] == "mac=:BzmtIbSi5avmQQcC7FVNOYw36OZFihCHVW2+XKR9LnQ=:")
     #expect(fields["vary"] == "accept-signature")
   }
 
@@ -195,7 +196,7 @@ struct SpaceMACTests {
     #expect(
       fields["atproto-space-record"]
         == "uri=\"\(Self.uri)\", cid=\"bafyreidefhqcgbfy3ogledyjsm3eqh6k5mucwjelz4ub6r5yfq4myoxk5y\"")
-    #expect(fields["signature"] == "mac=:z8uDF85XrpghKLc8vt82nanrIA2U+kcSdSGNZOeKewU=:")
+    #expect(fields["signature"] == "mac=:EQf/8J+9edS0UD3RRQFbLu68O+DGuvmq1/7WiNDe0pA=:")
   }
 
   @Test func verifiesWhatTheHostReturns() throws {

@@ -9,7 +9,7 @@ import Testing
 @Suite("Permissioned repository recovery")
 struct RepoSyncTests {
   private let space = try! SpaceRef(
-    string: "at://did:plc:spaceauthority/space/com.example.project/demo")
+    string: "at:space/did:plc:spaceauthority/com.example.project/demo")
   private let author = try! SwiftAtproto.DID(string: "did:plc:alice")
   private let baseRevision = try! TID(string: "3kbgyjzqfeq2e")
   private let headRevision = try! TID(string: "3kbgyjzqfeq2f")
@@ -108,7 +108,7 @@ struct RepoSyncTests {
   func rejectsAnotherIdentity() throws {
     let update = RepoIncrementalSync(checkpoint: try restoredCheckpoint(records: [first]))
     let (commit, authentication) = try headCommit(RepoCommit(records: [first]))
-    let otherSpace = try SpaceRef(string: "at://did:plc:spaceauthority/space/com.example.project/other")
+    let otherSpace = try SpaceRef(string: "at:space/did:plc:spaceauthority/com.example.project/other")
 
     #expect(throws: RepoVerificationError.commitIdentityMismatch) {
       try update.finish(

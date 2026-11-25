@@ -8,9 +8,9 @@ struct SpaceOAuthScopeTests {
   private let grantor = try! DID(string: "did:plc:alice")
   private let otherAuthority = try! DID(string: "did:plc:forum")
   private let ownSpace = try! SpaceRef(
-    string: "at://did:plc:alice/space/com.example.forum/default")
+    string: "at:space/did:plc:alice/com.example.forum/default")
   private let sharedSpace = try! SpaceRef(
-    string: "at://did:plc:forum/space/com.example.forum/default")
+    string: "at:space/did:plc:forum/com.example.forum/default")
 
   @Test("bare scope applies proposal defaults")
   func parsesDefaults() throws {
