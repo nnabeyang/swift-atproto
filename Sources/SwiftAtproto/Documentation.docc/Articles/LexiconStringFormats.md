@@ -62,6 +62,17 @@ its space key and ``ATURI`` into both key segments, the latter additionally
 accepting a trailing slash, a query string, and a malformed percent-escape in a
 fragment.
 
+Space URIs are written `at:space/{spaceDid}/{spaceType}/{skey}`, with an optional
+`/{authorDid}/{collection}/{rkey}` naming a record in the space. Before the
+November 24, 2026 Spaces alpha they were written
+`at://{spaceDid}/space/{spaceType}/{skey}`. Strict parsing rejects that legacy
+form. Lenient parsing of ``SpaceRef`` and ``ATURI`` accepts it, so that record
+values written during the alpha still read, and rewrites it to the current form,
+which becomes `rawValue`. Hosts send and accept only the current form, so read
+stored or embedded values leniently before comparing them with what a host sends,
+and write only the current form. Support for the legacy form is temporary and
+goes away before the beta, as it does upstream.
+
 ## Validation is about shape
 
 These types check that a string is well-formed, not that it refers to anything.
